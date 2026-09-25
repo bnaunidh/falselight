@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=89966d9d';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=371673be';
 
 const loader = new GLTFLoader();
 export const gltfCache = new Map();
@@ -159,6 +159,27 @@ void flSample(){
 
 // ------------------------------------------------------------------ vegetation: instanced LOD sets with wind
 const WIND = { time: { value: 0 }, amount: { value: 0.35 } };
+// LOD crossfade: each instance carries a fade (+f = keep where dither < f, -f = keep where dither >= 1-f) so the outgoing
+// and incoming LODs dissolve into each other instead of popping; foliage alpha is boosted with the mip level so distant
+// needles don't thin out and shimmer.
+function patchFade(mat, foliage) {
+  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => '';
+  mat.onBeforeCompile = (sh, r) => {
+    prev && prev.call(mat, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float instFade;\nvarying float vFade;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFade = instFade;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vFade;')
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+{ float dth = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  if (vFade >= 0.0 ? dth >= vFade : dth < 1.0 + vFade) discard; }`);
+    if (foliage) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+#ifdef USE_MAP
+{ vec2 dx = dFdx(vMapUv * 2048.0), dy = dFdy(vMapUv * 2048.0); float mip = max(0.0, 0.5 * log2(max(dot(dx, dx), dot(dy, dy))));
+  diffuseColor.a *= 1.0 + mip * 0.28; }
+#endif`);
+  };
+  mat.customProgramCacheKey = () => prevKey() + '|fade' + (foliage ? 'F' : '');
+}
 function patchWind(mat, soft) {
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
@@ -176,7 +197,7 @@ function patchWind(mat, soft) {
   float t = uFLTime * ${soft ? '1.9' : '1.1'} + ph;
   float sway = flwind.x;
   vec3 gust = vec3(sin(t) * 0.6 + sin(t * 2.37) * 0.25, sin(t * 3.1) * 0.12, cos(t * 0.83) * 0.45);
-  transformed += gust * uFLWind * sway * ${soft ? '0.08' : '(0.18 + position.y * 0.004)'};
+  transformed += gust * uFLWind * sway * ${soft ? '0.06' : '(0.1 + position.y * 0.0022)'};
   ${soft ? '' : 'transformed.xz += vec2(sin(uFLTime * 0.37 + ph * 0.3), cos(uFLTime * 0.29 + ph * 0.3)) * uFLWind * 0.35 * pow(max(position.y, 0.0) / 50.0, 2.0);'}
 }`);
   };
@@ -199,7 +220,10 @@ class VegSet {
     this.kind = kind; this.lods = lods; this.inst = placements; this.ranges = ranges;
     this.group = new THREE.Group(); this.group.name = 'veg:' + kind;
     this.meshes = lods.map((parts, li) => parts.map((p) => {
-      const im = new THREE.InstancedMesh(p.geometry, p.material, placements.length);
+      const geo = p.geometry.clone();
+      const fade = new THREE.InstancedBufferAttribute(new Float32Array(placements.length), 1); fade.setUsage(THREE.DynamicDrawUsage);
+      geo.setAttribute('instFade', fade);
+      const im = new THREE.InstancedMesh(geo, p.material, placements.length);
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       im.count = 0; im.frustumCulled = false; im.name = `${kind}_LOD${li}`;
       im.castShadow = li === 0 && opts.castShadow; im.receiveShadow = true;
@@ -230,31 +254,38 @@ class VegSet {
   update(cam, force) {
     const cx = cam.x, cz = cam.z;
     const counts = this.meshes.map(() => 0);
-    if (!this.cur) this.cur = new Int8Array(this.inst.length).fill(-2);
-    const R = this.ranges, H = 6;   // hysteresis: a tree near a boundary keeps its current LOD instead of flickering
-    for (let i = 0; i < this.inst.length; i++) {
-      const p = this.inst[i];
-      const d = Math.sqrt((p[0] - cx) ** 2 + (p[2] - cz) ** 2);
-      let li = d < R[0] ? 0 : (R[1] && d < R[1]) ? 1 : (R[2] && d < R[2]) ? 2 : -1;
-      const was = this.cur[i];
-      if (was >= 0 && li !== was) {
-        const lo = was === 0 ? 0 : R[was - 1], hi = R[was] || 1e9;
-        if (d > lo - H && d < hi + H) li = was;
-      }
-      if (li >= this.meshes.length) li = -1;
-      this.cur[i] = li;
-      if (li < 0) continue;
+    const R = this.ranges, nL = this.meshes.length;
+    const push = (li, i, f) => {
+      if (li >= nL) return;
       const k = counts[li]++;
       for (const im of this.meshes[li]) {
         this._m.multiplyMatrices(this.base[i], im.userData.part);
         im.setMatrixAt(k, this._m);
+        im.geometry.attributes.instFade.array[k] = f;
+      }
+    };
+    for (let i = 0; i < this.inst.length; i++) {
+      const p = this.inst[i];
+      const d = Math.sqrt((p[0] - cx) ** 2 + (p[2] - cz) ** 2);
+      // find the LOD band and whether we're inside a crossfade zone around its outer edge
+      let placed = false;
+      for (let li = 0; li < nL && !placed; li++) {
+        const lo = li ? R[li - 1] : 0, hi = R[li]; if (hi == null) break;
+        const B = Math.max(4, hi * 0.07);                       // fade band half-width grows with distance
+        if (d < hi - B) { push(li, i, 1); placed = true; }
+        else if (d < hi + B) {
+          const t = (d - (hi - B)) / (2 * B);
+          push(li, i, 1 - t);                                   // outgoing: keeps dither < 1-t
+          if (li + 1 < nL && R[li + 1] != null) push(li + 1, i, -t);   // incoming: keeps dither >= 1-t (complementary)
+          placed = true;
+        }
       }
     }
     this.meshes.forEach((parts, li) => parts.forEach((im) => {
       im.count = counts[li];
-      const a = im.instanceMatrix;
-      if (a.clearUpdateRanges) { a.clearUpdateRanges(); a.addUpdateRange(0, Math.max(16, counts[li] * 16)); }   // upload only the live part
-      a.needsUpdate = true;
+      const a = im.instanceMatrix, fa = im.geometry.attributes.instFade;
+      if (a.clearUpdateRanges) { a.clearUpdateRanges(); a.addUpdateRange(0, Math.max(16, counts[li] * 16)); fa.clearUpdateRanges(); fa.addUpdateRange(0, Math.max(1, counts[li])); }
+      a.needsUpdate = true; fa.needsUpdate = true;
     }));
     return counts;
   }
@@ -278,6 +309,7 @@ async function loadVegKind(kind, path, msaa) {
       if (col) { const a = new Float32Array(col.count * 3); for (let i = 0; i < col.count; i++) { a[i * 3] = col.getX(i); a[i * 3 + 1] = col.getY(i); a[i * 3 + 2] = col.getZ(i); } geo.setAttribute('flwind', new THREE.BufferAttribute(a, 3)); geo.deleteAttribute('color'); }
       const mat = prepVegMaterial(o.material.clone(), /foliage|impostor/i.test(o.material.name), msaa);
       if (geo.getAttribute('flwind')) patchWind(mat, soft);
+      patchFade(mat, mat.alphaTest > 0);
       // part matrix relative to the LOD root, but keep the LOD root's own offset out (LODs sit side by side in Blender)
       const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
       parts.push({ geometry: geo, material: mat, matrix: m });
@@ -438,16 +470,26 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setIndex(idx); g.computeVertexNormals();
-    const wm = new THREE.MeshStandardMaterial({ color: 0x0e1413, roughness: 0.06, metalness: 0.0, transparent: true, opacity: 0.86 });
-    const WU = { uT: engine.time };
-    wm.onBeforeCompile = (sh) => {
-      sh.uniforms.uT = WU.uT;
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uT;')
-        .replace('#include <normal_fragment_maps>', `{ vec2 q = vNormal.xy; float t = uT;
-          vec3 p = vViewPosition; float a = sin(p.x*2.1 + t*3.1) + sin(p.z*1.7 - t*2.3 + p.x) + sin((p.x+p.z)*3.3 + t*4.0)*0.5;
-          normal = normalize(normal + vec3(cos(p.x*2.1+t*3.1), 0.0, cos(p.z*1.7-t*2.3)) * 0.12 * a); }`);
-    };
+    // a tileable ripple normal map drawn once (two octaves of sine chop), scrolled downstream every frame
+    const NS = 256, cvs = document.createElement('canvas'); cvs.width = cvs.height = NS; const cx2 = cvs.getContext('2d');
+    const img = cx2.createImageData(NS, NS); const hgt = new Float32Array(NS * NS);
+    for (let y = 0; y < NS; y++) for (let x = 0; x < NS; x++) {
+      const u = (x / NS) * Math.PI * 2, v = (y / NS) * Math.PI * 2;
+      hgt[y * NS + x] = Math.sin(u * 3 + Math.sin(v * 2) * 1.3) * 0.5 + Math.sin(v * 5 + u * 2) * 0.3 + Math.sin(u * 9 - v * 7) * 0.12 + Math.sin(u * 17 + v * 13) * 0.05;
+    }
+    for (let y = 0; y < NS; y++) for (let x = 0; x < NS; x++) {
+      const hL = hgt[y * NS + ((x + NS - 1) % NS)], hR = hgt[y * NS + ((x + 1) % NS)], hD = hgt[((y + NS - 1) % NS) * NS + x], hU = hgt[((y + 1) % NS) * NS + x];
+      let nx = (hL - hR) * 2.2, ny = (hD - hU) * 2.2, nz = 1; const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+      const o = (y * NS + x) * 4; img.data[o] = (nx * 0.5 + 0.5) * 255; img.data[o + 1] = (ny * 0.5 + 0.5) * 255; img.data[o + 2] = (nz * 0.5 + 0.5) * 255; img.data[o + 3] = 255;
+    }
+    cx2.putImageData(img, 0, 0);
+    const wn = new THREE.CanvasTexture(cvs); wn.wrapS = wn.wrapT = THREE.RepeatWrapping; wn.colorSpace = THREE.NoColorSpace; wn.repeat.set(1.5, 1);
+    const wm = new THREE.MeshStandardMaterial({ color: 0x1a211c, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.8,
+      normalMap: wn, normalScale: new THREE.Vector2(0.45, 0.45), envMapIntensity: 1.4, depthWrite: false });
+    W.waterNormal = wn;
     const water = new THREE.Mesh(g, wm); water.name = 'FL_creek_water'; water.renderOrder = 2;
+    W.creek = new TrailIndex([{ name: 'creek', points: P }], 8); W.creek.halfWidth = hw;
+    W.waterY = (x, z) => { const n = W.creek.nearest(x, z); return n.dist < hw + 0.3 ? Math.max(n.point[1] - 0.15, heightAt(x, z) + 0.12) : null; };
     scene.add(water);
   }
 
@@ -518,6 +560,34 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
 
   // --- vegetation
   const scatter = await tryJSON('assets/data/scatter.json');
+  if (scatter && W.trail.segs && W.trail.segs.length) {
+    let seed = 1411; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const add = (k, x, z, sMin, sMax, dy = -0.15) => { (scatter[k] = scatter[k] || []).push([x, heightAt(x, z) + dy, z, rnd() * 6.283, sMin + rnd() * (sMax - sMin)]); };
+    const rav = layout.ravine && layout.ravine.polygon;
+    const inPoly = (x, z, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > z) !== (b[1] > z) && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1] || 1e-9) + a[0]) c = !c; } return c; };
+    for (const seg of W.trail.segs) {
+      const P = seg.points;
+      for (let i = 0; i < P.length - 1; i++) {
+        const a = P[i], b = P[i + 1], L = Math.hypot(b[0] - a[0], b[2] - a[2]); if (L < 1e-3) continue;
+        const tx = (b[0] - a[0]) / L, tz = (b[2] - a[2]) / L;
+        for (let u = 0; u < L; u += 2.3) {
+          const px = a[0] + tx * u, pz = a[2] + tz * u;
+          for (const side of [-1, 1]) for (const off of [20.2, 22.4, 24.6]) {
+            const x = px - tz * side * off + (rnd() - 0.5) * 1.6, z = pz + tx * side * off + (rnd() - 0.5) * 1.6;
+            if (W.trail.nearest(x, z).dist < 19.6) continue;                       // another trail is close: leave it open
+            if (W.zones.some((zn) => (x - zn.x) ** 2 + (z - zn.z) ** 2 < (zn.r + 4) ** 2)) continue;
+            if (rav && inPoly(x, z, rav)) continue;
+            const r = rnd();
+            if (r < 0.5) add('veg_sapling', x, z, 1.5, 2.6, -0.1);                  // dense young firs, 7-13 m
+            else if (r < 0.62) add('veg_hemlock_a', x, z, 0.32, 0.5);
+            else if (r < 0.8) add('veg_salal', x, z, 1.3, 2.0, -0.05);
+            else if (r < 0.93) add('veg_fern', x, z, 1.1, 1.6, -0.05);
+            else add(rnd() < 0.5 ? 'veg_log_a' : 'veg_log_b', x, z, 0.9, 1.3, -0.1);
+          }
+        }
+      }
+    }
+  }
   if (scatter) {
     const kinds = Object.keys(scatter);
     let done = 0;
@@ -552,6 +622,21 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   W.trunkGrid = new Map();
   for (const t of W.trunks) { const k = Math.floor(t[0] / 20) + ',' + Math.floor(t[1] / 20); if (!W.trunkGrid.has(k)) W.trunkGrid.set(k, []); W.trunkGrid.get(k).push(t); }
 
+  // --- ripple rings + droplets where something breaks the water
+  {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g2 = c.getContext('2d');
+    g2.strokeStyle = 'rgba(220,230,235,0.9)'; g2.lineWidth = 5; g2.beginPath(); g2.arc(64, 64, 54, 0, Math.PI * 2); g2.stroke();
+    g2.strokeStyle = 'rgba(220,230,235,0.45)'; g2.lineWidth = 3; g2.beginPath(); g2.arc(64, 64, 38, 0, Math.PI * 2); g2.stroke();
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const pool = [];
+    for (let i = 0; i < 10; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0, fog: true }));
+      m.rotation.x = -Math.PI / 2; m.visible = false; m.renderOrder = 3; scene.add(m); pool.push({ m, t: 9 });
+    }
+    let k = 0;
+    W.ripple = (x, y, z, strength = 1) => { const r = pool[k++ % pool.length]; r.m.position.set(x, y + 0.02, z); r.t = 0; r.s = strength; r.m.visible = true; };
+    W._ripples = pool;
+  }
   // --- distant fire glows (driven by the game)
   W.setFire = (name, intensity) => {
     const fs = (layout.fireSites || []).find((f) => f.name === name); if (!fs) return;
@@ -567,6 +652,8 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   // --- per-frame
   let lodTimer = 0; const lastCam = new THREE.Vector3(1e9, 0, 0);
   W.update = (dt, t, cam) => {
+    if (W.waterNormal) { W.waterNormal.offset.y = -t * 0.28; W.waterNormal.offset.x = Math.sin(t * 0.21) * 0.03; }
+    if (W._ripples) for (const r of W._ripples) { if (!r.m.visible) continue; r.t += dt; const k2 = r.t / 1.4; r.m.scale.setScalar(0.3 + k2 * 2.6 * r.s); r.m.material.opacity = Math.max(0, 0.55 * (1 - k2)); if (k2 >= 1) r.m.visible = false; }
     WIND.time.value = t; WIND.amount.value = engine.sky ? 0.25 + (engine.sky.weather.wind || 0) * 0.9 : 0.35;
     lodTimer -= dt;
     if (lodTimer <= 0 || cam.distanceToSquared(lastCam) > 36) {

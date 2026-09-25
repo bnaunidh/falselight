@@ -18,8 +18,23 @@ export function createAudio(engine) {
   };
   const samples = {};
   let samplesLoading = false;
+  const AMB = { rain: 'amb_rain.ogg', creek: 'amb_creek.ogg', wind: 'amb_wind.ogg', crickets: 'amb_crickets.mp3' };
+  const rec = {};
+  async function loadAmbience() {
+    await Promise.all(Object.entries(AMB).map(async ([k, f]) => {
+      try {
+        const r = await fetch('assets/audio/' + f); if (!r.ok) return;
+        const buf = await ctx.decodeAudioData(await r.arrayBuffer());
+        const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+        const g = gain(0, bus.amb); let head = g;
+        if (k === 'rain') { const lp = filt('lowpass', 9000); src.connect(lp); lp.connect(g); rec.rainLP = lp; } else src.connect(g);
+        src.start(0, Math.random() * buf.duration); rec[k] = g;
+      } catch (e) { /* synthesized bed stays */ }
+    }));
+  }
   async function loadSamples() {
     if (samplesLoading || !ctx) return; samplesLoading = true;
+    loadAmbience();
     const names = [...new Set(Object.values(SAMPLE_SETS).flat())];
     await Promise.all(names.map(async (n) => {
       try { const r = await fetch('assets/audio/' + n + '.ogg'); if (!r.ok) return; samples[n] = await ctx.decodeAudioData(await r.arrayBuffer()); } catch (e) { /* keep the procedural fallback */ }
@@ -108,7 +123,7 @@ export function createAudio(engine) {
       for (let k = 0; k < notes; k++) { const tt = t + k * 0.28; o.frequency.setValueAtTime(f0 * (1 + (Math.random() - 0.5) * 0.3), tt); o.frequency.linearRampToValueAtTime(f0 * (0.85 + Math.random() * 0.3), tt + 0.22);
         out.gain.setValueAtTime(0, tt); out.gain.linearRampToValueAtTime(0.05 * vol, tt + 0.03); out.gain.linearRampToValueAtTime(0, tt + 0.24); }
       o.connect(out); o.start(t); o.stop(t + notes * 0.3 + 0.1);
-    } else {   // crickets: pulsed 4.6 kHz
+    } else if (!rec.crickets) {   // crickets: pulsed 4.6 kHz (only if the recording didn't load)
       const o = ctx.createOscillator(); o.frequency.value = 4400 + Math.random() * 500; const am = ctx.createOscillator(); am.type = 'square'; am.frequency.value = 28 + Math.random() * 8;
       const amg = gain(0.5); am.connect(amg); const g2 = gain(0.5); amg.connect(g2.gain); o.connect(g2); g2.connect(out);
       out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(0.012 * vol, t + 0.05); out.gain.setValueAtTime(0.012 * vol, t + 0.6); out.gain.linearRampToValueAtTime(0, t + 0.7);
@@ -147,6 +162,9 @@ export function createAudio(engine) {
     footstep_dirt: (d, v) => { burst(d, { f: 900, Q: 0.8, d: 0.09, v: 0.35 * v }); burst(d, { type: 'lowpass', f: 200, d: 0.08, v: 0.35 * v, brown: true }); },
     footstep_gravel: (d, v) => { for (let k = 0; k < 4; k++) burst(d, { f: 2500 + Math.random() * 2500, Q: 3, d: 0.03, v: 0.18 * v, t: ctx.currentTime + k * 0.012 + Math.random() * 0.01 }); burst(d, { type: 'lowpass', f: 220, d: 0.07, v: 0.3 * v, brown: true }); },
     footstep_wet: (d, v) => { burst(d, { f: 700, Q: 1.5, d: 0.14, v: 0.45 * v }); tone(d, { f: 900, f1: 300, d: 0.08, v: 0.05 * v }); },
+    splash: (d, v) => { const t = ctx.currentTime; burst(d, { f: 900, Q: 0.7, a: 0.004, d: 0.18, v: 0.55 * v });
+      burst(d, { type: 'lowpass', f: 420, a: 0.01, d: 0.25, v: 0.35 * v, brown: true });
+      for (let k = 0; k < 5; k++) tone(d, { f: 500 + Math.random() * 900, f1: 1400 + Math.random() * 800, a: 0.002, d: 0.035, v: 0.03 * v, t: t + 0.05 + Math.random() * 0.25 }); },
     stair_creak: (d, v) => { tone(d, { type: 'sawtooth', f: 180 + Math.random() * 90, f1: 120 + Math.random() * 40, a: 0.05, d: 0.45, v: 0.06 * v }); },
     door: (d, v) => { tone(d, { type: 'sawtooth', f: 320, f1: 190, a: 0.08, d: 0.7, v: 0.07 * v }); burst(d, { type: 'lowpass', f: 180, d: 0.25, v: 0.8 * v, brown: true, t: ctx.currentTime + 0.75 }); },
     trapdoor: (d, v) => { burst(d, { type: 'lowpass', f: 140, Q: 2, d: 0.45, v: 1.2 * v, brown: true }); burst(d, { f: 900, d: 0.08, v: 0.2 * v }); },
@@ -205,6 +223,7 @@ export function createAudio(engine) {
     footstep(surface, jog, carrying) {
       const v = (jog ? 1.2 : 0.8) * (carrying ? 1.2 : 1);
       const wet = A.ambience.rain > 0.4 && surface !== 'wood';
+      if (surface === 'water') { api.play('splash', { volume: v * 1.2 }); return; }
       const set = surface === 'wood' ? 'footstep_wood' : surface === 'gravel' ? 'footstep_gravel' : 'footstep_dirt';
       if (ctx && A.started && playSample(set, bus.sfx, v * (surface === 'wood' ? 0.9 : 0.7))) { if (wet) api.play('footstep_wet', { volume: v * 0.4 }); }
       else api.play(wet ? 'footstep_wet' : 'footstep_' + surface, { volume: v });
@@ -220,16 +239,22 @@ export function createAudio(engine) {
       const inCab = zone === 'cab'; A.roof = inCab ? 1 : 0;
       const k = 1 - Math.exp(-dt * 2);
       const set = (param, v) => { param.value += (v - param.value) * k; };
-      set(beds.rain.out.gain, am.rain * (inCab ? 0.35 : 0.5)); set(beds.rain.roofG.gain, am.rain * (inCab ? 1.6 : 0.2));
-      set(beds.wind.out.gain, am.wind * (inCab ? 0.22 : 0.18));   // same at any height (it used to swell as you climbed)
-      set(beds.radio.out.gain, am.radioStatic * 0.07);
-      // creek loudness by distance to the nearest creek point
+      const hasRec = (k) => !!rec[k];
+      const rainV = am.rain * (inCab ? 0.55 : 0.7);
+      if (hasRec('rain')) { set(rec.rain.gain, rainV); rec.rainLP.frequency.value = inCab ? 1400 : 9000; set(beds.rain.out.gain, 0); set(beds.rain.roofG.gain, am.rain * (inCab ? 0.6 : 0)); }
+      else { set(beds.rain.out.gain, am.rain * (inCab ? 0.35 : 0.5)); set(beds.rain.roofG.gain, am.rain * (inCab ? 1.6 : 0.2)); }
+      const windV = am.wind * (inCab ? 0.25 : 0.32);
+      if (hasRec('wind')) { set(rec.wind.gain, windV); set(beds.wind.out.gain, 0); } else set(beds.wind.out.gain, am.wind * (inCab ? 0.22 : 0.18));
+      set(beds.radio.out.gain, am.radioStatic * 0.05);
       let cd = 999; const cp = engine.world && engine.world.layout.creek && engine.world.layout.creek.points;
       if (cp) for (let i = 0; i < cp.length; i += 3) { const d = Math.hypot(cp[i][0] - listenerPos.x, cp[i][2] - listenerPos.z); if (d < cd) cd = d; }
-      set(beds.creek.out.gain, Math.max(am.creek, 0) * 0 + 0.35 * Math.exp(-cd / 30));
+      const creekV = 0.55 * Math.exp(-cd / 22);
+      if (hasRec('creek')) { set(rec.creek.gain, creekV); set(beds.creek.out.gain, 0); } else set(beds.creek.out.gain, creekV * 0.6);
+      const night = engine.sky ? 1 - engine.sky.dayFactor : 0;
+      if (hasRec('crickets')) set(rec.crickets.gain, 0.22 * night * (1 - am.rain * 0.8) * (inCab ? 0.4 : 1));
       const gp = engine.world && engine.world.anchors.get('IA_generator');
       if (gp) { beds.generator.pan.positionX.value = gp.x; beds.generator.pan.positionY.value = gp.y; beds.generator.pan.positionZ.value = gp.z; }
-      set(beds.generator.out.gain, am.generator * 0.5);
+      set(beds.generator.out.gain, am.generator * 0.3);
       life(dt);
       drops(dt);
     },

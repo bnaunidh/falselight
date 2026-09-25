@@ -1,7 +1,7 @@
 // FALSE LIGHT — first-person player: walking/jogging, capsule vs COL_wall OBBs, ground from the heightfield and
 // raycasts onto COL_floor/COL_ramp (stairs climb smoothly), the trail-corridor rule, head bob, footsteps.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=89966d9d';
+import { clamp, damp } from './util.js?v=371673be';
 
 const EYE = 1.65, RADIUS = 0.3, STEP = 0.5;
 
@@ -73,7 +73,7 @@ export function createPlayer(engine) {
     }
   }
 
-  const FOREST_LIMIT = 20;   // you can leave the trail, but not by more than 20 m
+  const FOREST_LIMIT = 19.4;   // you can leave the trail up to the wall of trees at ~20 m
   function inPoly(x, z, poly) {
     let inside = false;
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -142,7 +142,7 @@ export function createPlayer(engine) {
       }
       const len = Math.hypot(fx, fz) || 1; fx /= len; fz /= len;
       const jog = input.isDown('jog') && !api.carrying && api.stamina > 0.05;
-      const sp = (jog ? 3.2 : 1.5) * api.speedMul * (api.carrying ? 0.8 : 1) * (api.onStructure && !jog ? 0.95 : 1);
+      const sp = (jog ? 3.2 : 1.5) * api.speedMul * (api.carrying ? 0.8 : 1) * (api.onStructure && !jog ? 0.95 : 1) * (api.inWater ? 0.55 : 1);
       const sin = Math.sin(yaw), cos = Math.cos(yaw);
       const wx = (fx * cos + fz * sin) * sp, wz = (-fx * sin + fz * cos) * sp;
       vel.x = damp(vel.x, wx, 12, dt); vel.z = damp(vel.z, wz, 12, dt);
@@ -170,6 +170,9 @@ export function createPlayer(engine) {
         else { vel.y -= 9.81 * dt; pos.y += vel.y * dt; if (pos.y <= target) { pos.y = target; vel.y = 0; onGround = true; } else onGround = false; }
         api.onStructure = g2.onStructure; api.surface = g2.surface; api.trail = g2.trail;
         api.offTrail = g2.onStructure ? 0 : (g2.trail ? g2.trail.dist : 0);
+        const wy = !g2.onStructure && W().waterY ? W().waterY(pos.x, pos.z) : null;
+        api.inWater = wy != null && wy > pos.y + 0.03;
+        if (api.inWater) api.surface = 'water';
       }
       if (api.blockedByPath) api.blockedByPath = Math.max(0, api.blockedByPath - dt);
       // zone name
@@ -184,7 +187,10 @@ export function createPlayer(engine) {
       if (onGround && moving > 0.3) {
         bob += dt * moving * 3.1; stepAcc += moving * dt;
         const stride = jog ? 1.25 : 0.78;
-        if (stepAcc > stride) { stepAcc = 0; engine.audio && engine.audio.footstep(api.surface, jog, api.carrying); }
+        if (stepAcc > stride) {
+          stepAcc = 0; engine.audio && engine.audio.footstep(api.surface, jog, api.carrying);
+          if (api.inWater && W().ripple) { const wy2 = W().waterY(pos.x, pos.z); if (wy2 != null) W().ripple(pos.x + Math.sin(bob) * 0.15, wy2, pos.z, jog ? 1.4 : 1); }
+        }
       } else bob = damp(bob, Math.round(bob / Math.PI) * Math.PI, 4, dt);
       const bobY = Math.sin(bob * 2) * 0.035 * Math.min(1, moving / 1.5), bobX = Math.cos(bob) * 0.025 * Math.min(1, moving / 1.5);
       camera.position.set(pos.x, pos.y + EYE + bobY, pos.z);

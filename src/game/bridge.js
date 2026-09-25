@@ -1,24 +1,24 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=89966d9d';
-import { Objectives } from './objectives.js?v=89966d9d';
-import { Radio } from './radio.js?v=89966d9d';
-import { Fuel } from './fuel.js?v=89966d9d';
-import { FireFinder, spokenBearing } from './firefinder.js?v=89966d9d';
-import { Photos, classifyShot } from './photos.js?v=89966d9d';
-import { CO } from './co.js?v=89966d9d';
-import { Weeper, lookupChance } from './weeper.js?v=89966d9d';
-import { OtherLookout } from './otherLookout.js?v=89966d9d';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=89966d9d';
-import { GuidedHiker } from './hikers.js?v=89966d9d';
-import { MorseKeyer, isSOS } from './morse.js?v=89966d9d';
-import { normalizeLayout } from './layout.js?v=89966d9d';
-import { createSaves } from './saves.js?v=89966d9d';
-import { createRng } from './rng.js?v=89966d9d';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=89966d9d';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=89966d9d';
-import * as S from './content/story.js?v=89966d9d';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=371673be';
+import { Objectives } from './objectives.js?v=371673be';
+import { Radio } from './radio.js?v=371673be';
+import { Fuel } from './fuel.js?v=371673be';
+import { FireFinder, spokenBearing } from './firefinder.js?v=371673be';
+import { Photos, classifyShot } from './photos.js?v=371673be';
+import { CO } from './co.js?v=371673be';
+import { Weeper, lookupChance } from './weeper.js?v=371673be';
+import { OtherLookout } from './otherLookout.js?v=371673be';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=371673be';
+import { GuidedHiker } from './hikers.js?v=371673be';
+import { MorseKeyer, isSOS } from './morse.js?v=371673be';
+import { normalizeLayout } from './layout.js?v=371673be';
+import { createSaves } from './saves.js?v=371673be';
+import { createRng } from './rng.js?v=371673be';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=371673be';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=371673be';
+import * as S from './content/story.js?v=371673be';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
