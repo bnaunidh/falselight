@@ -73,6 +73,7 @@ export class Game {
     this.placeholders();
     // lamps (hikers' flashlights) and the day smoke
     this.lampTex = lampTexture();
+    this.lampPool = [0, 1].map(() => { const l = new THREE.PointLight(0xffd9a0, 0, 12, 2); this.e.scene.add(l); return l; });   // created up front: adding lights later recompiles every shader
     this.smoke = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTexture(), transparent: true, depthWrite: false, fog: false, opacity: 0 }));
     this.smoke.scale.set(420, 840, 1); this.smoke.visible = false; e.scene.add(this.smoke);
     // entities that exist every day
@@ -151,7 +152,7 @@ export class Game {
     if (!restored || !this.clock || this.clock.phase !== phase) this.clock = new Clock(phase);
     this.obj = new Objectives(S.OBJECTIVES); this.radio = new Radio();
     this.fired = new Set(); this.phaseTime = 0; this.state = 'play';
-    for (const h of this.hikers) h.ent && h.ent.remove(); for (const h of this.hikers) h.lamp && e.scene.remove(h.lamp);
+    for (const h of this.hikers) h.ent && h.ent.remove(); for (const h of this.hikers) { h.lamp && e.scene.remove(h.lamp); if (h.light) h.light.intensity = 0; }
     for (const w of this.lostWatchers) w.ent.remove();
     this.hikers = []; this.lostWatchers = []; this.keyer = new MorseKeyer();
     if (this.otherEnt) { this.otherEnt.remove(); this.otherEnt = null; }
@@ -310,7 +311,7 @@ export class Game {
     const rules = new GuidedHiker(route, { kind: which === 'false' ? 'false' : 'hiker', rng: this.rng, t0: e.time.value, name: which === 'false' ? 'false' : 'Lyle Pruitt' });
     const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.lampTex, color: which === 'false' ? 0xfff6e8 : 0xffe2b0, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false }));
     lamp.renderOrder = 6; e.scene.add(lamp);
-    const light = new THREE.PointLight(0xffd9a0, 0, 12, 2); e.scene.add(light);
+    const light = this.lampPool[this.hikers.length % this.lampPool.length];
     const ent = which === 'false' ? null : e.entities.spawn('hiker', { position: V3(rules.ground), pose: 'step' });
     this.hikers.push({ rules, lamp, light, ent, which, announced: {} });
   }

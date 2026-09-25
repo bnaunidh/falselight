@@ -200,6 +200,7 @@ class VegSet {
     this.group = new THREE.Group(); this.group.name = 'veg:' + kind;
     this.meshes = lods.map((parts, li) => parts.map((p) => {
       const im = new THREE.InstancedMesh(p.geometry, p.material, placements.length);
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       im.count = 0; im.frustumCulled = false; im.name = `${kind}_LOD${li}`;
       im.castShadow = li === 0 && opts.castShadow; im.receiveShadow = true;
       im.userData.part = p.matrix;
@@ -216,12 +217,19 @@ class VegSet {
   update(cam, force) {
     const cx = cam.x, cz = cam.z;
     const counts = this.meshes.map(() => 0);
-    const r0 = this.ranges[0] ** 2, r1 = (this.ranges[1] || 0) ** 2, r2 = (this.ranges[2] || 0) ** 2;
+    if (!this.cur) this.cur = new Int8Array(this.inst.length).fill(-2);
+    const R = this.ranges, H = 6;   // hysteresis: a tree near a boundary keeps its current LOD instead of flickering
     for (let i = 0; i < this.inst.length; i++) {
       const p = this.inst[i];
-      const d2 = (p[0] - cx) ** 2 + (p[2] - cz) ** 2;
-      let li = d2 < r0 ? 0 : d2 < r1 ? 1 : d2 < r2 ? 2 : -1;
+      const d = Math.sqrt((p[0] - cx) ** 2 + (p[2] - cz) ** 2);
+      let li = d < R[0] ? 0 : (R[1] && d < R[1]) ? 1 : (R[2] && d < R[2]) ? 2 : -1;
+      const was = this.cur[i];
+      if (was >= 0 && li !== was) {
+        const lo = was === 0 ? 0 : R[was - 1], hi = R[was] || 1e9;
+        if (d > lo - H && d < hi + H) li = was;
+      }
       if (li >= this.meshes.length) li = -1;
+      this.cur[i] = li;
       if (li < 0) continue;
       const k = counts[li]++;
       for (const im of this.meshes[li]) {
@@ -229,7 +237,12 @@ class VegSet {
         im.setMatrixAt(k, this._m);
       }
     }
-    this.meshes.forEach((parts, li) => parts.forEach((im) => { im.count = counts[li]; im.instanceMatrix.needsUpdate = true; }));
+    this.meshes.forEach((parts, li) => parts.forEach((im) => {
+      im.count = counts[li];
+      const a = im.instanceMatrix;
+      if (a.clearUpdateRanges) { a.clearUpdateRanges(); a.addUpdateRange(0, Math.max(16, counts[li] * 16)); }   // upload only the live part
+      a.needsUpdate = true;
+    }));
     return counts;
   }
 }
@@ -534,10 +547,13 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   W.update = (dt, t, cam) => {
     WIND.time.value = t; WIND.amount.value = engine.sky ? 0.25 + (engine.sky.weather.wind || 0) * 0.9 : 0.35;
     lodTimer -= dt;
-    if (lodTimer <= 0 || cam.distanceToSquared(lastCam) > 16) {
-      lodTimer = 0.35; lastCam.copy(cam);
+    if (lodTimer <= 0 || cam.distanceToSquared(lastCam) > 36) {
+      lodTimer = 0.5; lastCam.copy(cam);
       for (const c of chunks) { const d = Math.hypot(c.x - cam.x, c.z - cam.z); const near = d < engine.quality.terrainLod0; c.lod0.visible = near; c.lod1.visible = !near; }
-      W.vegCounts = W.vegSets.map((v) => [v.kind, v.update(cam)]);
+      W._vegQueue = W.vegSets.slice();
+    }
+    if (W._vegQueue && W._vegQueue.length) {   // at most two sets per frame: no single frame does the whole forest
+      for (let k = 0; k < 2 && W._vegQueue.length; k++) { const v = W._vegQueue.shift(); v.update(cam); }
     }
     for (const f of W.fires.values()) {
       f.value += (f.target - f.value) * Math.min(1, dt * 0.5);

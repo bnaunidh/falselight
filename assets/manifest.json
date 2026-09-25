@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated": "2026-09-24T21:26:29",
+ "generated": "2026-09-25T09:14:12",
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
@@ -94,18 +94,18 @@
   },
   "veg_fir_a": {
    "path": "models/veg_fir_a.glb",
-   "bytes": 5029476,
-   "mtime": 1790296518
+   "bytes": 5058964,
+   "mtime": 1790352840
   },
   "veg_fir_b": {
    "path": "models/veg_fir_b.glb",
-   "bytes": 5068008,
-   "mtime": 1790296523
+   "bytes": 5102668,
+   "mtime": 1790352841
   },
   "veg_fir_c": {
    "path": "models/veg_fir_c.glb",
-   "bytes": 5314732,
-   "mtime": 1790296528
+   "bytes": 5379148,
+   "mtime": 1790352841
   },
   "veg_grass": {
    "path": "models/veg_grass.glb",
@@ -114,8 +114,8 @@
   },
   "veg_hemlock_a": {
    "path": "models/veg_hemlock_a.glb",
-   "bytes": 5794252,
-   "mtime": 1790296533
+   "bytes": 5862764,
+   "mtime": 1790352841
   },
   "veg_log_a": {
    "path": "models/veg_log_a.glb",
@@ -159,18 +159,18 @@
   },
   "veg_sapling": {
    "path": "models/veg_sapling.glb",
-   "bytes": 4641768,
-   "mtime": 1790296537
+   "bytes": 4651820,
+   "mtime": 1790352841
   },
   "veg_snag_a": {
    "path": "models/veg_snag_a.glb",
-   "bytes": 2157228,
-   "mtime": 1790296544
+   "bytes": 2158092,
+   "mtime": 1790352841
   },
   "veg_snag_b": {
    "path": "models/veg_snag_b.glb",
-   "bytes": 1790692,
-   "mtime": 1790296540
+   "bytes": 1791820,
+   "mtime": 1790352841
   },
   "veg_stump_a": {
    "path": "models/veg_stump_a.glb",

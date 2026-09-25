@@ -111,13 +111,13 @@ export function createLights(engine) {
       const flick = SL.power < 0.35 ? (0.75 + 0.25 * Math.sin(t * 43) * Math.sin(t * 17)) : 1;
       const I = SL.on ? SL.power * flick : 0;
       spot.intensity = damp(spot.intensity, I * 9.0e4, 18, dt);
-      spot.visible = spot.intensity > 1;
+      spot.visible = true; spot.shadow.autoUpdate = spot.intensity > 1;   // never toggle visibility: a light-count change recompiles every material (multi-second freeze)
       beam.visible = I > 0.02; bm.uniforms.uPow.value = damp(bm.uniforms.uPow.value, I, 18, dt); bm.uniforms.uT.value = t;
       bm.uniforms.uFog.value = engine.sky ? clamp(0.35 + engine.sky.weather.fog * 0.6 + engine.sky.weather.rain * 0.5 - engine.sky.dayFactor * 0.6, 0.05, 1.3) : 0.5;
-      flash.intensity = FL.on ? 40 * (0.5 + 0.5 * FL.battery) : 0; flash.visible = FL.on;
+      flash.intensity = FL.on ? 40 * (0.5 + 0.5 * FL.battery) : 0; flash.shadow.autoUpdate = FL.on;
       LAMP.flicker = damp(LAMP.flicker, 0, 3, dt);
-      lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) : 0; lamp.visible = LAMP.on;
-      cfT += dt; cf.intensity = cfT < 0.05 ? 2600 : cfT < 0.25 ? 2600 * Math.exp(-(cfT - 0.05) * 22) : 0; cf.visible = cf.intensity > 0.5;
+      lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) : 0;
+      cfT += dt; cf.intensity = cfT < 0.05 ? 2600 : cfT < 0.25 ? 2600 * Math.exp(-(cfT - 0.05) * 22) : 0;
     },
   };
   return api;
