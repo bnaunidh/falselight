@@ -15,9 +15,9 @@ export const SEAT = {
  * `line` is said once, the first time you sit there by day; `night` if that first time is after dark.
  */
 export const CHILL_SPOTS = [
-  { id: 'meadow', name: 'Bench below the lookout', kind: 'bench', pos: [5, -0.79, 20], bearing: 170,
+  { id: 'meadow', name: 'Bench below the lookout', kind: 'bench', pos: [3.75, -0.765, 18], bearing: 175,
     line: 'The ground falls away to the creek in one long green slope. A red-tailed hawk hangs over it on a single updraft and never once flaps.',
-    night: 'Behind you the cab lamp throws a yellow square on the grass. Everything in front of you is stars.' },
+    night: 'Behind you and high up, the cab window is one small yellow square. Everything in front of you is stars.' },
   { id: 'spring', name: 'Bench at the spring', kind: 'bench', pos: [-58, -19.3, 71], bearing: 162.5,
     line: 'Water runs out of the pipe, fills the barrel and spills over its lip, the same sound it was making before anyone built a tower. The air smells of wet moss and cold stone.',
     night: 'In the dark the spring is louder. You can hear each drop leave the lip of the barrel.' },
@@ -33,7 +33,7 @@ export const CHILL_SPOTS = [
   { id: 'trailhead', name: 'Bench at the trailhead', kind: 'bench', pos: [30, -32.64, 360], bearing: 50,
     line: 'A Steller\'s jay lands on the trail sign, raises its crest at you, and decides you aren\'t worth the noise. Below the lot the valley shimmers in the heat.',
     night: 'Crickets in the gravel. The flag on the mailbox catches a little starlight, and the road down is a pale ribbon going nowhere tonight.' },
-  { id: 'catwalk', name: 'Camp chair on the catwalk', kind: 'chair', pos: [2.56, 30, -2.56], bearing: 45, stand: [1.95, 30, -2.62],
+  { id: 'catwalk', name: 'Camp chair on the catwalk', kind: 'chair', area: 'catwalk', pos: [2.56, 30, -2.56], bearing: 45, stand: [1.95, 30, -2.62],
     line: 'Thirty metres up, the wind has nothing to lean on but you. The whole forest moves under it like water, and the smell of pine comes all the way up.',
     night: 'The Milky Way runs straight over the tower. A satellite crawls across it without blinking, taking its time.' },
 ];
@@ -71,6 +71,17 @@ export function seatFor(spot, from = null, base = spot.pos) {
   const f = facingFromBearing(spot.bearing);
   const look = [eye[0] + f[0] * 25, eye[1] - 1.6, eye[2] + f[1] * 25];
   return { lx, seat, eye, stand, look, yaw: yawFromBearing(spot.bearing) };
+}
+
+/**
+ * Can someone whose feet are at (x, y, z) use this seat? The prompt has no line-of-sight test, so without this the
+ * catwalk chair could be used from inside the cab through the wall (and you'd be put outside, past the door).
+ * Catwalk: on the deck and outside the cab (player.js calls |x|,|z| < 2.05 the cab). Benches: on the same ground.
+ */
+export function canReach(spot, x, y, z) {
+  if (spot.area === 'catwalk') return y > spot.pos[1] - 0.5 && y < spot.pos[1] + 1.2 && Math.max(Math.abs(x), Math.abs(z)) >= 2.05;
+  const dx = x - spot.pos[0], dz = z - spot.pos[2];
+  return Math.abs(y - spot.pos[1]) < 2 && dx * dx + dz * dz < 25;
 }
 
 /** The spot list the map draws: { id, name, pos, facing: [fx, fz], bearing, kind }. */
@@ -116,7 +127,9 @@ export class ChillRules {
     if (ctx.danger) return this.stand('danger');
     this.t += dt;
     if (ctx.moving && this.t >= SIT.settle) return this.stand('move');
-    const ev = [];
+    // runs every frame while seated: one reused list + calm event instead of fresh ones (read it before the next tick)
+    const ev = this._ev || (this._ev = []); ev.length = 0;
+    const calm = this._calm || (this._calm = { type: 'calm', dt: 0 });
     const k = ctx.fastOK === false ? 1 : SIT.timeScale;
     if (k !== this.scale) { this.scale = k; ev.push({ type: 'timeScale', k }); }
     if (!this.lineDone && this.t >= SIT.lineAfter) {
@@ -125,7 +138,7 @@ export class ChillRules {
       const text = ctx.night && s.night ? s.night : s.line;
       if (text) ev.push({ type: 'line', id: s.id, text });
     }
-    ev.push({ type: 'calm', dt });
+    calm.dt = dt; ev.push(calm);
     return ev;
   }
   toJSON() { return [...this.seen]; }

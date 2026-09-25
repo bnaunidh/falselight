@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=7927575b';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=cec6e676';
 
 const loader = new GLTFLoader();
 export const gltfCache = new Map();
