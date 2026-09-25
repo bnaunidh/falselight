@@ -160,7 +160,7 @@ export function createUI(root = document.getElementById('ui')) {
       return;
     }
     if (kind === 'pause') {
-      const m = openModal(`<div class="paper pause"><h2>Paused</h2><div class="menu"><button data-a="resume">Resume</button><button data-a="settings">Settings</button><button data-a="retry">Restart this ${esc(o.what || 'night')}</button><button data-a="title">Title</button></div></div>`, 'center');
+      const m = openModal(`<div class="paper pause"><h2>Paused</h2><div class="menu"><button data-a="resume">Resume</button><button data-a="settings">Settings</button><button data-a="retry">Restart this ${esc(o.what || 'night')}</button><button data-a="title">Title</button></div></div>`, 'center', o.onClose);
       m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => o.onAction(b.dataset.a));
       return;
     }

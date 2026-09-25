@@ -134,20 +134,54 @@ export class Game {
     this.hikers = []; this.lostWatchers = []; this.keyer = new MorseKeyer();
   }
   snapshot() {
-    return { phase: this.clock.phase, flags: this.flags, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(), weeper: this.weeper.toJSON(),
-      other: this.other.toJSON(), log: this.log, proofs: this.proofs, obj: this.obj.toJSON() };
+    const P = this.e.player;
+    return { phase: this.clock.phase, hour: this.clock.hour, flags: this.flags, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
+      weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log, proofs: this.proofs, obj: this.obj.toJSON(),
+      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit,
+      player: { pos: [P.position.x, P.position.y, P.position.z], yaw: P.yaw },
+      hikers: (this.hikers || []).map((h) => ({ which: h.which, s: h.rules.s, off: h.rules.off, status: h.rules.status })),
+      lost: (this.lostWatchers || []).map((w) => ({ idx: w.idx, steps: w.steps })) };
+  }
+  clearWorldEntities() {
+    for (const h of this.hikers || []) { h.ent && h.ent.remove(); h.lamp && this.e.scene.remove(h.lamp); if (h.light) h.light.intensity = 0; }
+    for (const w of this.lostWatchers || []) w.ent && w.ent.remove();
+    this.hikers = []; this.lostWatchers = [];
   }
   restore(s) {
+    this.clearWorldEntities();
     this.fresh(s.phase);
     this.flags = { rulesTo: 5, ...s.flags }; this.fuel = new Fuel(s.fuel); this.photos = new Photos(s.photos); this.co = new CO(s.co);
     this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = s.log || []; this.proofs = s.proofs || 0;
   }
-
+  /** Secret checkpoints: silent saves of exactly where you are. Never during a chase (you'd respawn into it). */
+  checkpoint(reason = '') {
+    if (this.state !== 'play' && reason !== 'pause') return false;
+    if (!this.clock || ['coming', 'stairs', 'door', 'hunting', 'caught'].includes(this.weeper.state)) return false;
+    if (this.e.player.velocity && Math.abs(this.e.player.velocity.y) > 1) return false;   // not mid-fall
+    const now = performance.now();
+    if (reason !== 'pause' && this._cpAt && now - this._cpAt < 4000) return false;
+    this._cpAt = now;
+    this.cpSnap = this.snapshot(); this.cpSnap.reason = reason;
+    this.persist();
+    return true;
+  }
+  persist() { this.saves.save({ ...(this.lastSaved || this.snapshot()), checkpoint: this.cpSnap || null }); }
   // ------------------------------------------------------------------ flow
-  newGame() { this.saves.clear(); this.fresh('day1'); this.startPhase('day1'); }
-  continueGame() { const s = this.saves.load(); if (!s) return this.newGame(); this.restore(s); this.startPhase(s.phase, true); }
-  retry() { const s = this.lastSaved || this.saves.load(); if (s) { this.restore(s); this.startPhase(s.phase, true); } else this.newGame(); }
-  startPhase(phase, restored = false) {
+  newGame() { this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
+  continueGame() {
+    const s = this.saves.load(); if (!s) return this.newGame();
+    this.lastSaved = { ...s }; delete this.lastSaved.checkpoint;
+    const cp = s.checkpoint && s.checkpoint.phase === s.phase ? s.checkpoint : null;
+    this.restore(cp || s); this.startPhase(s.phase, true, cp);
+  }
+  restartPhase() { const s = this.lastSaved || this.saves.load(); if (!s) return this.newGame(); this.cpSnap = null; this.restore(s); this.startPhase(s.phase, true); }
+  retry() {
+    const cp = this.cpSnap && this.lastSaved && this.cpSnap.phase === this.lastSaved.phase ? this.cpSnap : null;
+    if (cp) { this.restore(cp); this.startPhase(cp.phase, true, cp); return; }
+    this.restartPhase();
+  }
+  startPhase(phase, restored = false, cp = null) {
+    this._cpHour = null; this._lastZone = null;
     const e = this.e;
     if (!restored || !this.clock || this.clock.phase !== phase) this.clock = new Clock(phase);
     this.obj = new Objectives(S.OBJECTIVES); this.radio = new Radio();
@@ -169,7 +203,21 @@ export class Game {
     else if (phase === 'day2' || phase === 'end') { P.teleport(this.anchor('SP_cab_bed') || new THREE.Vector3(-1, 30, -0.7)); P.lookAt(new THREE.Vector3(0, 31.4, 3)); }
     else { P.teleport(this.anchor('SP_cab_bed') || new THREE.Vector3(-1, 30, -0.7)); P.lookAt(new THREE.Vector3(2, 31.4, 2)); }
     if (phase === 'night2' && this.weeper.state === 'seen_day') this.weeper.nightFell();
-    this.lastSaved = this.snapshot(); this.saves.save(this.lastSaved);
+    if (cp) {   // resuming a secret checkpoint: put everything back exactly as it was
+      this.clock.setHour(cp.hour); this.obj.load(cp.obj || []); this.fired = new Set(cp.fired || []);
+      this.truckVisible = !!cp.truckVisible; this.slLit = !!cp.slLit;
+      if (cp.player) { P.teleport(V3(cp.player.pos), cp.player.yaw); P.pitch = 0; }
+      for (const h of cp.hikers || []) {
+        this.spawnHiker(h.which); const r = this.hikers[this.hikers.length - 1].rules;
+        r.s = h.s; r.off = h.off || [0, 0];
+        r.status = ['answered', 'walking', 'straying'].includes(h.status) ? 'waiting' : h.status;
+      }
+      if ((cp.lost || []).length) { this.spawnLost(); cp.lost.forEach((l, k) => { const w = this.lostWatchers[k]; if (w) { w.idx = l.idx; w.steps = l.steps || 0; w.ent.setPosition(V3(w.pos)); } }); }
+      this.cpSnap = cp;
+      this.refreshTracker();
+      return;
+    }
+    this.lastSaved = this.snapshot(); this.cpSnap = null; this.persist();
     this.ui.toast(PHASES[phase].date, 5);
     this.script('start');
     this.refreshTracker();
@@ -209,7 +257,7 @@ export class Game {
       : { text: 'Keep watch — Silver Fork will call', hint: 'Scan the horizon from the catwalk, or rest on the bed to let the hours pass.' };
     this.ui.tracker(v, { date: PHASES[this.clock.phase].short + ' · ' + this.hourText() });
   }
-  complete(id, note) { if (this.obj.complete(id, note)) { this.e.audio.play('paper', { volume: 0.4 }); this.refreshTracker(); } }
+  complete(id, note) { if (this.obj.complete(id, note)) { this.e.audio.play('paper', { volume: 0.4 }); this.refreshTracker(); setTimeout(() => this.checkpoint('task:' + id), 1500); } }
   add(id, extra) { if (!this.obj.has(id)) { this.obj.add(id, extra); this.refreshTracker(); } }
   inCab() { return this.player().zone === 'cab'; }
   beamSpot() {
@@ -340,8 +388,8 @@ export class Game {
         if (ev === 'ready') { this.complete('n1_answer'); this.add('n1_guide'); }
         if (ev === 'stopped' && !H.announced.stopped) { H.announced.stopped = true; this.say(S.LINES.hikerStopped); }
         if (ev === 'straying' && !H.announced.stray) { H.announced.stray = true; this.say(S.LINES.hikerStraying); }
-        if (ev === 'saved') { this.say(S.LINES.savedN1); this.complete('n1_guide'); this.addLog(S.AUTO_LOG.saved()); this.flags.savedN1 = true; }
-        if (ev === 'fell') { this.say(S.LINES.fellN1); this.obj.complete('n1_guide', null, true); this.refreshTracker(); this.addLog(S.AUTO_LOG.lost()); this.flags.lostN1 = true; e.audio.play('breath', { volume: 0.6 }); }
+        if (ev === 'saved') { setTimeout(() => this.checkpoint('saved'), 2000); this.say(S.LINES.savedN1); this.complete('n1_guide'); this.addLog(S.AUTO_LOG.saved()); this.flags.savedN1 = true; }
+        if (ev === 'fell') { setTimeout(() => this.checkpoint('fell'), 2000); this.say(S.LINES.fellN1); this.obj.complete('n1_guide', null, true); this.refreshTracker(); this.addLog(S.AUTO_LOG.lost()); this.flags.lostN1 = true; e.audio.play('breath', { volume: 0.6 }); }
       }
     }
     function route_dir(r) { return r.route.dir ? r.route.dir(r.s) : null; }
@@ -465,7 +513,7 @@ export class Game {
       const r = sendPrint(it.p, channel, { phase: ph, hour: h, day: PHASES[ph].day });
       if (!r.ok) { this.ui.toast(r.why); return; }
       if (r.proof) this.proofs++;
-      this.addLog(S.AUTO_LOG.sent(channel, this.hourText()));
+      this.addLog(S.AUTO_LOG.sent(channel, this.hourText())); setTimeout(() => this.checkpoint('sent'), 1000);
       this.complete('d2_send');
       if (channel === 'fax') { this.say(S.LINES.faxSent); this.flags.faxUsed = true; }
       if (channel === 'mailbox') this.say(S.LINES.mailSent);
@@ -703,7 +751,17 @@ export class Game {
     // held can in view, watch
     this.ui.watch(e.input.isDown('watch'), fmtHour(this.clock.hour) + (this.clock.held ? '' : ''));
     // the path rule, said once
-    if (this.player().blockedByPath && !this.flags.toldPath) { this.flags.toldPath = true; this.ui.toast('Stay on the trail. The timber is thick and the ground falls away.'); }
+    const off = this.player().offTrail || 0;
+    if (off > 13 && !this._warnedOff) { this._warnedOff = true; this.ui.toast(this.night ? 'You can\'t see the trail anymore. Go back.' : 'The trail is behind you. Don\'t lose it.', 4); }
+    if (off < 6) this._warnedOff = false;
+    if (this.player().blockedByPath && !this.flags.toldPath) { this.flags.toldPath = true; this.ui.toast('The timber is too thick to go any further. Back to the trail.'); }
+    // secret checkpoints: walking into the cab, and every two game hours
+    const zoneNow = this.player().zone;
+    if (zoneNow === 'cab' && this._lastZone !== 'cab' && this.phaseTime > 3) this.checkpoint('cab');
+    this._lastZone = zoneNow;
+    const half = Math.floor(this.clock.hour * 2);   // time checkpoints: every :00 and :30 on the game clock
+    if (this._cpHour == null) this._cpHour = half;
+    else if (half !== this._cpHour) { this._cpHour = half; this._cpAt = 0; this.checkpoint('time ' + fmtHour(half / 2)); }
     // script + tracker
     this.scriptTick(dt);
     this.trackerT = (this.trackerT || 0) - dt; if (this.trackerT <= 0) { this.trackerT = 1; this.refreshTracker(); }

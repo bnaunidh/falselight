@@ -208,9 +208,22 @@ class VegSet {
       return im;
     }));
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._s = new THREE.Vector3(); this._p = new THREE.Vector3();
+    // seat every instance on the real ground: tilt toward the slope (rocks, logs, plants) and sink by how steep it is,
+    // so nothing hovers on a hillside
+    const H = opts.heightAt, up = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3(), qa = new THREE.Quaternion(), qy = new THREE.Quaternion();
     this.base = placements.map(([x, y, z, r, s]) => {
       const m = new THREE.Matrix4();
-      this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r); this._s.setScalar(s * (opts.baseScale || 1)); this._p.set(x, y, z);
+      const sc = s * (opts.baseScale || 1);
+      let yy = y;
+      qy.setFromAxisAngle(up, r);
+      if (H) {
+        const dx = H(x + 1, z) - H(x - 1, z), dz = H(x, z + 1) - H(x, z - 1);
+        const slope = Math.hypot(dx, dz) / 2;
+        nrm.set(-dx / 2, 1, -dz / 2).normalize();
+        qa.setFromUnitVectors(up, up.clone().lerp(nrm, opts.align || 0).normalize());
+        yy = H(x, z) - (opts.sink || 0) - slope * (opts.footprint || 0.5) * sc;
+      } else qa.identity();
+      this._q.multiplyQuaternions(qa, qy); this._s.setScalar(sc); this._p.set(x, yy, z);
       return m.compose(this._p, this._q, this._s);
     });
   }
@@ -517,8 +530,17 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
         const q = engine.quality;
         const ranges = isTree ? (kind === 'veg_sapling' ? [q.treeLod0 * 0.6, q.treeLod1 * 0.6, q.treeLod2 * 0.5] : [q.treeLod0, q.treeLod1, q.treeLod2])
           : /rocks|stump|log|boulder/.test(kind) ? [q.debris] : [q.plants];
-        const baseScale = kind === 'veg_moss' ? 4 : 1;
-        const vs = new VegSet(kind, lods, scatter[kind], ranges, { castShadow: isTree || /rocks|stump|log/.test(kind), baseScale });
+        // per-kind seating: how big the base is (m), how much it tilts to the slope, how deep it sits, and a size fix for
+        // the Poly Haven sets that came in as whole clusters/strips
+        const SEAT = {
+          veg_rocks_a: [2.6, 0.9, 0.25, 0.42], veg_rocks_b: [2.6, 0.9, 0.25, 0.42], veg_rocks_boulder: [0.9, 0.6, 0.2, 1],
+          veg_stump_a: [0.8, 0.4, 0.12, 1], veg_stump_b: [0.8, 0.4, 0.12, 1], veg_log_a: [1.6, 1.0, 0.1, 1], veg_log_b: [2.0, 1.0, 0.15, 1],
+          veg_roots: [0.9, 1.0, 0.08, 1], veg_branches: [0.6, 1.0, 0.05, 1], veg_fern: [0.6, 0.6, 0.06, 1], veg_salal: [0.5, 0.6, 0.05, 1],
+          veg_grass: [1.0, 0.8, 0.05, 0.4], veg_moss: [0.4, 1.0, 0.03, 4],
+        };
+        const seat = SEAT[kind] || (isTree ? [kind === 'veg_sapling' ? 0.2 : 0.9, 0, 0.2, 1] : [0.5, 0.5, 0.05, 1]);
+        const vs = new VegSet(kind, lods, scatter[kind], ranges, { castShadow: isTree || /rocks|stump|log/.test(kind), baseScale: seat[3],
+          heightAt, footprint: seat[0], align: seat[1], sink: seat[2] });
         scene.add(vs.group); W.vegSets.push(vs);
       } catch (err) { console.warn('veg', kind, err); }
       done++; prog(0.55 + 0.35 * done / kinds.length, 'forest');

@@ -17,6 +17,7 @@ engine.input.sensitivity = 0.0022 * settings.sens;
 engine.audio.setVolume(+settings.volume);
 engine.audio.setMuted(!settings.sound || q.has('mute'));   // sound is OFF until the player turns it on in Settings
 window.__fl = { engine, ui };
+engine.noRender = q.has('norender');   // headless logic tests: no GPU work per frame
 try {
   await engine.loadWorld((f, l) => ui.loading(f, l));
 } catch (err) {
@@ -67,14 +68,20 @@ function openSettings(back) {
   } });
 }
 function pause() {
+  if (game.state === 'paused') return;
+  game.checkpoint('pause');                       // opening the menu quietly sets a checkpoint
   game.state = 'paused'; engine.setPaused(true); engine.input.unlock();
-  ui.screen('pause', { what: /night/.test(game.clock.phase) ? 'night' : 'day', onAction: (a) => {
-    ui.closeModal(); engine.setPaused(false);
-    if (a === 'settings') { game.state = 'paused'; engine.setPaused(true); return openSettings(pause); }
-    if (a === 'retry') { game.state = 'play'; game.retry(); engine.input.lock(); return; }
-    if (a === 'title') return title();
-    game.state = 'play'; engine.input.lock();
-  } });
+  let acted = false;
+  const resume = () => { engine.setPaused(false); game.state = 'play'; engine.input.lock(); };
+  ui.screen('pause', { what: /night/.test(game.clock.phase) ? 'night' : 'day',
+    onClose: () => { if (!acted) resume(); },        // Esc on the menu = resume (it used to leave the game frozen)
+    onAction: (a) => {
+      acted = true; ui.closeModal(); engine.setPaused(false);
+      if (a === 'settings') { game.state = 'paused'; engine.setPaused(true); return openSettings(() => { game.state = 'play'; pause(); }); }
+      if (a === 'retry') { game.state = 'play'; game.restartPhase(); engine.input.lock(); return; }
+      if (a === 'title') return title();
+      resume();
+    } });
 }
 game.onPause = pause;
 game.onTitle = title;

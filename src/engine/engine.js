@@ -85,7 +85,7 @@ export async function createEngine(canvas, opts = {}) {
     E.audio.update(dt);
     E.frame++;
   }
-  function render(dt) { renderer.info.reset(); E.post.render(scene, camera, dt); }
+  function render(dt) { if (E.noRender) return; renderer.info.reset(); E.post.render(scene, camera, dt); }
   function frame(now) {
     if (!running) return;
     lastRAF = now;

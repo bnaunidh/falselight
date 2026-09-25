@@ -73,11 +73,32 @@ export function createPlayer(engine) {
     }
   }
 
+  const FOREST_LIMIT = 20;   // you can leave the trail, but not by more than 20 m
+  function inPoly(x, z, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if ((a[1] > z) !== (b[1] > z) && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1] || 1e-9) + a[0]) inside = !inside;
+    }
+    return inside;
+  }
   function allowedXZ(x, z) {
     const w = W();
+    const rav = w.layout && w.layout.ravine && w.layout.ravine.polygon;
+    if (rav && rav.length > 2 && inPoly(x, z, rav)) return false;        // the ravine: never
     for (const zn of w.zones) if ((x - zn.x) ** 2 + (z - zn.z) ** 2 < zn.r * zn.r) return true;
     if (Math.abs(x) < 7.5 && Math.abs(z) < 7.5) return true;           // the fenced tower base
-    return w.trail.nearest(x, z).dist <= w.trail.halfWidth + 0.35;
+    return w.trail.nearest(x, z).dist <= FOREST_LIMIT;
+  }
+  function pushOutTrunks(p) {   // tree trunks are solid once you're off the trail
+    const w = W(); if (!w.trunkGrid) return;
+    const cx = Math.floor(p.x / 20), cz = Math.floor(p.z / 20);
+    for (let ix = cx - 1; ix <= cx + 1; ix++) for (let iz = cz - 1; iz <= cz + 1; iz++) {
+      for (const t of w.trunkGrid.get(ix + ',' + iz) || []) {
+        const r = t[2] * 0.75 + RADIUS, dx = p.x - t[0], dz = p.z - t[1], d = Math.hypot(dx, dz);
+        if (d < r && d > 1e-4) { p.x = t[0] + (dx / d) * r; p.z = t[1] + (dz / d) * r; }
+      }
+    }
   }
 
   const api = {
@@ -133,6 +154,7 @@ export function createPlayer(engine) {
       } else {
         pos.x += vel.x * dt; pos.z += vel.z * dt;
         pushOutWalls(pos);
+        pushOutTrunks(pos);
         const g = groundAt(pos.x, pos.y, pos.z);
         // the path rule: off-structure, stay inside the trail corridor or a place's zone
         if (!api.freeRoam && !g.onStructure && !allowedXZ(pos.x, pos.z)) {
@@ -147,6 +169,7 @@ export function createPlayer(engine) {
         if (target >= pos.y - 0.02 || onGround && pos.y - target < 0.6) { pos.y = damp(pos.y, target, 30, dt); vel.y = 0; onGround = true; }
         else { vel.y -= 9.81 * dt; pos.y += vel.y * dt; if (pos.y <= target) { pos.y = target; vel.y = 0; onGround = true; } else onGround = false; }
         api.onStructure = g2.onStructure; api.surface = g2.surface; api.trail = g2.trail;
+        api.offTrail = g2.onStructure ? 0 : (g2.trail ? g2.trail.dist : 0);
       }
       if (api.blockedByPath) api.blockedByPath = Math.max(0, api.blockedByPath - dt);
       // zone name
