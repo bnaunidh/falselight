@@ -1,9 +1,9 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=eaf48799';
-import { createUI } from './ui/ui.js?v=eaf48799';
-import { Game } from './game/bridge.js?v=eaf48799';
-import { createSaves } from './game/saves.js?v=eaf48799';
-import { UI as WORDS } from './game/content/story.js?v=eaf48799';
+import { createEngine } from './engine/engine.js?v=cb2ac382';
+import { createUI } from './ui/ui.js?v=cb2ac382';
+import { Game } from './game/bridge.js?v=cb2ac382';
+import { createSaves } from './game/saves.js?v=cb2ac382';
+import { UI as WORDS } from './game/content/story.js?v=cb2ac382';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);

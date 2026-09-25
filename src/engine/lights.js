@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=eaf48799';
+import { clamp, damp } from './util.js?v=cb2ac382';
 
 function beamMaterial() {
   return new THREE.ShaderMaterial({

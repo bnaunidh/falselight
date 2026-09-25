@@ -185,3 +185,4 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .packsheet .cell b{position:absolute;left:7px;top:5px;font:600 10px/1 var(--type);opacity:.5}
 .packsheet .off,.packsheet .tip{font-size:14px;opacity:.75;line-height:1.45}
 @media (max-width:700px){.fl-hot .slot{width:48px;height:48px}.fl-hot .slot img{width:40px;height:40px}.fl-surv .m i{width:80px}}
+.fl-surv .m.h{color:#d9786a}.fl-surv .m.h u{background:#d9786a}

@@ -1,27 +1,27 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=eaf48799';
-import { Objectives } from './objectives.js?v=eaf48799';
-import { Radio } from './radio.js?v=eaf48799';
-import { Fuel, FUEL } from './fuel.js?v=eaf48799';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=eaf48799';
-import { Survival, SURV } from './survival.js?v=eaf48799';
-import { createItemsView } from './itemsView.js?v=eaf48799';
-import { FireFinder, spokenBearing } from './firefinder.js?v=eaf48799';
-import { Photos, classifyShot } from './photos.js?v=eaf48799';
-import { CO } from './co.js?v=eaf48799';
-import { Weeper, lookupChance } from './weeper.js?v=eaf48799';
-import { OtherLookout } from './otherLookout.js?v=eaf48799';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=eaf48799';
-import { GuidedHiker } from './hikers.js?v=eaf48799';
-import { MorseKeyer, isSOS } from './morse.js?v=eaf48799';
-import { normalizeLayout } from './layout.js?v=eaf48799';
-import { createSaves } from './saves.js?v=eaf48799';
-import { createRng } from './rng.js?v=eaf48799';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=eaf48799';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=eaf48799';
-import * as S from './content/story.js?v=eaf48799';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=cb2ac382';
+import { Objectives } from './objectives.js?v=cb2ac382';
+import { Radio } from './radio.js?v=cb2ac382';
+import { Fuel, FUEL } from './fuel.js?v=cb2ac382';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=cb2ac382';
+import { Survival, SURV } from './survival.js?v=cb2ac382';
+import { createItemsView } from './itemsView.js?v=cb2ac382';
+import { FireFinder, spokenBearing } from './firefinder.js?v=cb2ac382';
+import { Photos, classifyShot } from './photos.js?v=cb2ac382';
+import { CO } from './co.js?v=cb2ac382';
+import { Weeper, lookupChance } from './weeper.js?v=cb2ac382';
+import { OtherLookout } from './otherLookout.js?v=cb2ac382';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=cb2ac382';
+import { GuidedHiker } from './hikers.js?v=cb2ac382';
+import { MorseKeyer, isSOS } from './morse.js?v=cb2ac382';
+import { normalizeLayout } from './layout.js?v=cb2ac382';
+import { createSaves } from './saves.js?v=cb2ac382';
+import { createRng } from './rng.js?v=cb2ac382';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=cb2ac382';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=cb2ac382';
+import * as S from './content/story.js?v=cb2ac382';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -86,7 +86,8 @@ export class Game {
     this.weeperH = e.entities.spawn('weeper', { position: seat.clone(), facing: V3(this.L.places.creek_bridge || [34, -46, 176]), pose: 'sit_sob' });
     this.interactions();
     this.inputs();
-    this.iv = createItemsView(e); this.itemIA = new Map();
+    this.iv = createItemsView(e); this.itemIA = new Map(); this.health = 1; this.limp = 0;
+    e.player.onLand = (drop, v) => this.onLand(drop, v);
     this.itemsReady = this.iv.load().then(() => this.syncItems()).catch((err) => console.warn('items', err));
     e.onUpdate((dt, t) => this.update(dt, t));
   }
@@ -166,7 +167,7 @@ export class Game {
     const P = this.e.player;
     return { phase: this.clock.phase, hour: this.clock.hour, flags: this.flags, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
       weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log, proofs: this.proofs, obj: this.obj.toJSON(),
-      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(),
+      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1,
       player: { pos: [P.position.x, P.position.y, P.position.z], yaw: P.yaw },
       hikers: (this.hikers || []).map((h) => ({ which: h.which, s: h.rules.s, off: h.rules.off, status: h.rules.status })),
       lost: (this.lostWatchers || []).map((w) => ({ idx: w.idx, steps: w.steps })) };
@@ -181,7 +182,7 @@ export class Game {
     this.fresh(s.phase);
     this.flags = { rulesTo: 5, ...s.flags }; this.fuel = new Fuel(s.fuel); this.photos = new Photos(s.photos); this.co = new CO(s.co);
     this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = s.log || []; this.proofs = s.proofs || 0;
-    this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {});
+    this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = 0;
   }
   /** Secret checkpoints: silent saves of exactly where you are. Never during a chase (you'd respawn into it). */
   checkpoint(reason = '') {
@@ -223,6 +224,7 @@ export class Game {
     if (this.bodyEnt) { this.bodyEnt.remove(); this.bodyEnt = null; }
     this.exitMode(); this.holding = null;
     this.placing = null; this.syncItems();
+    if (!restored) this.health = Math.max(this.health ?? 1, 0.85);   // a night's sleep (or a day's) mends most of it
     if (this.weeper.state === 'caught' || (this.weeper.state === 'gone' && !isNight(phase))) this.weeper.state = this.weeper.state === 'gone' ? 'gone' : 'sitting';
     if (['coming', 'stairs', 'door', 'hunting'].includes(this.weeper.state)) { this.weeper.state = 'screaming'; this.weeper.timer = 0; this.weeper.progress = 0; }
     const sky = e.sky;
@@ -853,6 +855,21 @@ export class Game {
     }, () => this.closedModal());
     this.openModal(render);
   }
+  /** Fall damage. Under ~1.5 m you just thump down; a storey hurts and leaves you limping; ~8 m kills. */
+  onLand(drop) {
+    if (this.state !== 'play') return;
+    const e = this.e;
+    e.audio.sfx('knock_one', { volume: Math.min(0.9, 0.2 + drop * 0.12) });
+    if (drop < 1.5) return;
+    e.audio.sfx('cloth', { volume: 0.45 });
+    if (drop >= 8) { this.health = 0; this.die('fall'); return; }
+    const dmg = Math.min(0.95, Math.pow((drop - 1.5) / 5.5, 1.3));
+    this.health = Math.max(0, this.health - dmg); this.hurtAt = e.time.value; this.limp = Math.min(1, this.limp + dmg * 1.5);
+    e.post.params.fear = Math.min(1, 0.45 + dmg);
+    if (this.health <= 0.001) { this.die('fall'); return; }
+    this.ui.toast(dmg > 0.4 ? 'You hit the ground hard. Something in your ankle gives.' : 'You land badly. That will bruise.', 3);
+    setTimeout(() => this.checkpoint('fell'), 1500);
+  }
   /** What Esc means right now, short of pausing. Returns true if it did something. */
   escape() {
     if (this.placing) { this.cancelPlace(); return true; }
@@ -958,9 +975,12 @@ export class Game {
       if (ev === 'hungry') this.ui.toast('Your stomach is knotted. Eat something: there are tins on the shelf in the cab.', 4);
       if (ev === 'freezing') this.ui.toast('You\'re shaking with cold. Get inside and light the heater.', 4);
     }
-    Pl.speedMul = this.surv.vigor;
+    // injuries mend slowly on their own, quickly asleep; a limp fades
+    if (this.health < 1 && e.time.value - (this.hurtAt ?? -99) > 8) this.health = Math.min(1, this.health + dt * (this.resting ? 1 / 25 : 1 / 240));
+    this.limp = Math.max(0, this.limp - dt / 45);
+    Pl.speedMul = this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1);
     this.survT = (this.survT || 0) - dt;
-    if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph }); this.refreshHotbar(); }
+    if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph, health: this.health }); this.refreshHotbar(); }
     // items: the thing in your hand, the placing ghost, wheel = switch hands (or turn what you're placing)
     const wh = e.input.consumeWheel();
     if (wh && this.mode === 'walk' && !this.ui.modalOpen()) { if (this.placing) this.placing.rot += wh * Math.PI / 12; else this.selectSlot((this.inv.active + (wh > 0 ? 1 : HAND_SLOTS - 1)) % HAND_SLOTS); }

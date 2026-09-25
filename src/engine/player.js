@@ -1,7 +1,7 @@
 // FALSE LIGHT — first-person player: walking/jogging, capsule vs COL_wall OBBs, ground from the heightfield and
 // raycasts onto COL_floor/COL_ramp (stairs climb smoothly), the trail-corridor rule, head bob, footsteps.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=eaf48799';
+import { clamp, damp } from './util.js?v=cb2ac382';
 
 const EYE = 1.65, RADIUS = 0.3, STEP = 0.5;
 
@@ -10,7 +10,7 @@ export function createPlayer(engine) {
   const W = () => engine.world;
   const pos = new THREE.Vector3(0, 0, 8);
   const vel = new THREE.Vector3();
-  let yaw = 0, pitch = 0, enabled = true, onGround = true, bob = 0, stepAcc = 0, lookTween = null;
+  let yaw = 0, pitch = 0, enabled = true, onGround = true, bob = 0, stepAcc = 0, lookTween = null, fallTop = null;
   const ray = new THREE.Raycaster(); ray.far = 3;
   const down = new THREE.Vector3(0, -1, 0);
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
@@ -111,7 +111,7 @@ export function createPlayer(engine) {
       let v = target;
       if (typeof target === 'string') v = W().anchors.get(target) || W().poi(target);
       if (!v) return false;
-      pos.copy(v); if (typeof y === 'number') yaw = y;
+      pos.copy(v); if (typeof y === 'number') yaw = y; fallTop = null; onGround = true;
       const g = groundAt(pos.x, pos.y + 0.2, pos.z); pos.y = g.y; vel.set(0, 0, 0); return true;
     },
     setEnabled(b) { enabled = b; },
@@ -166,8 +166,14 @@ export function createPlayer(engine) {
         const g2 = groundAt(pos.x, pos.y, pos.z);
         if (g2.y > pos.y + STEP + 0.05 && !g2.onStructure) { pos.x = old.x; pos.z = old.z; }   // too steep a step
         const target = g2.y;
-        if (target >= pos.y - 0.02 || onGround && pos.y - target < 0.6) { pos.y = damp(pos.y, target, 30, dt); vel.y = 0; onGround = true; }
-        else { vel.y -= 9.81 * dt; pos.y += vel.y * dt; if (pos.y <= target) { pos.y = target; vel.y = 0; onGround = true; } else onGround = false; }
+        // landings report how far you fell (fall damage lives in the game, api.onLand)
+        const land = () => { if (fallTop != null) { const drop = fallTop - pos.y, v = -vel.y; fallTop = null; if (drop > 0.9 && api.onLand) api.onLand(drop, v); } };
+        if (target >= pos.y - 0.02 || onGround && pos.y - target < 0.6) { pos.y = damp(pos.y, target, 30, dt); land(); vel.y = 0; onGround = true; }
+        else {
+          if (fallTop == null) fallTop = old.y;
+          vel.y -= 9.81 * dt; pos.y += vel.y * dt;
+          if (pos.y <= target) { pos.y = target; land(); vel.y = 0; onGround = true; } else onGround = false;
+        }
         api.onStructure = g2.onStructure; api.surface = g2.surface; api.trail = g2.trail;
         api.offTrail = g2.onStructure ? 0 : (g2.trail ? g2.trail.dist : 0);
         const wy = !g2.onStructure && W().waterY ? W().waterY(pos.x, pos.z) : null;
