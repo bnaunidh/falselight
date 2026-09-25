@@ -80,7 +80,7 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .logbook .thumb img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
 .logbook .thumb.down{background:#222;color:#aaa;aspect-ratio:.83;display:flex;align-items:center;justify-content:center}
 .logbook .thumb em{position:absolute;left:6px;bottom:2px;font-size:10px;font-family:var(--type)}
-.mapsheet{max-width:900px;padding:14px}
+.mapsheet{max-width:min(1200px,94vw,calc((88vh - 70px) * 4 / 3));padding:14px}
 .mapsheet canvas{width:100%;display:block}
 .mapsheet .legend{font-family:var(--hand);text-align:center;margin-top:6px}
 .chooser button{display:flex;align-items:center;gap:12px;width:100%;margin:6px 0;text-align:left}

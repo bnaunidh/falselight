@@ -1,29 +1,30 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=cec6e676';
-import { Objectives } from './objectives.js?v=cec6e676';
-import { Radio } from './radio.js?v=cec6e676';
-import { Fuel, FUEL } from './fuel.js?v=cec6e676';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=cec6e676';
-import { Survival, SURV } from './survival.js?v=cec6e676';
-import { createItemsView } from './itemsView.js?v=cec6e676';
-import { createPlume } from './smokePlume.js?v=cec6e676';
-import { FireFinder, spokenBearing } from './firefinder.js?v=cec6e676';
-import { Photos, classifyShot } from './photos.js?v=cec6e676';
-import { CO } from './co.js?v=cec6e676';
-import { Weeper, lookupChance } from './weeper.js?v=cec6e676';
-import { OtherLookout } from './otherLookout.js?v=cec6e676';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=cec6e676';
-import { GuidedHiker } from './hikers.js?v=cec6e676';
-import { MorseKeyer, isSOS } from './morse.js?v=cec6e676';
-import { normalizeLayout } from './layout.js?v=cec6e676';
-import { createSaves } from './saves.js?v=cec6e676';
-import { createRng } from './rng.js?v=cec6e676';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=cec6e676';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=cec6e676';
-import * as S from './content/story.js?v=cec6e676';
-import { createDog } from './dog.js?v=cec6e676';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=760ffcd2';
+import { Objectives } from './objectives.js?v=760ffcd2';
+import { Radio } from './radio.js?v=760ffcd2';
+import { Fuel, FUEL } from './fuel.js?v=760ffcd2';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=760ffcd2';
+import { Survival, SURV } from './survival.js?v=760ffcd2';
+import { createItemsView } from './itemsView.js?v=760ffcd2';
+import { createChill } from './chill.js?v=760ffcd2';
+import { createPlume } from './smokePlume.js?v=760ffcd2';
+import { FireFinder, spokenBearing } from './firefinder.js?v=760ffcd2';
+import { Photos, classifyShot } from './photos.js?v=760ffcd2';
+import { CO } from './co.js?v=760ffcd2';
+import { Weeper, lookupChance } from './weeper.js?v=760ffcd2';
+import { OtherLookout } from './otherLookout.js?v=760ffcd2';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=760ffcd2';
+import { GuidedHiker } from './hikers.js?v=760ffcd2';
+import { MorseKeyer, isSOS } from './morse.js?v=760ffcd2';
+import { normalizeLayout } from './layout.js?v=760ffcd2';
+import { createSaves } from './saves.js?v=760ffcd2';
+import { createRng } from './rng.js?v=760ffcd2';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=760ffcd2';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=760ffcd2';
+import * as S from './content/story.js?v=760ffcd2';
+import { createDog } from './dog.js?v=760ffcd2';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -106,6 +107,28 @@ export class Game {
       return d;
     }).catch((err) => console.warn('dog', err));
     e.onUpdate((dt, t) => this.update(dt, t));
+    // benches and the catwalk chair: sit, look, let the time go by (src/game/chill.js)
+    this.sitting = false;
+    this.chill = createChill(e, {
+      isPlay: () => this.state === 'play',
+      walkMode: () => this.mode === 'walk',
+      setSitting: (b) => { this.sitting = b; if (b) { this.binocular = false; if (this.placing) this.cancelPlace(); } },
+      setTimeScale: (k) => { if (this.clock && !this.resting) this.clock.speed = k; },
+      calm: (dt) => {
+        const P = e.post.params;
+        if (!(this.weeper && this.weeper.triggered)) P.fear = Math.max(0, P.fear - dt * 0.25);
+        if (this.co) this.co.blood = Math.max(0, this.co.blood - dt * 0.006);
+        this.limp = Math.max(0, (this.limp || 0) - dt / 40);
+      },
+      toast: (text, s) => this.ui.toast(text, s),
+      say: (text) => this.ui.subtitle('', text, 7, { note: true }),
+      danger: () => !!(this.weeper && this.weeper.triggered),
+      canFastForward: () => !(this.radio && this.radio.busy) && !(this.clock && this.clock.held) && !(this.obj && this.obj.current() && this.obj.current().urgent),
+      isNight: () => !!this.clock && this.night,
+      ownInteract: false,
+    });
+    // the benches are placement surfaces too, once they're in
+    Promise.all([this.itemsReady, this.chill.ready]).then(() => { try { this.iv.buildSurfaces(); } catch (err) { console.warn('surfaces', err); } });
   }
 
   placeholders() {
@@ -183,7 +206,7 @@ export class Game {
     const P = this.e.player;
     return { phase: this.clock.phase, hour: this.clock.hour, flags: this.flags, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
       weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log, proofs: this.proofs, obj: this.obj.toJSON(),
-      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, dog: this.dog ? this.dog.toJSON() : (this._dogSave || null),
+      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, chillSeen: this.chill ? this.chill.toJSON() : [], dog: this.dog ? this.dog.toJSON() : (this._dogSave || null),
       player: { pos: [P.position.x, P.position.y, P.position.z], yaw: P.yaw },
       hikers: (this.hikers || []).map((h) => ({ which: h.which, s: h.rules.s, off: h.rules.off, status: h.rules.status })),
       lost: (this.lostWatchers || []).map((w) => ({ idx: w.idx, steps: w.steps })) };
@@ -200,6 +223,7 @@ export class Game {
     this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = s.log || []; this.proofs = s.proofs || 0;
     this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = 0;
     if (this.dog) { if (s.dog) this.dog.restore(s.dog); else this.dog.reset(); } else this._dogSave = s.dog || null;
+    if (this.chill) this.chill.load(s.chillSeen || []);
   }
   /** Secret checkpoints: silent saves of exactly where you are. Never during a chase (you'd respawn into it). */
   checkpoint(reason = '') {
@@ -215,7 +239,7 @@ export class Game {
   }
   persist() { this.saves.save({ ...(this.lastSaved || this.snapshot()), checkpoint: this.cpSnap || null }); }
   // ------------------------------------------------------------------ flow
-  newGame() { if (this.dog) this.dog.reset(); else this._dogSave = null; this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
+  newGame() { if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.chill) this.chill.load([]); this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
   continueGame() {
     const s = this.saves.load(); if (!s) return this.newGame();
     this.lastSaved = { ...s }; delete this.lastSaved.checkpoint;
@@ -687,7 +711,7 @@ export class Game {
     this.ui.finder(null); this.ui.searchlight(null);
   }
   openModal(fn) { this.e.uiBlocking = true; this.e.input.unlock(); this.player().setEnabled(false); fn(); }
-  closedModal() { this.e.uiBlocking = false; this.player().setEnabled(this.mode === 'walk'); if (this.state === 'play') this.e.input.lock(); }
+  closedModal() { this.e.uiBlocking = false; this.player().setEnabled(this.mode === 'walk' && !this.sitting); if (this.state === 'play') this.e.input.lock(); }
   openLogbook(page = 'tasks') {
     const o = this.obj;
     const data = {
@@ -706,7 +730,8 @@ export class Game {
     const W = this.e.world;
     const places = {}; for (const k of ['tower', 'trailhead', 'hikers_camp', 'burn_scar', 'spring', 'ravine_overlook', 'creek_bridge']) if (this.L.places[k]) places[k.replace('_', ' ')] = this.L.places[k];
     this.openModal(() => this.ui.map({ segments: W.layout.trail ? W.layout.trail.segments : [], places, player: this.pos(), rect: W.rect, heightAt: W.heightAt,
-      creek: W.layout.creek && W.layout.creek.points, ravine: W.layout.ravine && W.layout.ravine.polygon }, () => this.closedModal()));
+      creek: W.layout.creek && W.layout.creek.points, ravine: W.layout.ravine && W.layout.ravine.polygon,
+      spots: this.chill ? this.chill.spots : [], heading: this.player().yaw }, () => this.closedModal()));
   }
 
   inputs() {
@@ -714,6 +739,7 @@ export class Game {
     In.onAction('interact', (d) => {
       if (!d || this.state !== 'play') return;
       if (this.ui.modalOpen()) { this.ui.closeModal(); return; }
+      if (this.chill && this.chill.sitting) { this.chill.stand(); return; }
       if (this.mode === 'finder') { this.reportFinder(); return; }
       if (this.mode === 'searchlight') { this.slLit = !this.slLit; return; }
       e.interact.use();
@@ -926,6 +952,7 @@ export class Game {
   }
   /** What Esc means right now, short of pausing. Returns true if it did something. */
   escape() {
+    if (this.chill && this.chill.sitting) { this.chill.stand(); return true; }
     if (this.placing) { this.cancelPlace(); return true; }
     if (this.binocular) { this.binocular = false; return true; }
     if (this.mode !== 'walk') { this.exitMode(); return true; }
@@ -1046,7 +1073,7 @@ export class Game {
       if (ev === 'freezing') this.ui.toast('You\'re shaking with cold. Get inside and light the heater.', 4);
     }
     // injuries mend slowly on their own, quickly asleep; a limp fades
-    if (this.health < 1 && e.time.value - (this.hurtAt ?? -99) > 8) this.health = Math.min(1, this.health + dt * (this.resting ? 1 / 25 : 1 / 240));
+    if (this.health < 1 && e.time.value - (this.hurtAt ?? -99) > 8) this.health = Math.min(1, this.health + dt * (this.resting ? 1 / 25 : this.sitting ? 1 / 90 : 1 / 240));
     this.limp = Math.max(0, this.limp - dt / 45);
     Pl.speedMul = this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1);
     this.survT = (this.survT || 0) - dt;
@@ -1071,6 +1098,13 @@ export class Game {
     this.updateLost(dt, t);
     this.updateWeeper(dt, t);
     if (this.dog) this.dog.update(dt, t);
+    // sitting down turns you to face what the seat looks out on
+    if (this.sitting && this.chill && this.chill.sitting && this.chill.sitting !== this._sitFaced) {
+      const sp = this.chill.spots.find((x) => x.id === this.chill.sitting);
+      if (sp && sp.facing) this.player().lookAt(new THREE.Vector3(sp.pos[0] + sp.facing[0] * 40, sp.pos[1] + 0.6, sp.pos[2] + sp.facing[1] * 40), 1.2);
+      this._sitFaced = this.chill.sitting;
+    }
+    if (!this.sitting) this._sitFaced = null;
     if (this.otherEnt && this.bedSitterT != null) { this.bedSitterT += dt; const c = e.view.check(this.otherEnt); if (!c.inFrustum && this.bedSitterT > 3) { this.otherEnt.remove(); this.otherEnt = null; this.bedSitterT = null; } }
     // smoke by day
     if (this.smoke.mesh.visible) {

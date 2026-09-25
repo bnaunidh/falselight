@@ -1,6 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
+import { drawMap } from './mapdraw.js?v=760ffcd2';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -96,30 +97,9 @@ export function createUI(root = document.getElementById('ui')) {
     render(page);
   };
   U.map = (data, onClose) => {
-    const m = openModal('<div class="paper mapsheet"><canvas width="900" height="900"></canvas><div class="legend">Trail map — Tamarack Lookout · pinned in the cab · M / Esc</div></div>', 'center', onClose);
-    const c = m.querySelector('canvas'), g = c.getContext('2d');
-    const { segments, places, player, rect } = data;
-    const sx = (x) => ((x - rect.min[0]) / (rect.max[0] - rect.min[0])) * 820 + 40, sz = (z) => ((z - rect.min[1]) / (rect.max[1] - rect.min[1])) * 820 + 40;
-    g.fillStyle = '#e8dfc8'; g.fillRect(0, 0, 900, 900);
-    // contour-ish hatching from the height samples
-    if (data.heightAt) {
-      g.globalAlpha = 0.18; g.strokeStyle = '#6d6048'; g.lineWidth = 0.7;
-      for (let z = rect.min[1]; z < rect.max[1]; z += 6) for (let x = rect.min[0]; x < rect.max[0]; x += 6) {
-        const h = data.heightAt(x, z), h2 = data.heightAt(x + 6, z), h3 = data.heightAt(x, z + 6);
-        const lv = Math.floor(h / 5), l2 = Math.floor(h2 / 5), l3 = Math.floor(h3 / 5);
-        if (lv !== l2 || lv !== l3) { g.beginPath(); g.moveTo(sx(x), sz(z)); g.lineTo(sx(x) + 1.5, sz(z) + 1.5); g.stroke(); }
-      }
-      g.globalAlpha = 1;
-    }
-    if (data.creek) { g.strokeStyle = '#4d6a78'; g.lineWidth = 3; g.beginPath(); data.creek.forEach((p, i) => i ? g.lineTo(sx(p[0]), sz(p[2])) : g.moveTo(sx(p[0]), sz(p[2]))); g.stroke(); }
-    if (data.ravine) { g.fillStyle = 'rgba(90,70,50,.25)'; g.beginPath(); data.ravine.forEach((p, i) => i ? g.lineTo(sx(p[0]), sz(p[1])) : g.moveTo(sx(p[0]), sz(p[1]))); g.closePath(); g.fill(); g.fillStyle = '#6b5438'; g.font = 'italic 15px Georgia'; g.fillText('ravine', sx(data.ravine[0][0]) + 10, sz(data.ravine[0][1]) + 40); }
-    g.strokeStyle = '#8a2b1d'; g.lineWidth = 2.2; g.setLineDash([7, 5]);
-    for (const s of segments) { g.beginPath(); s.points.forEach((p, i) => i ? g.lineTo(sx(p[0]), sz(p[2])) : g.moveTo(sx(p[0]), sz(p[2]))); g.stroke(); }
-    g.setLineDash([]);
-    g.font = '16px "Bradley Hand","Noteworthy","Segoe Print",cursive'; g.fillStyle = '#2b2419';
-    for (const [n, p] of Object.entries(places)) { g.beginPath(); g.arc(sx(p[0]), sz(p[2]), 4, 0, 7); g.fill(); g.fillText(n, sx(p[0]) + 8, sz(p[2]) - 6); }
-    if (player) { g.fillStyle = '#b3261e'; g.beginPath(); g.arc(sx(player[0]), sz(player[2]), 7, 0, 7); g.fill(); g.font = 'bold 14px Georgia'; g.fillText('you', sx(player[0]) + 10, sz(player[2]) + 4); }
-    g.strokeStyle = '#2b2419'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(850, 110); g.lineTo(850, 60); g.stroke(); g.font = 'bold 18px Georgia'; g.fillText('N', 843, 52);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const m = openModal(`<div class="paper mapsheet"><canvas width="${Math.round(1200 * dpr)}" height="${Math.round(900 * dpr)}"></canvas><div class="legend">Trail map — Tamarack Lookout · pinned in the cab · M / Esc</div></div>`, 'center', onClose);
+    try { drawMap(m.querySelector('canvas'), { ...data, dpr }); } catch (err) { console.warn('map', err); }
   };
   U.choose = (title, items, onPick, onClose) => {
     const m = openModal(`<div class="paper chooser"><h2>${esc(title)}</h2>${items.length ? items.map((it, i) => `<button data-i="${i}">${it.img ? `<img src="${it.img}">` : ''}<span>${esc(it.label)}</span></button>`).join('') : '<p>Nothing.</p>'}<div class="close">Esc</div></div>`, 'center', onClose);

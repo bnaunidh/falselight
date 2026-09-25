@@ -22,6 +22,11 @@
    "bytes": 2532576,
    "mtime": 1790225200
   },
+  "prop_camp_chair": {
+   "path": "models/prop_camp_chair.glb",
+   "bytes": 2067056,
+   "mtime": 1790360674
+  },
   "prop_camp_stove": {
    "path": "models/prop_camp_stove.glb",
    "bytes": 661624,
@@ -61,6 +66,11 @@
    "path": "models/prop_jerrycan.glb",
    "bytes": 2652308,
    "mtime": 1790225193
+  },
+  "prop_log_bench": {
+   "path": "models/prop_log_bench.glb",
+   "bytes": 1918844,
+   "mtime": 1790360511
   },
   "prop_mailbox": {
    "path": "models/prop_mailbox.glb",

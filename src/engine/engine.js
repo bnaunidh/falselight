@@ -1,15 +1,16 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
-import { createInput } from './input.js?v=cec6e676';
-import { createWorld } from './world.js?v=cec6e676';
-import { createPlayer } from './player.js?v=cec6e676';
-import { createSky } from './sky.js?v=cec6e676';
-import { createLights } from './lights.js?v=cec6e676';
-import { createPost } from './post.js?v=cec6e676';
-import { createEntities, createView, createInteract } from './entities.js?v=cec6e676';
-import { createAudio } from './audio.js?v=cec6e676';
-import { createPhoto } from './photo.js?v=cec6e676';
-import { tryJSON } from './util.js?v=cec6e676';
+import { createInput } from './input.js?v=760ffcd2';
+import { createWorld } from './world.js?v=760ffcd2';
+import { createPlayer } from './player.js?v=760ffcd2';
+import { createSky } from './sky.js?v=760ffcd2';
+import { createLights } from './lights.js?v=760ffcd2';
+import { createPost } from './post.js?v=760ffcd2';
+import { createEntities, createView, createInteract } from './entities.js?v=760ffcd2';
+import { createAudio } from './audio.js?v=760ffcd2';
+import { createPhoto } from './photo.js?v=760ffcd2';
+import { createMountains } from './mountains.js?v=760ffcd2';
+import { tryJSON } from './util.js?v=760ffcd2';
 
 export const QUALITY = {
   low: { pr: 0.75, prMin: 0.5, msaa: false, aniso: 4, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },
@@ -30,7 +31,7 @@ export async function createEngine(canvas, opts = {}) {
   const E = {
     renderer, scene, camera, quality, qualityName: qname, adaptive: true, _pr: null, msaa: quality.msaa, manifest: { models: {}, data: {}, textures: {}, hdri: {} },
     time: { value: 0 }, paused: false, uiBlocking: false, frame: 0, fps: 0,
-    _cbs: [], onUpdate(fn) { E._cbs.push(fn); return () => E._cbs.splice(E._cbs.indexOf(fn), 1); },
+    _cbs: [], onUpdate(fn) { E._cbs.push(fn); return () => { const i = E._cbs.indexOf(fn); if (i >= 0) E._cbs.splice(i, 1); }; },
   };
   E.input = createInput(canvas);
   E.audio = createAudio(E);
@@ -59,6 +60,7 @@ export async function createEngine(canvas, opts = {}) {
     E.manifest = (await tryJSON('assets/manifest.json')) || E.manifest;
     E.world = await createWorld(E, E.manifest, (f, l) => onProgress(f * 0.85, l));
     E.sky = await createSky(E, E.manifest, (f) => onProgress(0.85 + f * 0.1, 'sky'));
+    E.mountains = createMountains(E);   // the distant Cascades (FL_mountains) + a night-sky band; updates itself via E.onUpdate
     E.view = createView(E);
     E.lights = createLights(E);
     E.entities = createEntities(E);

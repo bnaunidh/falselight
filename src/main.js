@@ -1,9 +1,9 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=cec6e676';
-import { createUI } from './ui/ui.js?v=cec6e676';
-import { Game } from './game/bridge.js?v=cec6e676';
-import { createSaves } from './game/saves.js?v=cec6e676';
-import { UI as WORDS } from './game/content/story.js?v=cec6e676';
+import { createEngine } from './engine/engine.js?v=760ffcd2';
+import { createUI } from './ui/ui.js?v=760ffcd2';
+import { Game } from './game/bridge.js?v=760ffcd2';
+import { createSaves } from './game/saves.js?v=760ffcd2';
+import { UI as WORDS } from './game/content/story.js?v=760ffcd2';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -105,7 +105,7 @@ canvas.addEventListener('click', () => { if (game.state === 'play' && !ui.modalO
 engine.input.onAction('lockchange', (locked) => {
   if (locked || game.state !== 'play' || ui.modalOpen() || engine.uiBlocking) return;
   // the browser ate an Esc to free the mouse: do what that Esc meant (leave the searchlight / finder / camera / print) instead of wasting it
-  if (game.mode !== 'walk' || game.camRaised || game.holding || game.placing) { game.escape(); return; }
+  if (game.mode !== 'walk' || game.camRaised || game.holding || game.placing || (game.chill && game.chill.sitting)) { game.escape(); return; }
   setTimeout(() => { if (!engine.input.locked && game.state === 'play' && !ui.modalOpen()) pause(); }, 120);
 });
 

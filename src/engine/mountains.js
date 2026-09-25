@@ -1,5 +1,6 @@
 // FALSE LIGHT — the distant Cascades seen from the lookout: five receding ridge layers from 3 to 11 km, Rainier NNE,
-// St. Helens SSW (1983: horseshoe crater, grey blast zone), Adams ESE. One mesh, one draw call, 138k triangles.
+// St. Helens SSW (1983: horseshoe crater, grey blast zone), Adams ESE. One mesh, one draw call, 138k triangles (+ a 1.5k
+// triangle night-sky band, a second draw only while the night HDRI shows).
 //
 // Shape lives in mountainsShape.js (pure, node-tested). This file wraps it for three.js and shades it:
 //   * sun/moon Lambert + sky ambient taken from the engine's own sky (the dome's HDRI stats, env intensity, fog colour)
@@ -10,7 +11,7 @@
 // Not a collider, not a raycast target, no shadows, fog:false (it does its own), frustumCulled off (it rings the camera).
 // A second, tiny draw (the night band, below) paints a clean sky over the rocky hill baked into the night HDRI.
 import * as THREE from 'three';
-import { buildMountains, skyBandTable, MOUNTAINS } from './mountainsShape.js?v=cec6e676';
+import { buildMountains, skyBandTable, MOUNTAINS } from './mountainsShape.js?v=760ffcd2';
 
 const VS = /* glsl */`
 attribute vec4 aInfo;
@@ -211,6 +212,7 @@ function createNightBand(radius) {
     uniforms, vertexShader: BAND_VS, fragmentShader: BAND_FS, side: THREE.DoubleSide,
     transparent: true, blending: THREE.NoBlending, depthWrite: false, depthTest: true, fog: false, lights: false,
   });
+  material.forceSinglePass = true;   // three draws transparent DoubleSide in two passes otherwise (a 3rd draw call)
   material.name = 'FL_mountains_nightband';
   const mesh = new THREE.Mesh(geo, material);
   mesh.name = 'FL_mountains_nightband';
@@ -315,7 +317,8 @@ export function createMountains(engine, opts = {}) {
   group.name = 'FL_mountains';
   group.matrixAutoUpdate = false;
   group.add(mesh);
-  const band = opts.nightBand === false ? null : createNightBand(opts.skyRadius || 9000);
+  const domeGeo = engine.sky && engine.sky.dome && engine.sky.dome.geometry, domeR = domeGeo && domeGeo.parameters && domeGeo.parameters.radius;
+  const band = opts.nightBand === false ? null : createNightBand(opts.skyRadius || domeR || 9000);   // the dome's own sphere
   if (band) group.add(band.mesh);
   let bandFor = null, bandOn = false, bandEnabled = !!band;
   // the table (a few ms) is built when the night texture is first seen: at load when the sky already exists (the normal
@@ -374,7 +377,7 @@ export function createMountains(engine, opts = {}) {
         (0.5 * (a.mean[0] + a.zenith[0]) * (1 - m) + 0.5 * (b.mean[0] + b.zenith[0]) * m) * env,
         (0.5 * (a.mean[1] + a.zenith[1]) * (1 - m) + 0.5 * (b.mean[1] + b.zenith[1]) * m) * env,
         (0.5 * (a.mean[2] + a.zenith[2]) * (1 - m) + 0.5 * (b.mean[2] + b.zenith[2]) * m) * env);
-      U.uFlash.value = du.uFlash.value;
+      U.uFlash.value = du.uFlash ? du.uFlash.value : 0;
     }
     if (sky.hemi) {
       const hi = sky.hemi.intensity / Math.PI;
