@@ -6,6 +6,32 @@ import * as THREE from 'three';
 export function createAudio(engine) {
   let ctx = null, master = null, bus = {}, noiseBuf = null, brownBuf = null;
   const beds = {};
+  const SAMPLE_SETS = {
+    footstep_wood: ['footstep_wood_000', 'footstep_wood_001', 'footstep_wood_002', 'footstep_wood_003', 'footstep_wood_004'],
+    footstep_dirt: ['footstep_grass_000', 'footstep_grass_001', 'footstep_grass_002', 'footstep_grass_003', 'footstep_grass_004'],
+    footstep_gravel: ['footstep00', 'footstep01', 'footstep02', 'footstep03', 'footstep04', 'footstep05', 'footstep06', 'footstep07', 'footstep08', 'footstep09'],
+    door: ['doorOpen_1', 'doorOpen_2'], door_close: ['doorClose_1', 'doorClose_2', 'doorClose_3', 'doorClose_4'], trapdoor: ['doorClose_2', 'doorClose_4'],
+    stair_creak: ['creak1', 'creak2', 'creak3'], paper: ['bookFlip1', 'bookFlip2', 'bookFlip3'], logbook_open: ['bookOpen'], logbook_close: ['bookClose'],
+    knock_one: ['impactPlank_medium_000', 'impactPlank_medium_001', 'impactPlank_medium_002', 'impactPlank_medium_003', 'impactPlank_medium_004'],
+    metal: ['impactMetal_light_000', 'impactMetal_light_001', 'impactMetal_light_002', 'impactMetal_light_003', 'impactMetal_light_004'],
+    metal_heavy: ['impactMetal_heavy_000', 'impactMetal_heavy_001', 'impactMetal_heavy_002'], cloth: ['cloth1', 'cloth2', 'cloth3', 'cloth4'],
+  };
+  const samples = {};
+  let samplesLoading = false;
+  async function loadSamples() {
+    if (samplesLoading || !ctx) return; samplesLoading = true;
+    const names = [...new Set(Object.values(SAMPLE_SETS).flat())];
+    await Promise.all(names.map(async (n) => {
+      try { const r = await fetch('assets/audio/' + n + '.ogg'); if (!r.ok) return; samples[n] = await ctx.decodeAudioData(await r.arrayBuffer()); } catch (e) { /* keep the procedural fallback */ }
+    }));
+  }
+  function playSample(set, dest, v, rate = 1) {
+    const list = (SAMPLE_SETS[set] || []).map((n) => samples[n]).filter(Boolean);
+    if (!list.length) return false;
+    const src = ctx.createBufferSource(); src.buffer = list[(Math.random() * list.length) | 0];
+    src.playbackRate.value = rate * (0.93 + Math.random() * 0.14);
+    const g = ctx.createGain(); g.gain.value = v; src.connect(g); g.connect(dest); src.start(); return true;
+  }
   const listenerPos = new THREE.Vector3();
   const A = { volume: 0.8, muted: true, started: false, ambience: { rain: 0, wind: 0.3, generator: 0, radioStatic: 0, forest: 0.6, creek: 0 }, roof: 0 };
 
@@ -25,6 +51,7 @@ export function createAudio(engine) {
     const n = noiseBuf.getChannelData(0), b = brownBuf.getChannelData(0); let last = 0;
     for (let i = 0; i < len; i++) { n[i] = Math.random() * 2 - 1; last = (last + 0.02 * n[i]) / 1.02; b[i] = last * 3.5; }
     buildBeds();
+    loadSamples();
     return ctx;
   }
   const noise = (brown = false) => { const s = ctx.createBufferSource(); s.buffer = brown ? brownBuf : noiseBuf; s.loop = true; s.loopStart = Math.random(); return s; };
@@ -37,7 +64,7 @@ export function createAudio(engine) {
 
   function buildBeds() {
     // rain: broadband hiss + a patter layer; "roof" variant boosts a resonant drum band
-    { const out = gain(0, bus.amb); const s = noise(); const hp = filt('highpass', 600); const lp = filt('lowpass', 7000); s.connect(hp); hp.connect(lp); lp.connect(out);
+    { const out = gain(0, bus.amb); const s = noise(); const hp = filt('highpass', 900); const lp = filt('lowpass', 4200); const sh = filt('highshelf', 3000); sh.gain.value = -9; s.connect(hp); hp.connect(lp); lp.connect(sh); sh.connect(out);
       const roofG = gain(0, out); const s2 = noise(true); const bp = filt('bandpass', 380, 1.4); s2.connect(bp); bp.connect(roofG); s.start(); s2.start();
       beds.rain = { out, roofG }; }
     { const out = gain(0, bus.amb); const s = noise(true); const bp = filt('bandpass', 420, 0.6); s.connect(bp); bp.connect(out); s.start();
@@ -54,6 +81,17 @@ export function createAudio(engine) {
     { const out = gain(0, bus.amb); beds.forest = { out }; }
   }
 
+  // rain drops: short random ticks on leaves / the cab roof while it rains
+  let dropT = 0;
+  function drops(dt) {
+    const r = A.ambience.rain; if (r < 0.05) return;
+    dropT -= dt; if (dropT > 0) return; dropT = 0.012 + Math.random() * 0.05 / (0.3 + r);
+    const t = ctx.currentTime, g = gain(0, bus.amb), pan = ctx.createStereoPanner(); pan.pan.value = Math.random() * 2 - 1; g.disconnect(); g.connect(pan); pan.connect(bus.amb);
+    const s = noise(), bp = filt('bandpass', A.roof > 0.5 ? 900 + Math.random() * 1200 : 2500 + Math.random() * 4000, 3); s.connect(bp); bp.connect(g);
+    const v = (A.roof > 0.5 ? 0.08 : 0.035) * r * (0.4 + Math.random());
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.002); g.gain.exponentialRampToValueAtTime(1e-4, t + 0.04 + Math.random() * 0.05);
+    s.start(t, Math.random() * 3); s.stop(t + 0.12);
+  }
   // forest life: scheduled birds by day, crickets by night
   let lifeT = 0;
   function life(dt) {
@@ -127,13 +165,17 @@ export function createAudio(engine) {
     thunder: (d, v) => { burst(d, { type: 'lowpass', f: 90, Q: 0.5, a: 0.08, d: 3.5, v: 1.4 * v, brown: true }); burst(d, { type: 'lowpass', f: 400, a: 0.01, d: 0.6, v: 0.5 * v, brown: true }); },
     heart: (d, v) => { const t = ctx.currentTime; tone(d, { f: 55, f1: 40, d: 0.12, v: 0.5 * v, t }); tone(d, { f: 50, f1: 38, d: 0.12, v: 0.35 * v, t: t + 0.22 }); },
     breath: (d, v) => { burst(d, { f: 900, Q: 0.6, a: 0.4, d: 0.9, v: 0.12 * v }); },
-    sob: (d, v) => { const t = ctx.currentTime; voice(d, { f0: 190, dur: 1.6, vowel: 'u', breath: 0.8, v: 0.25 * v, glide: 0.8, jitter: 0.06, sob: true, t });
-      voice(d, { f0: 160, dur: 1.1, vowel: 'o', breath: 0.9, v: 0.18 * v, glide: 0.7, sob: true, t: t + 1.8 }); burst(d, { f: 1200, Q: 0.7, a: 0.3, d: 0.7, v: 0.1 * v, t: t + 3.0 }); },
-    scream: (d, v) => { const t = ctx.currentTime; voice(d, { f0: 420, dur: 2.2, vowel: 'a', breath: 0.5, v: 0.6 * v, glide: 1.45, jitter: 0.09, t }); voice(d, { f0: 610, dur: 1.8, vowel: 'e', breath: 0.7, v: 0.35 * v, glide: 1.2, jitter: 0.12, t: t + 0.15 }); },
+    sob: (d, v) => { const t = ctx.currentTime;   // far-off crying: shuddering breaths (catches), a faint low moan, a long inhale
+      for (let k = 0; k < 4; k++) burst(d, { f: 700 + k * 60, Q: 1.4, a: 0.03, d: 0.16, v: 0.16 * v, t: t + k * 0.22 });
+      voice(d, { f0: 140, dur: 1.2, vowel: 'u', breath: 1.6, v: 0.07 * v, glide: 0.85, jitter: 0.05, sob: true, t: t + 0.9 });
+      burst(d, { f: 1400, Q: 0.6, a: 0.5, d: 0.6, v: 0.09 * v, t: t + 2.3 }); },
+    scream: (d, v) => { const t = ctx.currentTime;   // raw, breathy and ragged rather than a clean tone
+      voice(d, { f0: 380, dur: 2.0, vowel: 'a', breath: 2.2, v: 0.32 * v, glide: 1.35, jitter: 0.16, t });
+      burst(d, { f: 2200, Q: 0.8, a: 0.08, d: 1.8, v: 0.28 * v, t }); burst(d, { type: 'lowpass', f: 500, a: 0.05, d: 1.6, v: 0.25 * v, t: t + 0.1 }); },
     radio_voice: (d, v, opts) => { const words = Math.max(2, ((opts && opts.text) || 'copy').split(/\s+/).length); const t = ctx.currentTime;
-      const out = gain(1); const hp = filt('highpass', 450); const lp = filt('lowpass', 2800); out.connect(hp); hp.connect(lp); lp.connect(d);
-      for (let k = 0; k < words; k++) voice(out, { f0: 105 + Math.random() * 30, dur: 0.18 + Math.random() * 0.12, vowel: 'aoeiu'[(Math.random() * 5) | 0], breath: 0.3, v: 0.35 * v, t: t + 0.15 + k * 0.33 });
-      burst(d, { f: 1800, d: 0.2, v: 0.3 * v, t: t + 0.15 + words * 0.33 }); },
+      // a voice under heavy static: band-limited noise that swells with the syllables (no fake formant buzz)
+      for (let k = 0; k < words; k++) burst(d, { f: 1100 + Math.random() * 700, Q: 1.2, a: 0.03, d: 0.16 + Math.random() * 0.1, v: 0.1 * v, t: t + 0.15 + k * 0.31 });
+      burst(d, { f: 1800, d: 0.18, v: 0.25 * v, t: t + 0.15 + words * 0.31 }); },
   };
 
   const api = {
@@ -148,6 +190,13 @@ export function createAudio(engine) {
       if (!ctx || !A.started) return { stop() {}, setVolume() {} };
       const f = SOUNDS[name]; if (!f) { console.warn('no sound', name); return { stop() {}, setVolume() {} }; }
       const g = gain(1); g.connect(position ? panner(position) : bus.sfx);
+      const map = { door: 'door', trapdoor: 'trapdoor', stair_creak: 'stair_creak', paper: 'paper', gate_rattle: 'metal', generator_start: 'metal_heavy' };
+      if (name === 'knock') { if (samples.impactPlank_medium_000) { for (let k = 0; k < 3; k++) setTimeout(() => playSample('knock_one', g, volume * 1.4, 0.8), k * 340); return { stop() {}, setVolume(x) { g.gain.value = x; } }; } }
+      else if (map[name] && playSample(map[name], g, volume * (name === 'gate_rattle' ? 0.9 : 1.1))) {
+        if (name === 'gate_rattle') for (let k = 1; k < 5; k++) setTimeout(() => playSample('metal', g, volume * 0.7), k * 90 + Math.random() * 40);
+        if (name === 'generator_start') f(g, volume * 0.6, { text });
+        return { stop() {}, setVolume(x) { g.gain.value = x; } };
+      }
       f(g, volume, { text });
       let timer = null;
       if (loop) timer = setInterval(() => f(g, volume, { text }), 3800 + Math.random() * 1500);
@@ -156,7 +205,9 @@ export function createAudio(engine) {
     footstep(surface, jog, carrying) {
       const v = (jog ? 1.2 : 0.8) * (carrying ? 1.2 : 1);
       const wet = A.ambience.rain > 0.4 && surface !== 'wood';
-      api.play(wet ? 'footstep_wet' : 'footstep_' + surface, { volume: v });
+      const set = surface === 'wood' ? 'footstep_wood' : surface === 'gravel' ? 'footstep_gravel' : 'footstep_dirt';
+      if (ctx && A.started && playSample(set, bus.sfx, v * (surface === 'wood' ? 0.9 : 0.7))) { if (wet) api.play('footstep_wet', { volume: v * 0.4 }); }
+      else api.play(wet ? 'footstep_wet' : 'footstep_' + surface, { volume: v });
       if (surface === 'wood' && Math.random() < 0.18) api.play('stair_creak', { volume: 0.8 });
     },
     thunder(delay) { if (!ctx || !A.started) return; setTimeout(() => api.play('thunder', { volume: 0.9 }), delay * 1000); },
@@ -180,6 +231,7 @@ export function createAudio(engine) {
       if (gp) { beds.generator.pan.positionX.value = gp.x; beds.generator.pan.positionY.value = gp.y; beds.generator.pan.positionZ.value = gp.z; }
       set(beds.generator.out.gain, am.generator * 0.5);
       life(dt);
+      drops(dt);
     },
   };
   // unlock on the first gesture

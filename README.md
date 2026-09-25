@@ -4,7 +4,7 @@ A first-person horror game. It's 1983, fire season, at a Forest Service lookout 
 walk the lost out, report the fires, and don't look at the man by the creek. Not with the glasses. Not in a picture.
 
 ## Play
-**Online:** https://bnaunidh.github.io/falseflight/ (desktop Chrome, Edge or Safari; about 165 MB on first load).
+**Online:** https://bnaunidh.github.io/falselight/ (desktop Chrome, Edge or Safari; about 165 MB on first load).
 
 Double-click **`Play FALSE LIGHT.command`** (it starts a tiny local server and opens your browser). Click the page to take control.
 **Sound starts OFF.** Turn it on in Settings when you're somewhere you can use headphones.

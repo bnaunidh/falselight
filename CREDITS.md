@@ -13,6 +13,9 @@ FALSE LIGHT was built in Blender and three.js. Every third-party asset is **CC0 
 ## Blender Studio — Human Base Meshes v1.4.1 (CC0)
 https://www.blender.org/download/demo-files/ — the realistic male base mesh, used for every character.
 
+## Kenney — https://kenney.nl (CC0)
+'Impact Sounds' and 'RPG Audio' packs: footsteps, doors, creaks, knocks, metal, paper (downloaded with the owner's approval, 2026-09-25).
+
 ## three.js r160 (MIT) — https://threejs.org
 
 Everything else — the tower, cab, fire finder, trees (needle cards rendered from the Poly Haven fir sapling), terrain, trailhead, truck, characters, sounds (procedural WebAudio) and the story — was made for this game.
