@@ -1,9 +1,9 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=d3713743';
-import { createUI } from './ui/ui.js?v=d3713743';
-import { Game } from './game/bridge.js?v=d3713743';
-import { createSaves } from './game/saves.js?v=d3713743';
-import { UI as WORDS } from './game/content/story.js?v=d3713743';
+import { createEngine } from './engine/engine.js?v=eaf48799';
+import { createUI } from './ui/ui.js?v=eaf48799';
+import { Game } from './game/bridge.js?v=eaf48799';
+import { createSaves } from './game/saves.js?v=eaf48799';
+import { UI as WORDS } from './game/content/story.js?v=eaf48799';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -25,6 +25,7 @@ try {
 }
 const game = new Game(engine, ui);
 game.init();
+ui.loading(0.97, 'gear'); await game.itemsReady;
 window.__fl.game = game;
 ui.loading(null);
 engine.sky.setTime(20.2); engine.sky.setWeather({ fog: 0.45, rain: 0, wind: 0.4 });
@@ -104,7 +105,7 @@ canvas.addEventListener('click', () => { if (game.state === 'play' && !ui.modalO
 engine.input.onAction('lockchange', (locked) => {
   if (locked || game.state !== 'play' || ui.modalOpen() || engine.uiBlocking) return;
   // the browser ate an Esc to free the mouse: do what that Esc meant (leave the searchlight / finder / camera / print) instead of wasting it
-  if (game.mode !== 'walk' || game.camRaised || game.holding) { game.escape(); return; }
+  if (game.mode !== 'walk' || game.camRaised || game.holding || game.placing) { game.escape(); return; }
   setTimeout(() => { if (!engine.input.locked && game.state === 'play' && !ui.modalOpen()) pause(); }, 120);
 });
 

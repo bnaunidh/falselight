@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=d3713743';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=eaf48799';
 
 const loader = new GLTFLoader();
 export const gltfCache = new Map();
@@ -541,6 +541,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   }
   W.glassMaterials = glass;
   const cab = await addModel('cab_interior');
+  W.cabRoot = cab;
   // searchlight nodes
   W.searchlight = { yaw: W.objects.get('FL_searchlight_yaw') || null, pitch: W.objects.get('FL_searchlight_pitch') || null };
 

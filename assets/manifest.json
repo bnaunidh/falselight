@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated": "2026-09-25T10:08:33",
+ "generated": "2026-09-25T10:20:24",
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
@@ -12,20 +12,50 @@
    "bytes": 3393620,
    "mtime": 1790303187
   },
+  "prop_binoculars": {
+   "path": "models/prop_binoculars.glb",
+   "bytes": 2532576,
+   "mtime": 1790225200
+  },
   "prop_camp_stove": {
    "path": "models/prop_camp_stove.glb",
    "bytes": 661624,
    "mtime": 1790303203
+  },
+  "prop_canteen": {
+   "path": "models/prop_canteen.glb",
+   "bytes": 1250160,
+   "mtime": 1790356321
   },
   "prop_fire_pit": {
    "path": "models/prop_fire_pit.glb",
    "bytes": 2535072,
    "mtime": 1790225196
   },
+  "prop_flashlight": {
+   "path": "models/prop_flashlight.glb",
+   "bytes": 2112368,
+   "mtime": 1790225195
+  },
+  "prop_food_tin": {
+   "path": "models/prop_food_tin.glb",
+   "bytes": 211688,
+   "mtime": 1790356321
+  },
   "prop_footbridge": {
    "path": "models/prop_footbridge.glb",
    "bytes": 3023052,
    "mtime": 1790302976
+  },
+  "prop_instant_camera": {
+   "path": "models/prop_instant_camera.glb",
+   "bytes": 292608,
+   "mtime": 1790303220
+  },
+  "prop_jerrycan": {
+   "path": "models/prop_jerrycan.glb",
+   "bytes": 2652308,
+   "mtime": 1790225193
   },
   "prop_mailbox": {
    "path": "models/prop_mailbox.glb",
@@ -119,8 +149,8 @@
   },
   "tower": {
    "path": "models/tower.glb",
-   "bytes": 20000492,
-   "mtime": 1790356104
+   "bytes": 16906684,
+   "mtime": 1790356339
   },
   "veg_branches": {
    "path": "models/veg_branches.glb",

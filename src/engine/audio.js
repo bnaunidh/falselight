@@ -204,6 +204,8 @@ export function createAudio(engine) {
     get muted() { return A.muted; },
     setMuted(b) { A.muted = b; if (master) master.gain.value = b ? 0 : A.volume; },
     setAmbience(o) { Object.assign(A.ambience, o); },
+    /** A recorded sample set straight (pickups, set-downs): metal, metal_heavy, cloth, paper, knock_one, door_close. */
+    sfx(set, { position = null, volume = 1 } = {}) { if (!ctx || !A.started) return; const g = gain(1); g.connect(position ? panner(position) : bus.sfx); playSample(set, g, volume); },
     play(name, { position = null, volume = 1, loop = false, text = null } = {}) {
       if (!ctx || !A.started) return { stop() {}, setVolume() {} };
       const f = SOUNDS[name]; if (!f) { console.warn('no sound', name); return { stop() {}, setVolume() {} }; }

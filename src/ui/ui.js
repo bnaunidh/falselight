@@ -17,6 +17,7 @@ export function createUI(root = document.getElementById('ui')) {
   const fade = $('div', 'fl-fade', root);
   const modal = $('div', 'fl-modal', root);
   const binoc = $('div', 'fl-binoc', root);
+  const hot = $('div', 'fl-hot', root), surv = $('div', 'fl-surv', root);
   let subTimer = 0, toastTimer = 0;
 
   U.tracker = (v, { date, hour } = {}) => {
@@ -188,6 +189,40 @@ export function createUI(root = document.getElementById('ui')) {
   U.update = (dt) => {
     if (subTimer > 0) { subTimer -= dt; if (subTimer <= 0) subs.style.opacity = 0; }
     if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) toast.style.opacity = 0; }
+  };
+  // ---------------- hands, pack, body
+  const ICON = {
+    fire: '<svg viewBox="0 0 24 24"><path d="M12 2.5c.8 3.6-2.6 5-2.6 8.4 0 1.6 1.2 2.8 2.6 2.8s2.6-1.2 2.6-2.7c0-.9-.3-1.7-.8-2.5 2.8 1.6 4.7 4.3 4.7 7.2A6.5 6.5 0 0 1 12 22a6.5 6.5 0 0 1-6.5-6.3C5.5 9.8 12 8.5 12 2.5z"/></svg>',
+    snow: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9.5 3.8 12 6l2.5-2.2M9.5 20.2 12 18l2.5 2.2M4 10.3l3.3-.3-.9-3.2M20 13.7l-3.3.3.9 3.2M4 13.7l3.3.3-.9 3.2M20 10.3l-3.3-.3.9-3.2"/></svg>',
+    therm: '<svg viewBox="0 0 24 24"><path d="M10 4a2 2 0 1 1 4 0v9.3a4.5 4.5 0 1 1-4 0zm1.2 3v7.2a2.9 2.9 0 1 0 1.6 0V7z"/></svg>',
+    drop: '<svg viewBox="0 0 24 24"><path d="M12 2.5C9 7 5.5 10.4 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10.4 15 7 12 2.5z"/></svg>',
+    food: '<svg viewBox="0 0 24 24"><path d="M6 6.5C6 5.1 8.7 4 12 4s6 1.1 6 2.5v11c0 1.4-2.7 2.5-6 2.5s-6-1.1-6-2.5zm1.6 2.6v6.6c1 .6 2.6 1 4.4 1s3.4-.4 4.4-1V9.1c-1.1.5-2.7.8-4.4.8s-3.3-.3-4.4-.8zM12 5.6c-2.4 0-4.2.5-4.2.9s1.8.9 4.2.9 4.2-.5 4.2-.9-1.8-.9-4.2-.9z"/></svg>',
+  };
+  U.hotbar = (o) => {
+    if (!o) { hot.style.display = 'none'; return; }
+    const key = JSON.stringify([o.slots.map((s) => s && [s.label, s.icon.length, s.fill != null ? Math.round(s.fill * 20) : -1]), o.active, o.label, o.pack]);
+    hot.style.display = 'flex'; if (hot._k === key) return; hot._k = key;
+    hot.innerHTML = `<div class="lbl">${esc(o.label || '')}</div><div class="row">` + o.slots.map((s, i) => `<div class="slot${i === o.active ? ' on' : ''}${s ? '' : ' empty'}"><b>${i + 1}</b>${s ? (s.icon ? `<img src="${s.icon}" alt="">` : `<span>${esc(s.short)}</span>`) : ''}${s && s.fill != null ? `<i><u style="width:${Math.round(s.fill * 100)}%"></u></i>` : ''}</div>`).join('') + `</div><div class="pk">${esc(o.pack || '')}</div>`;
+  };
+  U.survival = (o) => {
+    if (!o) { surv.style.display = 'none'; return; }
+    surv.style.display = 'block';
+    const f = Math.round(o.feels), a = Math.round(o.air);
+    const sub = [Math.abs(a - f) >= 2 ? `air ${a}°` : '', o.mph >= 3 ? `wind ${Math.round(o.mph)} mph` : '', o.wet > 0.15 ? 'wet' : ''].filter(Boolean).join(' · ');
+    const key = [o.icon, f, sub, Math.round(o.water * 40), Math.round(o.food * 40)].join('|'); if (surv._k === key) return; surv._k = key;
+    const lvl = (v) => (v < 0.18 ? ' low' : '');
+    surv.innerHTML = `<div class="t ${o.icon}">${ICON[o.icon]}<span>${f}°F</span>${sub ? `<small>${esc(sub)}</small>` : ''}</div>
+      <div class="m w${lvl(o.water)}">${ICON.drop}<i><u style="width:${Math.round(o.water * 100)}%"></u></i></div>
+      <div class="m f${lvl(o.food)}">${ICON.food}<i><u style="width:${Math.round(o.food * 100)}%"></u></i></div>`;
+  };
+  U.pack = (d, onPick, onClose) => {
+    const cell = (s, w, i, on) => `<button class="cell${s ? '' : ' empty'}${on ? ' on' : ''}" data-w="${w}" data-i="${i}">${w === 'hand' ? `<b>${i + 1}</b>` : ''}${s ? (s.icon ? `<img src="${s.icon}" alt="">` : '') + `<span>${esc(s.label)}</span>` : '<span>empty</span>'}</button>`;
+    const m = openModal(`<div class="paper packsheet"><h2>What you're carrying</h2>
+      <h3>Hands</h3><div class="row">${d.hands.map((s, i) => cell(s, 'hand', i, i === d.active)).join('')}</div>
+      <h3>Backpack</h3>${d.worn ? `<div class="row">${d.pack.map((s, i) => cell(s, 'pack', i)).join('')}</div>` : '<p class="off">You set the pack down somewhere. Its five slots are with it: go back for it (E).</p>'}
+      <p class="tip">Click a thing to move it between your hands and the pack. In the world: <b>G</b> sets what's in your hand down anywhere, <b>E</b> picks things up, <b>click</b> uses it (drink, eat, light).</p>
+      <div class="close">I / Esc</div></div>`, 'center', onClose);
+    m.querySelectorAll('button.cell').forEach((b) => b.onclick = () => onPick(b.dataset.w, +b.dataset.i));
   };
   U.hideHUD = (b) => { root.classList.toggle('nohud', !!b); };
   return U;

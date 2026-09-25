@@ -1,7 +1,7 @@
 // Carbon monoxide from the cab's propane heater. Pure.
 // Heater on + windows shut → the cab air fills → your blood follows → real hallucinations.
 // Windows open → your head clears, but you get cold (breath fog, shivering, stiff hands).
-import { clamp } from './util.js?v=d3713743'
+import { clamp } from './util.js?v=eaf48799'
 
 export const COCFG = {
   rise: 0.0034,          // cab air per second, heater on, all shut
@@ -27,7 +27,7 @@ export class CO {
   toggleWindow(k) { this.windows[k] = !this.windows[k]; return this.windows[k] }
   toggleHeater() { this.heater = !this.heater; return this.heater }
   /** ctx: { inCab, night, rng } → events ('hallucinate:<kind>' | 'passout' | 'shiver') */
-  tick(dt, { inCab = false, night = false, rng = Math.random } = {}) {
+  tick(dt, { inCab = false, night = false, rng = Math.random, coldTarget = null } = {}) {
     const ev = []
     const o = this.open
     let dAir = 0
@@ -42,6 +42,7 @@ export class CO {
     // cold: night air through open windows, or no heat
     let target = 0
     if (night) target = inCab ? (this.heater ? 0.05 : 0.45) + 0.13 * o : 0.55
+    if (coldTarget != null) target = coldTarget          // the temperature model (survival.js) knows better
     this.cold += (clamp(target) - this.cold) * Math.min(1, dt * 0.02)
     const wasShiver = this._shiver; this._shiver = this.cold > 0.55
     if (this._shiver && !wasShiver) ev.push('shiver')

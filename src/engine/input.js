@@ -4,6 +4,7 @@ const KEYMAP = {
   KeyD: 'right', ArrowRight: 'right', ShiftLeft: 'jog', ShiftRight: 'jog',
   KeyE: 'interact', KeyF: 'searchlight', KeyC: 'camera', Tab: 'logbook', KeyM: 'map', KeyQ: 'flip',
   Space: 'signal', KeyL: 'flashlight', KeyB: 'binoculars', Escape: 'pause', KeyP: 'pause', KeyT: 'watch', KeyR: 'reload',
+  Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', KeyG: 'place', KeyI: 'inventory',
 };
 
 export function createInput(canvas) {
@@ -33,7 +34,7 @@ export function createInput(canvas) {
     if (!a) return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (a === 'logbook' || a === 'signal') e.preventDefault();
-    if (!enabled && a !== 'pause' && a !== 'logbook' && a !== 'map') return;
+    if (!enabled && a !== 'pause' && a !== 'logbook' && a !== 'map' && a !== 'inventory') return;
     if (isDown) { if (down.has(a)) return; down.add(a); } else { if (!down.has(a)) return; down.delete(a); }
     api.emit(a, isDown);
   };
