@@ -1,0 +1,245 @@
+{
+ "version": 1,
+ "generated": "2026-09-24T21:26:29",
+ "models": {
+  "cab_interior": {
+   "path": "models/cab_interior.glb",
+   "bytes": 21440280,
+   "mtime": 1790301485
+  },
+  "prop_backpack": {
+   "path": "models/prop_backpack.glb",
+   "bytes": 3393620,
+   "mtime": 1790303187
+  },
+  "prop_camp_stove": {
+   "path": "models/prop_camp_stove.glb",
+   "bytes": 661624,
+   "mtime": 1790303203
+  },
+  "prop_fire_pit": {
+   "path": "models/prop_fire_pit.glb",
+   "bytes": 2535072,
+   "mtime": 1790225196
+  },
+  "prop_footbridge": {
+   "path": "models/prop_footbridge.glb",
+   "bytes": 3023052,
+   "mtime": 1790302976
+  },
+  "prop_mailbox": {
+   "path": "models/prop_mailbox.glb",
+   "bytes": 1164380,
+   "mtime": 1790303126
+  },
+  "prop_overlook_railing": {
+   "path": "models/prop_overlook_railing.glb",
+   "bytes": 1174152,
+   "mtime": 1790303058
+  },
+  "prop_picnic_table": {
+   "path": "models/prop_picnic_table.glb",
+   "bytes": 4307512,
+   "mtime": 1790225197
+  },
+  "prop_ranger_station": {
+   "path": "models/prop_ranger_station.glb",
+   "bytes": 4402352,
+   "mtime": 1790303147
+  },
+  "prop_rubber_boot_fallen": {
+   "path": "models/prop_rubber_boot_fallen.glb",
+   "bytes": 1132004,
+   "mtime": 1790225199
+  },
+  "prop_sleeping_bag": {
+   "path": "models/prop_sleeping_bag.glb",
+   "bytes": 2103436,
+   "mtime": 1790303194
+  },
+  "prop_spring": {
+   "path": "models/prop_spring.glb",
+   "bytes": 2292700,
+   "mtime": 1790303090
+  },
+  "prop_supply_truck": {
+   "path": "models/prop_supply_truck.glb",
+   "bytes": 4037556,
+   "mtime": 1790309195
+  },
+  "prop_tent_collapsed": {
+   "path": "models/prop_tent_collapsed.glb",
+   "bytes": 1087032,
+   "mtime": 1790303178
+  },
+  "prop_trail_sign": {
+   "path": "models/prop_trail_sign.glb",
+   "bytes": 1467808,
+   "mtime": 1790303118
+  },
+  "tower": {
+   "path": "models/tower.glb",
+   "bytes": 21004036,
+   "mtime": 1790301984
+  },
+  "veg_branches": {
+   "path": "models/veg_branches.glb",
+   "bytes": 260260,
+   "mtime": 1790296648
+  },
+  "veg_fern": {
+   "path": "models/veg_fern.glb",
+   "bytes": 1692080,
+   "mtime": 1790296633
+  },
+  "veg_fir_a": {
+   "path": "models/veg_fir_a.glb",
+   "bytes": 5029476,
+   "mtime": 1790296518
+  },
+  "veg_fir_b": {
+   "path": "models/veg_fir_b.glb",
+   "bytes": 5068008,
+   "mtime": 1790296523
+  },
+  "veg_fir_c": {
+   "path": "models/veg_fir_c.glb",
+   "bytes": 5314732,
+   "mtime": 1790296528
+  },
+  "veg_grass": {
+   "path": "models/veg_grass.glb",
+   "bytes": 542536,
+   "mtime": 1790296634
+  },
+  "veg_hemlock_a": {
+   "path": "models/veg_hemlock_a.glb",
+   "bytes": 5794252,
+   "mtime": 1790296533
+  },
+  "veg_log_a": {
+   "path": "models/veg_log_a.glb",
+   "bytes": 2627460,
+   "mtime": 1790296642
+  },
+  "veg_log_b": {
+   "path": "models/veg_log_b.glb",
+   "bytes": 3087900,
+   "mtime": 1790296644
+  },
+  "veg_moss": {
+   "path": "models/veg_moss.glb",
+   "bytes": 146800,
+   "mtime": 1790296635
+  },
+  "veg_rocks_a": {
+   "path": "models/veg_rocks_a.glb",
+   "bytes": 559552,
+   "mtime": 1790296636
+  },
+  "veg_rocks_b": {
+   "path": "models/veg_rocks_b.glb",
+   "bytes": 703120,
+   "mtime": 1790296637
+  },
+  "veg_rocks_boulder": {
+   "path": "models/veg_rocks_boulder.glb",
+   "bytes": 4814072,
+   "mtime": 1790296639
+  },
+  "veg_roots": {
+   "path": "models/veg_roots.glb",
+   "bytes": 6059976,
+   "mtime": 1790296647
+  },
+  "veg_salal": {
+   "path": "models/veg_salal.glb",
+   "bytes": 531312,
+   "mtime": 1790296635
+  },
+  "veg_sapling": {
+   "path": "models/veg_sapling.glb",
+   "bytes": 4641768,
+   "mtime": 1790296537
+  },
+  "veg_snag_a": {
+   "path": "models/veg_snag_a.glb",
+   "bytes": 2157228,
+   "mtime": 1790296544
+  },
+  "veg_snag_b": {
+   "path": "models/veg_snag_b.glb",
+   "bytes": 1790692,
+   "mtime": 1790296540
+  },
+  "veg_stump_a": {
+   "path": "models/veg_stump_a.glb",
+   "bytes": 3077980,
+   "mtime": 1790296639
+  },
+  "veg_stump_b": {
+   "path": "models/veg_stump_b.glb",
+   "bytes": 3136212,
+   "mtime": 1790296641
+  }
+ },
+ "data": {
+  "layout.json": {
+   "path": "data/layout.json",
+   "bytes": 126581,
+   "mtime": 1790302365
+  },
+  "scatter.json": {
+   "path": "data/scatter.json",
+   "bytes": 592842,
+   "mtime": 1790302366
+  },
+  "terrain_height.bin": {
+   "path": "data/terrain_height.bin",
+   "bytes": 3165524,
+   "mtime": 1790302365
+  },
+  "terrain_height.json": {
+   "path": "data/terrain_height.json",
+   "bytes": 192,
+   "mtime": 1790302365
+  },
+  "terrain_splat.png": {
+   "path": "data/terrain_splat.png",
+   "bytes": 103103,
+   "mtime": 1790302365
+  },
+  "terrain_splat.json": {
+   "path": "data/terrain_splat.json",
+   "bytes": 1831,
+   "mtime": 1790302365
+  }
+ },
+ "textures": {
+  "burned_ground_01": {
+   "diff": "textures/burned_ground_01/burned_ground_01_diff_2k.jpg",
+   "arm": "textures/burned_ground_01/burned_ground_01_arm_2k.jpg",
+   "nor_gl": "textures/burned_ground_01/burned_ground_01_nor_gl_2k.jpg"
+  },
+  "forest_leaves_02": {
+   "diff": "textures/forest_leaves_02/forest_leaves_02_diff_1k.jpg",
+   "arm": "textures/forest_leaves_02/forest_leaves_02_arm_1k.jpg",
+   "nor_gl": "textures/forest_leaves_02/forest_leaves_02_nor_gl_1k.jpg"
+  },
+  "mossy_rock": {
+   "diff": "textures/mossy_rock/mossy_rock_diff_2k.jpg",
+   "arm": "textures/mossy_rock/mossy_rock_arm_2k.jpg",
+   "nor_gl": "textures/mossy_rock/mossy_rock_nor_gl_2k.jpg"
+  },
+  "rocky_trail": {
+   "diff": "textures/rocky_trail/rocky_trail_diff_2k.jpg",
+   "arm": "textures/rocky_trail/rocky_trail_arm_2k.jpg",
+   "nor_gl": "textures/rocky_trail/rocky_trail_nor_gl_2k.jpg"
+  }
+ },
+ "hdri": {
+  "kloofendal_overcast_puresky": "hdri/kloofendal_overcast_puresky_2k.hdr",
+  "qwantani_dusk_2_puresky": "hdri/qwantani_dusk_2_puresky_2k.hdr",
+  "rogland_moonlit_night": "hdri/rogland_moonlit_night_2k.hdr"
+ }
+}

@@ -1,0 +1,66 @@
+{
+ "rect": {
+  "min": [
+   -420.0,
+   -420.0
+  ],
+  "max": [
+   420.0,
+   520.0
+  ]
+ },
+ "image": "terrain_splat.png",
+ "channels": "R forest floor, G trail/dirt, B rock+moss; burn weight = 1-R-G-B",
+ "layers": {
+  "r": {
+   "name": "forest_leaves_02",
+   "tileMeters": 3.2,
+   "diff": "terrain_tex/forest_leaves_02_diff_1k.jpg",
+   "nor": "terrain_tex/forest_leaves_02_nor_gl_1k.jpg",
+   "arm": "terrain_tex/forest_leaves_02_arm_1k.jpg"
+  },
+  "g": {
+   "name": "rocky_trail",
+   "tileMeters": 2.2,
+   "diff": "terrain_tex/rocky_trail_diff_1k.jpg",
+   "nor": "terrain_tex/rocky_trail_nor_gl_1k.jpg",
+   "arm": "terrain_tex/rocky_trail_arm_1k.jpg"
+  },
+  "b": {
+   "name": "mossy_rock",
+   "tileMeters": 3.0,
+   "diff": "terrain_tex/mossy_rock_diff_1k.jpg",
+   "nor": "terrain_tex/mossy_rock_nor_gl_1k.jpg",
+   "arm": "terrain_tex/mossy_rock_arm_1k.jpg"
+  },
+  "burn": {
+   "name": "burned_ground_01",
+   "tileMeters": 3.0,
+   "diff": "terrain_tex/burned_ground_01_diff_1k.jpg",
+   "nor": "terrain_tex/burned_ground_01_nor_gl_1k.jpg",
+   "arm": "terrain_tex/burned_ground_01_arm_1k.jpg"
+  },
+  "r2": {
+   "name": "forest_floor",
+   "tileMeters": 4.0,
+   "diff": "terrain_tex/forest_floor_diff_1k.jpg",
+   "nor": "terrain_tex/forest_floor_nor_gl_1k.jpg",
+   "arm": "terrain_tex/forest_floor_arm_1k.jpg"
+  },
+  "g2": {
+   "name": "mud_forest",
+   "tileMeters": 2.5,
+   "diff": "terrain_tex/mud_forest_diff_1k.jpg",
+   "nor": "terrain_tex/mud_forest_nor_gl_1k.jpg",
+   "arm": "terrain_tex/mud_forest_arm_1k.jpg"
+  },
+  "b2": {
+   "name": "rock_face_03",
+   "tileMeters": 5.0,
+   "diff": "terrain_tex/rock_face_03_diff_1k.jpg",
+   "nor": "terrain_tex/rock_face_03_nor_gl_1k.jpg",
+   "arm": "terrain_tex/rock_face_03_arm_1k.jpg"
+  }
+ },
+ "notes": "r2/g2/b2 are detail variants: blend them in by a low-frequency noise to break tiling."
+}
