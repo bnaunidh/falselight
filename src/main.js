@@ -1,9 +1,9 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js';
-import { createUI } from './ui/ui.js';
-import { Game } from './game/bridge.js';
-import { createSaves } from './game/saves.js';
-import { UI as WORDS } from './game/content/story.js';
+import { createEngine } from './engine/engine.js?v=89966d9d';
+import { createUI } from './ui/ui.js?v=89966d9d';
+import { Game } from './game/bridge.js?v=89966d9d';
+import { createSaves } from './game/saves.js?v=89966d9d';
+import { UI as WORDS } from './game/content/story.js?v=89966d9d';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -84,6 +84,15 @@ function pause() {
     } });
 }
 game.onPause = pause;
+// if the mouse isn't captured while playing (Chrome refuses to re-lock right after Esc), say so instead of looking frozen
+const clickRes = document.createElement('div'); clickRes.id = 'fl-clickres';
+clickRes.innerHTML = '<div>Click to continue</div><small>the game is running — your mouse just isn\'t captured</small>';
+document.body.appendChild(clickRes);
+clickRes.addEventListener('click', () => { engine.input.lock(); engine.audio.start(); });
+engine.onUpdate(() => {
+  const show = game.state === 'play' && !engine.input.locked && !ui.modalOpen() && !engine.noRender;
+  if (show !== clickRes.classList.contains('on')) clickRes.classList.toggle('on', show);
+});
 game.onTitle = title;
 canvas.addEventListener('click', () => { if (game.state === 'play' && !ui.modalOpen()) { engine.input.lock(); engine.audio.start(); } });
 engine.input.onAction('lockchange', (locked) => { if (!locked && game.state === 'play' && !ui.modalOpen() && game.mode === 'walk' && !engine.uiBlocking) setTimeout(() => { if (!engine.input.locked && game.state === 'play' && !ui.modalOpen()) pause(); }, 120); });

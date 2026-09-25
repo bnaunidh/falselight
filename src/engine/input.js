@@ -14,7 +14,7 @@ export function createInput(canvas) {
   const api = {
     sensitivity: 0.0022,
     get locked() { return document.pointerLockElement === canvas; },
-    lock() { try { canvas.requestPointerLock(); } catch (e) { /* ignore */ } },
+    lock() { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* the click-to-continue prompt covers it */ } },
     unlock() { if (document.pointerLockElement) document.exitPointerLock(); },
     isDown(a) { return enabled && down.has(a); },
     onAction(name, fn) { if (!handlers.has(name)) handlers.set(name, []); handlers.get(name).push(fn); return () => { const l = handlers.get(name); l.splice(l.indexOf(fn), 1); }; },

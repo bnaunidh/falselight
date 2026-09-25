@@ -221,7 +221,7 @@ export function createAudio(engine) {
       const k = 1 - Math.exp(-dt * 2);
       const set = (param, v) => { param.value += (v - param.value) * k; };
       set(beds.rain.out.gain, am.rain * (inCab ? 0.35 : 0.5)); set(beds.rain.roofG.gain, am.rain * (inCab ? 1.6 : 0.2));
-      set(beds.wind.out.gain, am.wind * (inCab ? 0.7 : 0.45) * (engine.player && engine.player.position.y > 20 ? 1.4 : 1));
+      set(beds.wind.out.gain, am.wind * (inCab ? 0.22 : 0.18));   // same at any height (it used to swell as you climbed)
       set(beds.radio.out.gain, am.radioStatic * 0.07);
       // creek loudness by distance to the nearest creek point
       let cd = 999; const cp = engine.world && engine.world.layout.creek && engine.world.layout.creek.points;

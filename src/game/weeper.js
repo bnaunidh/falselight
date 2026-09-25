@@ -3,7 +3,7 @@
 //   Watch him too long and the sobbing stops; a moment later he lifts his head. Look away.
 //   Seen: the sob becomes a scream and he comes (in daylight he waits for dark). Nothing stops him.
 //   The only way out: send the photograph away. Whoever looks at it next is the one he wants.
-import { dist, lerp3, clamp } from './util.js'
+import { dist, lerp3, clamp } from './util.js?v=89966d9d'
 
 export const WEEPER = {
   watchToHush: 5.0,      // seconds of continuous watching before the sobbing stops

@@ -1,15 +1,15 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
-import { createInput } from './input.js';
-import { createWorld } from './world.js';
-import { createPlayer } from './player.js';
-import { createSky } from './sky.js';
-import { createLights } from './lights.js';
-import { createPost } from './post.js';
-import { createEntities, createView, createInteract } from './entities.js';
-import { createAudio } from './audio.js';
-import { createPhoto } from './photo.js';
-import { tryJSON } from './util.js';
+import { createInput } from './input.js?v=89966d9d';
+import { createWorld } from './world.js?v=89966d9d';
+import { createPlayer } from './player.js?v=89966d9d';
+import { createSky } from './sky.js?v=89966d9d';
+import { createLights } from './lights.js?v=89966d9d';
+import { createPost } from './post.js?v=89966d9d';
+import { createEntities, createView, createInteract } from './entities.js?v=89966d9d';
+import { createAudio } from './audio.js?v=89966d9d';
+import { createPhoto } from './photo.js?v=89966d9d';
+import { tryJSON } from './util.js?v=89966d9d';
 
 export const QUALITY = {
   low: { pr: 0.7, prMin: 0.5, msaa: false, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },

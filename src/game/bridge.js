@@ -1,24 +1,24 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js';
-import { Objectives } from './objectives.js';
-import { Radio } from './radio.js';
-import { Fuel } from './fuel.js';
-import { FireFinder, spokenBearing } from './firefinder.js';
-import { Photos, classifyShot } from './photos.js';
-import { CO } from './co.js';
-import { Weeper, lookupChance } from './weeper.js';
-import { OtherLookout } from './otherLookout.js';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js';
-import { GuidedHiker } from './hikers.js';
-import { MorseKeyer, isSOS } from './morse.js';
-import { normalizeLayout } from './layout.js';
-import { createSaves } from './saves.js';
-import { createRng } from './rng.js';
-import { canSend, send as sendPrint, isProof } from './sending.js';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js';
-import * as S from './content/story.js';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=89966d9d';
+import { Objectives } from './objectives.js?v=89966d9d';
+import { Radio } from './radio.js?v=89966d9d';
+import { Fuel } from './fuel.js?v=89966d9d';
+import { FireFinder, spokenBearing } from './firefinder.js?v=89966d9d';
+import { Photos, classifyShot } from './photos.js?v=89966d9d';
+import { CO } from './co.js?v=89966d9d';
+import { Weeper, lookupChance } from './weeper.js?v=89966d9d';
+import { OtherLookout } from './otherLookout.js?v=89966d9d';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=89966d9d';
+import { GuidedHiker } from './hikers.js?v=89966d9d';
+import { MorseKeyer, isSOS } from './morse.js?v=89966d9d';
+import { normalizeLayout } from './layout.js?v=89966d9d';
+import { createSaves } from './saves.js?v=89966d9d';
+import { createRng } from './rng.js?v=89966d9d';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=89966d9d';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=89966d9d';
+import * as S from './content/story.js?v=89966d9d';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];

@@ -139,3 +139,8 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .note2{font-size:14px;opacity:.8}
 #fl-loading .tip{position:absolute;bottom:9vh;font-style:italic;font-size:14px;opacity:.55}
 @media (max-width:760px){.t2-left{padding:8vh 6vw 0}.t2-foot{flex-wrap:wrap;gap:10px}}
+
+#fl-clickres{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;
+  background:rgba(3,4,6,.35);color:#efe6d2;font-size:24px;letter-spacing:.06em;text-shadow:0 2px 8px #000}
+#fl-clickres.on{display:flex}
+#fl-clickres small{font-size:13px;opacity:.65;letter-spacing:.02em}
