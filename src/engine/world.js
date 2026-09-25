@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=cb2ac382';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=7927575b';
 
 const loader = new GLTFLoader();
 export const gltfCache = new Map();
@@ -359,7 +359,7 @@ function buildHorizon(heightAt, rect, fireSites) {
 // ------------------------------------------------------------------ the world
 export async function createWorld(engine, manifest, onProgress = () => {}) {
   const { scene } = engine;
-  const W = { anchors: new Map(), colliders: [], layout: null, fires: new Map(), objects: new Map(), vegSets: [] };
+  const W = { anchors: new Map(), colliders: [], layout: null, fires: new Map(), objects: new Map(), vegSets: [], modelRoots: [] };
   const prog = (f, label) => onProgress(f, label);
 
   // --- layout + heightfield
@@ -496,6 +496,8 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   // --- tower
   prog(0.45, 'tower');
   const glass = [];
+  const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
+  const ANISO = Math.min(engine.renderer.capabilities.getMaxAnisotropy ? engine.renderer.capabilities.getMaxAnisotropy() : 8, engine.quality.aniso || 8);
   async function addModel(name, pos = null, rotY = 0, scale = 1) {
     const e = manifest.models && manifest.models[name];
     if (!e) return null;
@@ -514,6 +516,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
           const mats = Array.isArray(o.material) ? o.material : [o.material];
           for (const m of mats) {
             if (!m) continue;
+            for (const k of TEX_SLOTS) if (m[k] && m[k].anisotropy !== ANISO) { m[k].anisotropy = ANISO; m[k].needsUpdate = true; }   // planks and bark stay sharp at grazing angles
             if (m.name === 'FL_glass') { m.transparent = true; m.opacity = 0.18; m.roughness = 0.08; m.metalness = 0; m.depthWrite = false; glass.push(m); o.castShadow = false; }
             if (/wiremesh|mesh$/i.test(m.name) || m.alphaTest > 0) { m.alphaTest = Math.max(0.35, m.alphaTest); m.transparent = false; m.side = THREE.DoubleSide; o.castShadow = true; }
             if (/oilstain/i.test(m.name)) { m.transparent = true; m.depthWrite = false; o.castShadow = false; }
@@ -523,6 +526,8 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
         W.objects.set(n, o);
       });
       scene.add(root);
+      if (pos && pos.y < -100) return root;      // an item template (loaded far below the world): not a static surface
+      W.modelRoots.push(root);
       return root;
     } catch (err) { console.warn('model', name, err); return null; }
   }

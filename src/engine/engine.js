@@ -1,20 +1,21 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
-import { createInput } from './input.js?v=cb2ac382';
-import { createWorld } from './world.js?v=cb2ac382';
-import { createPlayer } from './player.js?v=cb2ac382';
-import { createSky } from './sky.js?v=cb2ac382';
-import { createLights } from './lights.js?v=cb2ac382';
-import { createPost } from './post.js?v=cb2ac382';
-import { createEntities, createView, createInteract } from './entities.js?v=cb2ac382';
-import { createAudio } from './audio.js?v=cb2ac382';
-import { createPhoto } from './photo.js?v=cb2ac382';
-import { tryJSON } from './util.js?v=cb2ac382';
+import { createInput } from './input.js?v=7927575b';
+import { createWorld } from './world.js?v=7927575b';
+import { createPlayer } from './player.js?v=7927575b';
+import { createSky } from './sky.js?v=7927575b';
+import { createLights } from './lights.js?v=7927575b';
+import { createPost } from './post.js?v=7927575b';
+import { createEntities, createView, createInteract } from './entities.js?v=7927575b';
+import { createAudio } from './audio.js?v=7927575b';
+import { createPhoto } from './photo.js?v=7927575b';
+import { tryJSON } from './util.js?v=7927575b';
 
 export const QUALITY = {
-  low: { pr: 0.7, prMin: 0.5, msaa: false, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },
-  medium: { pr: 0.9, prMin: 0.6, msaa: false, shadowMap: 1024, shadowExtent: 45, treeLod0: 36, treeLod1: 120, treeLod2: 1200, plants: 40, debris: 90, terrainLod0: 120, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 1024 },
-  high: { pr: 1.2, prMin: 0.7, msaa: true, shadowMap: 2048, shadowExtent: 60, treeLod0: 48, treeLod1: 160, treeLod2: 1600, plants: 55, debris: 120, terrainLod0: 160, spotShadows: true, flashShadows: false, lampShadows: false, terrainTex: 1024 },
+  low: { pr: 0.75, prMin: 0.5, msaa: false, aniso: 4, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },
+  // medium is meant to look properly good: full-ish resolution with MSAA, sharp textures at grazing angles, real shadows
+  medium: { pr: 1.3, prMin: 0.8, msaa: true, aniso: 8, shadowMap: 2048, shadowExtent: 55, treeLod0: 44, treeLod1: 150, treeLod2: 1500, plants: 50, debris: 110, terrainLod0: 150, spotShadows: true, flashShadows: false, lampShadows: false, terrainTex: 1024 },
+  high: { pr: 1.75, prMin: 0.9, msaa: true, aniso: 16, shadowMap: 4096, shadowExtent: 70, treeLod0: 60, treeLod1: 200, treeLod2: 2000, plants: 70, debris: 150, terrainLod0: 200, spotShadows: true, flashShadows: true, lampShadows: true, terrainTex: 1024 },
 };
 
 export async function createEngine(canvas, opts = {}) {

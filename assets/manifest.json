@@ -1,11 +1,11 @@
 {
  "version": 1,
- "generated": "2026-09-25T10:20:24",
+ "generated": "2026-09-25T11:11:43",
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
-   "bytes": 21440280,
-   "mtime": 1790301485
+   "bytes": 16357428,
+   "mtime": 1790359453
   },
   "prop_backpack": {
    "path": "models/prop_backpack.glb",
@@ -149,8 +149,8 @@
   },
   "tower": {
    "path": "models/tower.glb",
-   "bytes": 16906684,
-   "mtime": 1790356339
+   "bytes": 17004968,
+   "mtime": 1790359427
   },
   "veg_branches": {
    "path": "models/veg_branches.glb",

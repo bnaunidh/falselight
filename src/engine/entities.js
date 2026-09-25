@@ -1,8 +1,8 @@
 // FALSE LIGHT — entities (posed static meshes, instant pose swaps), what-can-be-seen tests (engine.view),
 // line of sight (terrain + tower + tree trunks), and the crosshair interaction registry.
 import * as THREE from 'three';
-import { loadGLB } from './world.js?v=cb2ac382';
-import { clamp } from './util.js?v=cb2ac382';
+import { loadGLB } from './world.js?v=7927575b';
+import { clamp } from './util.js?v=7927575b';
 
 // ------------------------------------------------------------------ placeholder people (until the Blender characters land)
 function placeholderFigure(kind) {
@@ -166,9 +166,9 @@ export function createInteract(engine) {
   const targets = new Map();
   const el = document.createElement('div');
   el.id = 'fl-prompt';
-  el.style.cssText = 'position:fixed;left:50%;top:calc(50% + 26px);transform:translateX(-50%);font:500 13px/1.3 Georgia,serif;color:#e8e2d4;letter-spacing:.04em;text-shadow:0 1px 3px #000;pointer-events:none;opacity:0;transition:opacity .15s;white-space:nowrap;z-index:20';
+  el.style.cssText = 'position:fixed;left:50%;top:calc(50% + 28px);transform:translateX(-50%);font:500 16px/1.3 Georgia,serif;color:#f1ebdd;letter-spacing:.03em;text-shadow:0 1px 3px #000;padding:5px 12px;border-radius:14px;background:rgba(10,10,8,.45);pointer-events:none;opacity:0;transition:opacity .15s;white-space:nowrap;z-index:20';
   const dot = document.createElement('div');
-  dot.style.cssText = 'position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:rgba(235,228,212,.55);pointer-events:none;z-index:20';
+  dot.style.cssText = 'position:fixed;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:rgba(235,228,212,.55);pointer-events:none;z-index:20';
   document.body.append(el, dot);
   const dir = new THREE.Vector3(), p = new THREE.Vector3(), tmp = new THREE.Vector3();
   const api = {

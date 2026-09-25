@@ -3,7 +3,8 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=cb2ac382';
+import { KINDS } from './items.js?v=7927575b';
+import { createSurfaces } from './surfaces.js?v=7927575b';
 
 export function createItemsView(engine) {
   const { scene, camera } = engine;
@@ -55,7 +56,7 @@ export function createItemsView(engine) {
 
   // ---------------------------------------------------------------- the thing in your hand
   let vm = null, vmKind = null;
-  const HOLD = { fuel: [0.13, -0.2, -0.27], flashlight: [0.12, -0.11, -0.24], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
+  const HOLD = { fuel: [0.17, -0.17, -0.3], flashlight: [0.12, -0.11, -0.24], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
     canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23] };
   V.hold = (kind, t = 0, moving = 0) => {
     if (kind !== vmKind || (!vm && kind && T[kind] && HOLD[kind])) {
@@ -84,52 +85,94 @@ export function createItemsView(engine) {
     ghost.visible = !!pos;
     if (pos) { ghost.position.copy(pos); ghost.rotation.set(0, rotY, 0); ghostMat.color.set(ok ? 0xcfe8c4 : 0xe8a49a); }
   };
-  function surfaces(from) {
-    const out = [];
-    for (const c of W().colliders) if (c.enabled && c.mesh) out.push(c.mesh);          // ~150 boxes; walls only block
-    if (from.y > 28 && W().cabRoot) W().cabRoot.traverse((o) => { if (o.isMesh && o.visible && !(o.material && o.material.name === 'FL_glass')) out.push(o); });
-    for (const o of scene.children) if (/^placed:/.test(o.name) && o.position.distanceToSquared(from) < 144) o.traverse((m) => { if (m.isMesh && m.visible) out.push(m); });
-    return out;
+  // the static world's real triangles (built once the models are in), the terrain, and things already set down
+  const grid = createSurfaces();
+  V.surfaces = grid;
+  V.buildSurfaces = () => { grid.build(W().modelRoots || []); return grid; };
+  const itemMeshes = [];
+  function itemHit(o, d, far) {
+    itemMeshes.length = 0;
+    for (const m of meshes.values()) if (m.position.distanceToSquared(o) < (far + 1.5) ** 2) m.traverse((x) => { if (x.isMesh && x.visible) itemMeshes.push(x); });
+    if (!itemMeshes.length) return null;
+    ray.set(o, d); ray.far = far; ray.near = 0;
+    const h = ray.intersectObjects(itemMeshes, false)[0]; if (!h || !h.face) return null;
+    const n = h.face.normal.clone().transformDirection(h.object.matrixWorld); if (n.dot(d) > 0) n.negate();
+    return { point: h.point.clone(), distance: h.distance, normal: n, up: n.y > 0.6 };
   }
-  const nrm = new THREE.Vector3(), tmp = new THREE.Vector3();
+  function colliderHit(o, d, far) {   // only until the grid exists (no art loaded): the old box colliders
+    const list = []; for (const c of W().colliders) if (c.enabled && c.mesh) list.push(c.mesh);
+    ray.set(o, d); ray.far = far; ray.near = 0;
+    const h = ray.intersectObjects(list, false)[0]; if (!h || !h.face) return null;
+    const n = h.face.normal.clone().transformDirection(h.object.matrixWorld); if (n.dot(d) > 0) n.negate();
+    return { point: h.point.clone(), distance: h.distance, normal: n, up: n.y > 0.6 && !/^COL_wall/.test(h.object.name) };
+  }
+  const tmp = new THREE.Vector3();
   function terrainHit(o, d, far) {
     const h = W().heightAt; let prev = 0;
     for (let s = 0.05; s <= far; s += 0.05) {
       tmp.copy(o).addScaledVector(d, s);
-      if (tmp.y <= h(tmp.x, tmp.z)) { let a = prev, b = s; for (let i = 0; i < 8; i++) { const m = (a + b) / 2; tmp.copy(o).addScaledVector(d, m); if (tmp.y <= h(tmp.x, tmp.z)) b = m; else a = m; } tmp.copy(o).addScaledVector(d, b); tmp.y = h(tmp.x, tmp.z); return { point: tmp.clone(), distance: b, normal: terrainNormal(tmp.x, tmp.z) }; }
+      if (tmp.y <= h(tmp.x, tmp.z)) { let a = prev, b = s; for (let i = 0; i < 8; i++) { const m = (a + b) / 2; tmp.copy(o).addScaledVector(d, m); if (tmp.y <= h(tmp.x, tmp.z)) b = m; else a = m; } tmp.copy(o).addScaledVector(d, b); tmp.y = h(tmp.x, tmp.z); const n = terrainNormal(tmp.x, tmp.z); return { point: tmp.clone(), distance: b, normal: n, up: n.y > 0.6 }; }
       prev = s;
     }
     return null;
   }
   function terrainNormal(x, z) { const h = W().heightAt, e = 0.3; return new THREE.Vector3(h(x - e, z) - h(x + e, z), 2 * e, h(x, z - e) - h(x, z + e)).normalize(); }
-  /** First upward-facing surface along a ray (or straight down from its end). → { pos, ok } */
+  /** Nearest thing along a ray: the static geometry, items, the ground. */
   function cast(o, d, far) {
-    const list = surfaces(o);
-    ray.set(o, d); ray.far = far; ray.near = 0;
-    let best = null;
-    for (const h of ray.intersectObjects(list, false)) {
-      if (!h.face) continue;
-      nrm.copy(h.face.normal).transformDirection(h.object.matrixWorld);
-      // wall colliders block (you can't put things through a wall) but are never a shelf: they're taller than the rails
-      best = { point: h.point.clone(), distance: h.distance, normal: nrm.clone(), wall: /^COL_wall/.test(h.object.name) };
-      break;   // intersections come sorted: the first one is what you're looking at
-    }
-    const th = terrainHit(o, d, best ? best.distance : far);
-    if (th && (!best || th.distance < best.distance)) best = th;
+    let best = grid.triangles ? grid.cast(o, d, far) : colliderHit(o, d, far);
+    const ih = itemHit(o, d, best ? best.distance : far); if (ih && (!best || ih.distance < best.distance)) best = ih;
+    const th = terrainHit(o, d, best ? best.distance : far); if (th && (!best || th.distance < best.distance)) best = th;
     return best;
   }
-  V.findSpot = (reach = 3.0) => {
+  const DOWN = new THREE.Vector3(0, -1, 0);
+  // pegs: IA_hook_<name>_<px|nx|pz|nz> anchors (the outward direction in three axes)
+  const HANG = { backpack: 0.93, canteen: 0.9, binoculars: 0.85, camera: 0.85, flashlight: 0.95 };
+  let hooks = null;
+  function hookList() {
+    if (hooks) return hooks;
+    hooks = [];
+    for (const [n, p] of W().anchors) {
+      const m = /^IA_hook_(.+)_(px|nx|pz|nz)$/.exec(n); if (!m) continue;
+      const dir = { px: [1, 0, 0], nx: [-1, 0, 0], pz: [0, 0, 1], nz: [0, 0, -1] }[m[2]];
+      hooks.push({ name: n, pos: p.clone(), dir: new THREE.Vector3(...dir) });
+    }
+    return hooks;
+  }
+  V.hooks = hookList;
+  /** Where G would put `kind`: a free peg you're pointing at, else the first flat surface you're looking at, else straight
+   * down from where your look ends, else the floor at your feet. → { pos, ok, hook?, rotY? } */
+  V.findSpot = (reach = 3.5, kind = null, taken = new Set(), feet = null) => {
     const o = camera.getWorldPosition(new THREE.Vector3()), d = camera.getWorldDirection(new THREE.Vector3());
-    let hit = cast(o, d, reach);
-    if (hit && !hit.wall && hit.normal.y > 0.6) return { pos: hit.point, ok: true };
-    // looking at a wall or into the air: drop straight down from where the look ends
-    const end = hit ? hit.point.clone().addScaledVector(d, -0.25) : o.clone().addScaledVector(d, reach);
-    const down = cast(end, new THREE.Vector3(0, -1, 0), 2.2);
-    if (down && !down.wall && down.normal.y > 0.6) return { pos: down.point, ok: true };
+    const hit = cast(o, d, reach);
+    if (kind && HANG[kind] && T[kind]) {
+      let best = null, bp = 0.24;
+      for (const h of hookList()) {
+        if (taken.has(h.name)) continue;
+        const to = h.pos.clone().sub(o), t = to.dot(d); if (t < 0.25 || t > reach + 0.4) continue;
+        const perp = to.clone().addScaledVector(d, -t).length(); if (perp >= bp) continue;
+        const dist = to.length(), los = grid.triangles ? grid.cast(o, to.clone().normalize(), dist - 0.06) : null;
+        if (los) continue;   // a wall between you and that peg
+        best = h; bp = perp;
+      }
+      if (best) {
+        const sz = T[kind].size, rotY = Math.atan2(best.dir.x, best.dir.z);
+        const pos = best.pos.clone().addScaledVector(best.dir, sz.z / 2 - 0.02); pos.y -= sz.y * HANG[kind];
+        return { pos, ok: true, hook: best.name, rotY };
+      }
+    }
+    if (hit && hit.up) return { pos: hit.point, ok: true };
+    // a wall, a rail, a pane, or the air: drop straight down from just short of it
+    const end = hit ? hit.point.clone().addScaledVector(d, -0.12) : o.clone().addScaledVector(d, reach);
+    const down = cast(end, DOWN, 3.5);
+    if (down && down.up) return { pos: down.point, ok: true };
+    if (feet) {   // at your feet, a step ahead
+      const f = new THREE.Vector3(feet.x + Math.sin(feet.yaw) * -0.55, o.y, feet.z + Math.cos(feet.yaw) * -0.55);
+      const dn = cast(f, DOWN, 3.5); if (dn && dn.up) return { pos: dn.point, ok: true };
+    }
     return { pos: hit ? hit.point : end, ok: false };
   };
   /** Settle a point onto whatever is under it (for spawning things on shelves / the ground). */
-  V.settle = (p) => { const d = cast(new THREE.Vector3(p[0], p[1] + 0.6, p[2]), new THREE.Vector3(0, -1, 0), 3); return d && !d.wall ? [p[0], d.point.y, p[2]] : [p[0], W().heightAt(p[0], p[2]), p[2]]; };
+  V.settle = (p) => { const d = cast(new THREE.Vector3(p[0], p[1] + 0.6, p[2]), DOWN, 3); return d && d.up ? [p[0], d.point.y, p[2]] : [p[0], W().heightAt(p[0], p[2]), p[2]]; };
 
   // ---------------------------------------------------------------- icons rendered from the real models
   function renderIcons() {

@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=cb2ac382'
+import { clamp } from './util.js?v=7927575b'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -55,16 +55,16 @@ export class Inventory {
   take(id) {
     const it = this.get(id); if (!it || it.where !== 'world') return { ok: false, why: 'gone' }
     const h = this.freeHand()
-    if (h >= 0) { Object.assign(it, { where: 'hand', slot: h, pos: null }); this.active = h; return { ok: true, to: 'hand' } }
+    if (h >= 0) { Object.assign(it, { where: 'hand', slot: h, pos: null, hook: null }); this.active = h; return { ok: true, to: 'hand' } }
     const p = KINDS[it.kind].pack ? this.freePack() : -1
-    if (p >= 0) { Object.assign(it, { where: 'pack', slot: p, pos: null }); return { ok: true, to: 'pack' } }
+    if (p >= 0) { Object.assign(it, { where: 'pack', slot: p, pos: null, hook: null }); return { ok: true, to: 'pack' } }
     return { ok: false, why: KINDS[it.kind].pack ? 'Your hands and pack are full. Set something down (G).' : 'Your hands are full. Set something down (G).' }
   }
   /** Put a carried item down in the world. */
-  place(id, pos, rotY = 0) {
+  place(id, pos, rotY = 0, hook = null) {
     const it = this.get(id); if (!it || it.where === 'world') return false
     if (it.where === 'pack' && !this.wearingPack) return false
-    Object.assign(it, { where: 'world', slot: null, pos: [...pos], rotY })
+    Object.assign(it, { where: 'world', slot: null, pos: [...pos], rotY, hook })
     return true
   }
   /** Hand <-> pack. */
@@ -90,7 +90,7 @@ export class Inventory {
   label(it) {
     if (!it) return ''
     const k = KINDS[it.kind]; if (!k) return it.kind
-    if (it.kind === 'fuel') return k.name + (it.fill > 0.01 ? ' (full)' : ' (empty)')
+    if (it.kind === 'fuel') return k.name + (it.fill > 0.99 ? ' (full, 5 L)' : it.fill > 0.01 ? ` (${Math.round(it.fill * 50) / 10} L)` : ' (empty)')
     if (it.kind === 'canteen') return k.name + (it.fill > 0 ? ` (${Math.round(it.fill * CANTEEN_SIPS)}/${CANTEEN_SIPS})` : ' (empty)')
     return k.name
   }

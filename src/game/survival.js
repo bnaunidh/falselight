@@ -1,6 +1,6 @@
 // Body and weather: air temperature (°F, the lookout is a 1983 Forest Service post), wind chill, the cab's own air,
 // thirst and hunger. Pure. Rates are per GAME hour, so resting on the bed costs water and food like real hours do.
-import { clamp } from './util.js?v=cb2ac382'
+import { clamp } from './util.js?v=7927575b'
 
 export const SURV = {
   thirst: 1 / 16,       // a full water meter lasts 16 game hours
@@ -30,6 +30,7 @@ export class Survival {
     this.food = s.food ?? 0.8
     this.cabF = s.cabF ?? null
     this.wet = s.wet ?? 0
+    this.warmth = s.warmth ?? 0   // a hot drink: fades over about an hour and a half
     this.airF = 55; this.feelsF = 55; this.warming = false; this.mph = 0
     this.warned = { ...(s.warned || {}) }
   }
@@ -50,7 +51,8 @@ export class Survival {
     else if (!inCab && ctx.rain > 0.05) this.wet = Math.min(0.6, this.wet + ctx.rain * dtH * 0.8)
     else this.wet = Math.max(0, this.wet - dtH * (inCab ? (ctx.heater ? 1.2 : 0.4) : 0.2))
     this.airF = inCab ? this.cabF : out
-    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet
+    this.warmth = Math.max(0, this.warmth - dtH * 0.7)
+    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet + 7 * this.warmth
     this.warming = inCab && ctx.heater && this.cabF > out + 3
     // thirst + hunger (worse jogging, or sweating in a hot cab)
     const hot = this.feelsF > 74 ? 1.4 : 1
@@ -68,6 +70,6 @@ export class Survival {
   get vigor() { return clamp(Math.min(this.water / SURV.lowWater, this.food / SURV.lowFood, 1) * 0.3 + 0.7) }
   drink(amount) { this.water = clamp(this.water + amount) }
   eat(amount) { this.food = clamp(this.food + amount) }
-  get icon() { return this.warming || this.feelsF >= 66 ? 'fire' : this.feelsF < 40 ? 'snow' : 'therm' }
-  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warned: this.warned } }
+  get icon() { return this.warming || this.warmth > 0.3 || this.feelsF >= 66 ? 'fire' : this.feelsF < 40 ? 'snow' : 'therm' }
+  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warmth: this.warmth, warned: this.warned } }
 }

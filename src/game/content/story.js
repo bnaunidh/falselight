@@ -122,7 +122,7 @@ export const LINES = {
   bedSitter: [N('Someone is sitting on the edge of your bed, with his back to you.')],
   hallu: {
     figure: [N('Someone on the catwalk, outside the glass.')],
-    knock: [N('Three knocks on the hatch.')],
+    knock: [N('Three knocks on the door.')],
     text: [N('The logbook is open. You don\'t remember opening it.')],
     voice: [D('Tamarack. ...Tamarack. Come down.')],
   },
@@ -275,3 +275,12 @@ export function coDistort(text, level, seed = 7) {
     return k && h < p ? (w[0] === w[0].toUpperCase() ? k[0].toUpperCase() + k.slice(1) : k) : w
   })
 }
+
+// the books on the cab shelf (E on the shelf flips through them in turn)
+export const BOOKS = [
+  { title: 'Lookout Handbook · USFS Region 6, rev. 1962', text: 'REPORTING A SMOKE. Take the azimuth with the fire finder to the nearest degree. Give the landmark nearest the smoke, the colour of the smoke, and whether it is drifting.\n\nWhite smoke is usually light fuel. Black or brown is heavier: timber, slash, a structure.\n\nReport every smoke. A false alarm costs a phone call. A missed one costs a mountain.\n\n(In pencil, in the margin: "and you can see further at dusk than you think.")' },
+  { title: 'Birds of the Northwest · a field guide, water-stained', text: 'STELLER\'S JAY. Crested, dark blue and black. Bold at camps. Loud harsh "shook-shook-shook"; mimics hawks.\n\nUnderlined twice, in Tillman\'s hand: Jays go quiet before weather.\n\nUnder that, newer ink: And before other things.' },
+  { title: 'Cold Deck · a paperback western, spine broken', text: 'The rider came down off the ridge at a walk, like a man who had all the time left in the world and meant to spend it slowly. Nobody in the town had seen him ride in. Nobody would see him ride out, either.\n\nSomeone has dog-eared this page. Nothing on it is marked.' },
+  { title: 'Crossword Omnibus No. 4 · half done', text: 'Seven across, "Keeps watch" (7): SENTINEL is crossed out; LOOKOUT written in.\n\nTwelve down, "Won\'t be seen" (6): left blank. The square has been gone over with the pencil so many times the paper has worn through.' },
+  { title: 'Osborne Fire Finder · operating card', text: '1. Level the table. The map is oriented to TRUE north.\n2. Turn the sighting ring until the smoke is behind the hair of the front sight.\n3. Read the azimuth under the rear sight. Report it with the vertical angle if you can.\n4. Two lookouts crossing their azimuths fix the fire. One lookout gives a line.\n\n(Taped over the bottom: "Do not report the rock. The rock is not a fire. —R.T.")' },
+];
