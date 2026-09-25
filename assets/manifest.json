@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated": "2026-09-25T09:14:12",
+ "generated": "2026-09-25T10:08:33",
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
@@ -52,6 +52,51 @@
    "bytes": 1132004,
    "mtime": 1790225199
   },
+  "prop_sign_camp": {
+   "path": "models/prop_sign_camp.glb",
+   "bytes": 1484252,
+   "mtime": 1790355244
+  },
+  "prop_sign_cliff": {
+   "path": "models/prop_sign_cliff.glb",
+   "bytes": 572080,
+   "mtime": 1790355246
+  },
+  "prop_sign_creek": {
+   "path": "models/prop_sign_creek.glb",
+   "bytes": 1559648,
+   "mtime": 1790355243
+  },
+  "prop_sign_firedanger": {
+   "path": "models/prop_sign_firedanger.glb",
+   "bytes": 1549492,
+   "mtime": 1790355245
+  },
+  "prop_sign_gate": {
+   "path": "models/prop_sign_gate.glb",
+   "bytes": 1053276,
+   "mtime": 1790355247
+  },
+  "prop_sign_j1": {
+   "path": "models/prop_sign_j1.glb",
+   "bytes": 1678956,
+   "mtime": 1790355242
+  },
+  "prop_sign_j2": {
+   "path": "models/prop_sign_j2.glb",
+   "bytes": 1620536,
+   "mtime": 1790355243
+  },
+  "prop_sign_spring": {
+   "path": "models/prop_sign_spring.glb",
+   "bytes": 1442028,
+   "mtime": 1790355246
+  },
+  "prop_sign_trailhead": {
+   "path": "models/prop_sign_trailhead.glb",
+   "bytes": 2551680,
+   "mtime": 1790355244
+  },
   "prop_sleeping_bag": {
    "path": "models/prop_sleeping_bag.glb",
    "bytes": 2103436,
@@ -72,15 +117,10 @@
    "bytes": 1087032,
    "mtime": 1790303178
   },
-  "prop_trail_sign": {
-   "path": "models/prop_trail_sign.glb",
-   "bytes": 1467808,
-   "mtime": 1790303118
-  },
   "tower": {
    "path": "models/tower.glb",
-   "bytes": 21004036,
-   "mtime": 1790301984
+   "bytes": 20000492,
+   "mtime": 1790356104
   },
   "veg_branches": {
    "path": "models/veg_branches.glb",
@@ -186,33 +226,33 @@
  "data": {
   "layout.json": {
    "path": "data/layout.json",
-   "bytes": 126581,
-   "mtime": 1790302365
+   "bytes": 126939,
+   "mtime": 1790355396
   },
   "scatter.json": {
    "path": "data/scatter.json",
-   "bytes": 592842,
-   "mtime": 1790302366
+   "bytes": 604212,
+   "mtime": 1790355401
   },
   "terrain_height.bin": {
    "path": "data/terrain_height.bin",
    "bytes": 3165524,
-   "mtime": 1790302365
+   "mtime": 1790355396
   },
   "terrain_height.json": {
    "path": "data/terrain_height.json",
    "bytes": 192,
-   "mtime": 1790302365
+   "mtime": 1790355396
   },
   "terrain_splat.png": {
    "path": "data/terrain_splat.png",
    "bytes": 103103,
-   "mtime": 1790302365
+   "mtime": 1790355396
   },
   "terrain_splat.json": {
    "path": "data/terrain_splat.json",
    "bytes": 1831,
-   "mtime": 1790302365
+   "mtime": 1790355396
   }
  },
  "textures": {

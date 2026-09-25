@@ -12002,56 +12002,85 @@
    "rotY": 0.6
   },
   {
-   "model": "prop_trail_sign",
+   "model": "prop_sign_j1",
    "position": [
-    9.6,
-    -21.488,
-    91.2
+    9.8,
+    -21.487,
+    91.1
    ],
-   "rotY": 0.3,
-   "text": [
-    "LOOKOUT",
-    "CREEK",
-    "CAMP LOOP"
-   ]
+   "rotY": 0.3
   },
   {
-   "model": "prop_trail_sign",
+   "model": "prop_sign_j2",
    "position": [
-    31.6,
-    -34.89,
-    262.0
+    31.8,
+    -34.889,
+    262.4
    ],
-   "rotY": -0.2,
-   "text": [
-    "TRAILHEAD",
-    "CREEK",
-    "CAMP LOOP"
-   ]
+   "rotY": -0.2
   },
   {
-   "model": "prop_trail_sign",
+   "model": "prop_sign_gate",
    "position": [
-    2.2,
-    -0.156,
-    11.0
+    0.9,
+    1.046,
+    6.05
    ],
-   "rotY": 0.0,
-   "text": [
-    "LOOKOUT"
-   ]
+   "rotY": 0.0
   },
   {
-   "model": "prop_trail_sign",
+   "model": "prop_sign_trailhead",
    "position": [
-    16.0,
-    -32.678,
-    364.0
+    14.5,
+    -32.69,
+    363.0
    ],
-   "rotY": 0.4,
-   "text": [
-    "LOOKOUT 0.3 MI"
-   ]
+   "rotY": 0.35
+  },
+  {
+   "model": "prop_sign_firedanger",
+   "position": [
+    19.0,
+    -32.75,
+    362.5
+   ],
+   "rotY": 0.2
+  },
+  {
+   "model": "prop_sign_cliff",
+   "position": [
+    76.5,
+    -7.425,
+    26.2
+   ],
+   "rotY": 1.5708
+  },
+  {
+   "model": "prop_sign_spring",
+   "position": [
+    -58.8,
+    -19.298,
+    75.6
+   ],
+   "rotY": 0.9
+  },
+  {
+   "model": "prop_sign_camp",
+   "position": [
+    -111.5,
+    -34.471,
+    146.0
+   ],
+   "rotY": 2.4
+  },
+  {
+   "model": "prop_sign_creek",
+   "position": [
+    30.8,
+    -44.422,
+    169.5
+   ],
+   "rotY": 0.1
   },
   {
    "model": "prop_mailbox",

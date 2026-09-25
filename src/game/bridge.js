@@ -1,24 +1,24 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=371673be';
-import { Objectives } from './objectives.js?v=371673be';
-import { Radio } from './radio.js?v=371673be';
-import { Fuel } from './fuel.js?v=371673be';
-import { FireFinder, spokenBearing } from './firefinder.js?v=371673be';
-import { Photos, classifyShot } from './photos.js?v=371673be';
-import { CO } from './co.js?v=371673be';
-import { Weeper, lookupChance } from './weeper.js?v=371673be';
-import { OtherLookout } from './otherLookout.js?v=371673be';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=371673be';
-import { GuidedHiker } from './hikers.js?v=371673be';
-import { MorseKeyer, isSOS } from './morse.js?v=371673be';
-import { normalizeLayout } from './layout.js?v=371673be';
-import { createSaves } from './saves.js?v=371673be';
-import { createRng } from './rng.js?v=371673be';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=371673be';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=371673be';
-import * as S from './content/story.js?v=371673be';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=d3713743';
+import { Objectives } from './objectives.js?v=d3713743';
+import { Radio } from './radio.js?v=d3713743';
+import { Fuel } from './fuel.js?v=d3713743';
+import { FireFinder, spokenBearing } from './firefinder.js?v=d3713743';
+import { Photos, classifyShot } from './photos.js?v=d3713743';
+import { CO } from './co.js?v=d3713743';
+import { Weeper, lookupChance } from './weeper.js?v=d3713743';
+import { OtherLookout } from './otherLookout.js?v=d3713743';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=d3713743';
+import { GuidedHiker } from './hikers.js?v=d3713743';
+import { MorseKeyer, isSOS } from './morse.js?v=d3713743';
+import { normalizeLayout } from './layout.js?v=d3713743';
+import { createSaves } from './saves.js?v=d3713743';
+import { createRng } from './rng.js?v=d3713743';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=d3713743';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=d3713743';
+import * as S from './content/story.js?v=d3713743';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -35,9 +35,10 @@ function lampTexture() {
 }
 function smokeTexture() {
   const c = document.createElement('canvas'); c.width = 128; c.height = 256; const g = c.getContext('2d');
-  for (let i = 0; i < 90; i++) {
-    const y = 250 - i * 2.6, x = 64 + Math.sin(i * 0.19) * (8 + i * 0.35) + i * 0.4, r = 10 + i * 0.55;
-    const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(215,212,205,${0.08 * (1 - i / 110)})`); gr.addColorStop(1, 'rgba(215,212,205,0)');
+  for (let i = 0; i < 130; i++) {
+    const y = 252 - i * 1.85, x = 64 + Math.sin(i * 0.17) * (5 + i * 0.22) + i * 0.33, r = 7 + i * 0.42;
+    const k = i / 130, c = [Math.round(88 + 92 * k), Math.round(80 + 92 * k), Math.round(72 + 94 * k)].join(',');   // brown-grey at the fire, paler aloft
+    const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${c},${0.2 * (1 - k * 0.75)})`); gr.addColorStop(1, `rgba(${c},0)`);
     g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
@@ -275,7 +276,7 @@ export class Game {
     const f = this.L.fireSites.find((q) => q.name === name); if (!f) return;
     this.flags['fire_' + name] = on;
     if (this.night) this.e.world.setFire(name, on ? 1 : 0);
-    else { const fp = (this.e.world.layout.fireSites || []).find((q) => q.name === name); if (fp && on) { this.smoke.position.set(fp.position[0], fp.position[1] + 380, fp.position[2]); this.smoke.visible = true; this.smokeFade = 1; } else this.smokeFade = 0; }
+    else { const fp = (this.e.world.layout.fireSites || []).find((q) => q.name === name); if (fp && on) { this.smoke.position.set(fp.position[0], fp.position[1] + 400, fp.position[2]); this.smoke.visible = true; this.smokeFade = 1; } else this.smokeFade = 0; }
   }
 
   // ------------------------------------------------------------------ the script
@@ -538,7 +539,10 @@ export class Game {
     reg('tillman', 'IA_logbook', 'E — Read Tillman\'s logbook', () => { this.flags.readTillman = true; this.openLogbook('tillman'); });
     reg('map', 'IA_map', 'E — The trail map', () => this.openMap());
     reg('heater', 'IA_heater', () => this.co.heater ? 'E — Turn the heater off' : 'E — Light the propane heater', () => { this.co.toggleHeater(); e.audio.play('door', { volume: 0.2 }); });
-    for (const k of ['n', 'e', 's', 'w']) reg('win_' + k, 'IA_window_' + k, () => this.co.windows[k] ? 'E — Close the window' : 'E — Open the window', () => { this.co.toggleWindow(k); e.audio.play('door', { volume: 0.3 }); }, () => true, 0.7);
+    for (const k of ['n', 'e', 's', 'w']) reg('win_' + k, 'IA_window_' + k, () => this.co.windows[k] ? 'E — Close the window' : 'E — Open the window', () => {
+      const open = this.co.toggleWindow(k); e.audio.play('door', { volume: 0.22 });
+      this.ui.toast(open ? 'Cold air pours in. The cab smells of pine instead of propane.' : 'The window thumps shut. Quieter.', 2.5);
+    }, () => true, 0.7);
     reg('hatch', 'IA_trapdoor', () => this.fuel.carrying ? 'E — Set the can down by the hatch' : `E — Take the can (${this.fuel.cabCans} here)`, () => {
       if (this.fuel.carrying) { this.fuel.stow('cab'); this.player().carrying = null; this.complete('d1_fuel'); this.complete('d2_fuel'); e.audio.play('fuel_pour', { volume: 0.2 }); }
       else if (this.fuel.pickUp('cab').ok) { this.player().carrying = 'fuel'; }
@@ -576,7 +580,9 @@ export class Game {
     this.finderPos = (this.anchor('IA_firefinder') || new THREE.Vector3(0.3, 31, -0.15)).clone().add(new THREE.Vector3(0, 0.55, 0));
   }
   enterSearchlight() {
-    this.mode = 'searchlight'; const p = this.player(); p.setEnabled(false); p.lookLocked = true;
+    const p = this.player(); this.slReturn = { pos: p.position.clone(), yaw: p.yaw };
+    this.mode = 'searchlight'; p.setEnabled(false); p.lookLocked = true;
+    if (!this.fuel.power) this.ui.toast(this.fuel.tank <= 0 ? 'No power: the generator tank is dry. Bring fuel to the shed.' : 'No power: start the generator in the shed at the base.', 4);
     const SL = this.e.lights.searchlight; SL.operating = true; this.slLit = true; this.fovTarget = 58;
   }
   exitMode() {
@@ -586,12 +592,14 @@ export class Game {
       const a = this.mode === 'finder' ? (this.anchor('IA_firefinder') || new THREE.Vector3(0.3, 30, -0.15)) : (this.anchor('IA_searchlight') || new THREE.Vector3(2, 30, 2));
       p.position.set(a.x + (this.mode === 'finder' ? -0.6 : 0), 30.0, a.z + (this.mode === 'finder' ? 0.3 : 0));
       p.yaw = this.e.camera.rotation.y; p.pitch = 0;
+      if (this.mode === 'searchlight' && this.slReturn) { p.position.copy(this.slReturn.pos); p.yaw = this.slReturn.yaw; }
+      this.slReturn = null;
     }
     this.mode = 'walk'; p.setEnabled(true); p.lookLocked = false; this.fovTarget = 68;
     this.ui.finder(null); this.ui.searchlight(null);
   }
   openModal(fn) { this.e.uiBlocking = true; this.e.input.unlock(); this.player().setEnabled(false); fn(); }
-  closedModal() { this.e.uiBlocking = false; this.player().setEnabled(this.mode === 'walk'); }
+  closedModal() { this.e.uiBlocking = false; this.player().setEnabled(this.mode === 'walk'); if (this.state === 'play') this.e.input.lock(); }
   openLogbook(page = 'tasks') {
     const o = this.obj;
     const data = {
@@ -625,12 +633,18 @@ export class Game {
     In.onAction('pause', (d) => {
       if (!d) return;
       if (this.ui.modalOpen()) { this.ui.closeModal(); return; }
-      if (this.mode !== 'walk') { this.exitMode(); return; }
-      if (this.camRaised) { this.lowerCamera(); return; }
-      if (this.holding) { this.holding = null; this.photos.close(); this.ui.print(null); return; }
+      if (this.escape()) return;
       if (this.state === 'play') this.onPause && this.onPause();
     });
-    In.onAction('searchlight', (d) => { if (!d || this.state !== 'play') return; if (this.camRaised) { this.flashOn = !this.flashOn; return; } if (this.mode === 'searchlight') this.exitMode(); });
+    In.onAction('searchlight', (d) => {
+      if (!d || this.state !== 'play' || this.ui.modalOpen()) return;
+      if (this.camRaised) { this.flashOn = !this.flashOn; return; }
+      if (this.mode === 'searchlight') { this.exitMode(); return; }
+      if (this.mode !== 'walk') return;
+      const z = this.player().zone;
+      if (z === 'cab' || z === 'catwalk') this.enterSearchlight();
+      else this.ui.toast('The searchlight is on the cab roof. Work it from the cab or the catwalk (F).', 3);
+    });
     In.onAction('logbook', (d) => { if (!d || this.state !== 'play') return; if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openLogbook(); });
     In.onAction('map', (d) => { if (!d || this.state !== 'play') return; if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openMap(); });
     In.onAction('camera', (d) => {
@@ -653,6 +667,13 @@ export class Game {
       if (d) { this.signal.mode = true; this.signal.last = t; this.keyer.down(t); e.audio.play('morse_click', { volume: 0.5 }); }
       else { this.signal.last = t; this.keyer.up(t); e.audio.play('morse_click', { volume: 0.35 }); }
     });
+  }
+  /** What Esc means right now, short of pausing. Returns true if it did something. */
+  escape() {
+    if (this.mode !== 'walk') { this.exitMode(); return true; }
+    if (this.camRaised) { this.lowerCamera(); return true; }
+    if (this.holding) { this.holding = null; this.photos.close(); this.ui.print(null); return true; }
+    return false;
   }
   reportFinder() {
     const fires = this.activeFires();
@@ -700,7 +721,7 @@ export class Game {
     if (!sigMode) this.signal.mode = false;
     SL.on = this.fuel.power && !!this.slLit && (sigMode ? e.input.isDown('signal') : true);
     SL.power = this.fuel.power ? 1 - this.fuel.sputter * 0.7 : 0;
-    e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, rain: e.sky.weather.rain, wind: e.sky.weather.wind, forest: this.night ? 0.8 : 0.6, radioStatic: this.inCab() ? 0.35 : 0 });
+    e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1), forest: this.night ? 0.8 : 0.6, radioStatic: this.inCab() ? 0.35 : 0 });
     for (const ev of this.keyer.update(t)) if (ev.kind === 'end') this.onMorseEnd(ev.v, t);
     // modes: camera placement
     const cam = e.camera;
@@ -721,7 +742,17 @@ export class Game {
     const fovT = this.binocular && this.mode === 'walk' ? 16 : this.fovTarget;
     if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov += (fovT - cam.fov) * Math.min(1, dt * 8); cam.updateProjectionMatrix(); }
     cam.userData.zoom = 68 / cam.fov;
-    this.ui.binoculars(this.binocular && this.mode === 'walk');
+    const fw = cam.getWorldDirection(this._fw || (this._fw = new THREE.Vector3()));
+    this.ui.binoculars(this.binocular && this.mode === 'walk', (Math.atan2(fw.x, -fw.z) * 180 / Math.PI + 360) % 360);
+    // windows: slide the sashes to match the rule state
+    if (!this.sashes) { this.sashes = {}; for (const k of 'nesw') { const o = e.world.objects.get('FL_sash_' + k); if (o) this.sashes[k] = { o, base: o.position.clone(), t: 0 }; } }
+    for (const k in this.sashes) {
+      const s = this.sashes[k], tgt = this.co.windows[k] ? 1 : 0; if (Math.abs(s.t - tgt) < 1e-3 && s.done) continue;
+      s.t += Math.sign(tgt - s.t) * Math.min(Math.abs(tgt - s.t), dt * 1.6); s.done = Math.abs(s.t - tgt) < 1e-3;
+      const sl = { n: [1, 0, 0], s: [-1, 0, 0], e: [0, 0, 1], w: [0, 0, -1] }[k], inw = { n: [0, 0, 1], s: [0, 0, -1], e: [-1, 0, 0], w: [1, 0, 0] }[k];
+      const u = s.t * s.t * (3 - 2 * s.t) * 0.88, v = Math.min(1, s.t * 8) * 0.08;
+      s.o.position.set(s.base.x + sl[0] * u + inw[0] * v, s.base.y, s.base.z + sl[2] * u + inw[2] * v);
+    }
     if (this.camRaised) this.ui.cameraFrame({ left: this.photos.packLeft, flash: this.flashOn });
     // prints
     for (const ev of this.photos.tick(dt)) {
@@ -745,7 +776,7 @@ export class Game {
     this.updateWeeper(dt, t);
     if (this.otherEnt && this.bedSitterT != null) { this.bedSitterT += dt; const c = e.view.check(this.otherEnt); if (!c.inFrustum && this.bedSitterT > 3) { this.otherEnt.remove(); this.otherEnt = null; this.bedSitterT = null; } }
     // smoke by day
-    if (this.smoke.visible) { this.smoke.material.opacity += ((this.smokeFade || 0) * 0.55 - this.smoke.material.opacity) * Math.min(1, dt * 0.5); if (this.smoke.material.opacity < 0.01 && !this.smokeFade) this.smoke.visible = false; }
+    if (this.smoke.visible) { this.smoke.material.opacity += ((this.smokeFade || 0) * 0.95 - this.smoke.material.opacity) * Math.min(1, dt * 0.5); this.smoke.material.rotation = Math.sin(t * 0.05) * 0.03; this.smoke.scale.set(430 + Math.sin(t * 0.21) * 18, 860, 1); if (this.smoke.material.opacity < 0.01 && !this.smokeFade) this.smoke.visible = false; }
     // truck / placeholders visibility
     const truck = e.scene.getObjectByName('placed:prop_supply_truck') || this.ph['prop_supply_truck']; if (truck) truck.visible = !!this.truckVisible;
     // held can in view, watch

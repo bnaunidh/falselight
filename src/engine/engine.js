@@ -1,15 +1,15 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
-import { createInput } from './input.js?v=371673be';
-import { createWorld } from './world.js?v=371673be';
-import { createPlayer } from './player.js?v=371673be';
-import { createSky } from './sky.js?v=371673be';
-import { createLights } from './lights.js?v=371673be';
-import { createPost } from './post.js?v=371673be';
-import { createEntities, createView, createInteract } from './entities.js?v=371673be';
-import { createAudio } from './audio.js?v=371673be';
-import { createPhoto } from './photo.js?v=371673be';
-import { tryJSON } from './util.js?v=371673be';
+import { createInput } from './input.js?v=d3713743';
+import { createWorld } from './world.js?v=d3713743';
+import { createPlayer } from './player.js?v=d3713743';
+import { createSky } from './sky.js?v=d3713743';
+import { createLights } from './lights.js?v=d3713743';
+import { createPost } from './post.js?v=d3713743';
+import { createEntities, createView, createInteract } from './entities.js?v=d3713743';
+import { createAudio } from './audio.js?v=d3713743';
+import { createPhoto } from './photo.js?v=d3713743';
+import { tryJSON } from './util.js?v=d3713743';
 
 export const QUALITY = {
   low: { pr: 0.7, prMin: 0.5, msaa: false, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },
@@ -92,18 +92,24 @@ export async function createEngine(canvas, opts = {}) {
     requestAnimationFrame(frame);
     step(now);
   }
+  // Adaptive resolution. Resizing clears the canvas, so a new size is applied BEFORE the frame renders (resizing after the
+  // render showed a blank frame = the screen flashed), and only after sustained slow / fast seconds so it can't flip-flop.
+  let slowS = 0, fastS = 0, lastDrop = -1e9;
   function step(now) {
     const dt = Math.min(0.05, Math.max(0.0005, (now - last) / 1000)); last = now;
+    if (E._pendingPr) { E._pr = E._pendingPr; E._pendingPr = null; resize(); }
     if (E.paused) { render(0); return; }
     tick(dt); render(dt);
     fpsAcc += dt; fpsN++;
     if (fpsAcc > 1.0) {
       E.fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
       if (E.adaptive && !E.paused) {
-        const pr = renderer.getPixelRatio(); let np = pr;
-        if (E.fps < 42) np = Math.max(quality.prMin || 0.5, pr - (E.fps < 28 ? 0.15 : 0.08));
-        else if (E.fps > 57) np = Math.min(Math.min(window.devicePixelRatio || 1, quality.pr), pr + 0.05);
-        if (Math.abs(np - pr) > 0.01) { E._pr = np; resize(); }
+        const pr = renderer.getPixelRatio(), max = Math.min(window.devicePixelRatio || 1, quality.pr);
+        slowS = E.fps < 40 ? slowS + 1 : 0; fastS = E.fps > 57 ? fastS + 1 : 0;
+        let np = pr;
+        if (slowS >= 3) { np = Math.max(quality.prMin || 0.5, pr - 0.1); slowS = 0; lastDrop = now; }
+        else if (fastS >= 12 && now - lastDrop > 45000) { np = Math.min(max, pr + 0.05); fastS = 0; }
+        if (Math.abs(np - pr) > 0.01) E._pendingPr = np;
       }
     }
   }

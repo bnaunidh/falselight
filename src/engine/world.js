@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=371673be';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=d3713743';
 
 const loader = new GLTFLoader();
 export const gltfCache = new Map();
@@ -565,15 +565,19 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
     const add = (k, x, z, sMin, sMax, dy = -0.15) => { (scatter[k] = scatter[k] || []).push([x, heightAt(x, z) + dy, z, rnd() * 6.283, sMin + rnd() * (sMax - sMin)]); };
     const rav = layout.ravine && layout.ravine.polygon;
     const inPoly = (x, z, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > z) !== (b[1] > z) && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1] || 1e-9) + a[0]) c = !c; } return c; };
+    const tg = new Map(), TC = 1.7;
+    const tooNear = (x, z) => { const cx = Math.floor(x / TC), cz = Math.floor(z / TC); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = tg.get((cx + i) * 100003 + cz + j); if (l) for (const p of l) if ((p[0] - x) ** 2 + (p[1] - z) ** 2 < TC * TC) return true; } return false; };
+    const mark = (x, z) => { const k = Math.floor(x / TC) * 100003 + Math.floor(z / TC); if (!tg.has(k)) tg.set(k, []); tg.get(k).push([x, z]); };
     for (const seg of W.trail.segs) {
       const P = seg.points;
       for (let i = 0; i < P.length - 1; i++) {
         const a = P[i], b = P[i + 1], L = Math.hypot(b[0] - a[0], b[2] - a[2]); if (L < 1e-3) continue;
         const tx = (b[0] - a[0]) / L, tz = (b[2] - a[2]) / L;
-        for (let u = 0; u < L; u += 2.3) {
-          const px = a[0] + tx * u, pz = a[2] + tz * u;
-          for (const side of [-1, 1]) for (const off of [20.2, 22.4, 24.6]) {
-            const x = px - tz * side * off + (rnd() - 0.5) * 1.6, z = pz + tx * side * off + (rnd() - 0.5) * 1.6;
+        for (let n = Math.round(L * 3.2), q = 0; q < n; q++) {                    // random darts + minimum spacing (no rows)
+          const u = rnd() * L, px = a[0] + tx * u, pz = a[2] + tz * u;
+          { const side = rnd() < 0.5 ? -1 : 1, off = 19.8 + Math.pow(rnd(), 0.85) * 6.8;
+            const x = px - tz * side * off, z = pz + tx * side * off;
+            if (tooNear(x, z)) continue;
             if (W.trail.nearest(x, z).dist < 19.6) continue;                       // another trail is close: leave it open
             if (W.zones.some((zn) => (x - zn.x) ** 2 + (z - zn.z) ** 2 < (zn.r + 4) ** 2)) continue;
             if (rav && inPoly(x, z, rav)) continue;
@@ -583,6 +587,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
             else if (r < 0.8) add('veg_salal', x, z, 1.3, 2.0, -0.05);
             else if (r < 0.93) add('veg_fern', x, z, 1.1, 1.6, -0.05);
             else add(rnd() < 0.5 ? 'veg_log_a' : 'veg_log_b', x, z, 0.9, 1.3, -0.1);
+            mark(x, z);
           }
         }
       }

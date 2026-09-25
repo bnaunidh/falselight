@@ -1,14 +1,14 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=371673be';
-import { createUI } from './ui/ui.js?v=371673be';
-import { Game } from './game/bridge.js?v=371673be';
-import { createSaves } from './game/saves.js?v=371673be';
-import { UI as WORDS } from './game/content/story.js?v=371673be';
+import { createEngine } from './engine/engine.js?v=d3713743';
+import { createUI } from './ui/ui.js?v=d3713743';
+import { Game } from './game/bridge.js?v=d3713743';
+import { createSaves } from './game/saves.js?v=d3713743';
+import { UI as WORDS } from './game/content/story.js?v=d3713743';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
 const saves = createSaves();
-const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, sound: false });
+const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, sound: false, fullscreen: true });
 if (!settings.qv2) { settings.quality = 'medium'; settings.qv2 = true; saves.saveSettings(settings); }   // older saves defaulted to 'high'
 const ui = createUI();
 ui.loading(0, 'starting');
@@ -46,7 +46,7 @@ function title() {
     ui.closeModal(); ui.hideHUD(false); engine.audio.start();
     engine.lights.searchlight.on = false; engine.lights.searchlight.operating = false;
     if (a === 'continue') game.continueGame(); else game.newGame();
-    engine.input.lock();
+    engine.input.lock(); goFullscreen();
   } });
 }
 // the title's living backdrop: a slow drift around the tower while the searchlight sweeps the fog
@@ -59,9 +59,15 @@ engine.onUpdate((dt, t) => {
   cam.lookAt(0, 24, 0); cam.fov = 50; cam.updateProjectionMatrix();
   SL.on = true; SL.power = 1; SL.setAim(t * 0.22, -0.06 + Math.sin(t * 0.13) * 0.05);
 });
+// In full screen the browser lets the game keep Esc (keyboard lock), so Esc closes menus instead of just freeing the mouse
+function goFullscreen() {
+  if (settings.fullscreen === false || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(() => { try { navigator.keyboard && navigator.keyboard.lock && navigator.keyboard.lock(['Escape']); } catch (e) { /* not supported */ } }).catch(() => {});
+}
 function openSettings(back) {
-  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, sound: settings.sound, onDone: (v) => {
-    Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, sound: v.sound === true || v.sound === 'on' }); saves.saveSettings(settings);
+  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, sound: settings.sound, fullscreen: settings.fullscreen, onDone: (v) => {
+    Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
+    if (!settings.fullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
     engine.input.sensitivity = 0.0022 * settings.sens; engine.audio.setVolume(settings.volume); engine.audio.setMuted(!settings.sound);
     if (v.quality !== engine.qualityName) engine.setQuality(v.quality);
     ui.closeModal(); back();
@@ -72,7 +78,7 @@ function pause() {
   game.checkpoint('pause');                       // opening the menu quietly sets a checkpoint
   game.state = 'paused'; engine.setPaused(true); engine.input.unlock();
   let acted = false;
-  const resume = () => { engine.setPaused(false); game.state = 'play'; engine.input.lock(); };
+  const resume = () => { engine.setPaused(false); game.state = 'play'; engine.input.lock(); goFullscreen(); };
   ui.screen('pause', { what: /night/.test(game.clock.phase) ? 'night' : 'day',
     onClose: () => { if (!acted) resume(); },        // Esc on the menu = resume (it used to leave the game frozen)
     onAction: (a) => {
@@ -88,14 +94,19 @@ game.onPause = pause;
 const clickRes = document.createElement('div'); clickRes.id = 'fl-clickres';
 clickRes.innerHTML = '<div>Click to continue</div><small>the game is running — your mouse just isn\'t captured</small>';
 document.body.appendChild(clickRes);
-clickRes.addEventListener('click', () => { engine.input.lock(); engine.audio.start(); });
+clickRes.addEventListener('click', () => { engine.input.lock(); engine.audio.start(); goFullscreen(); });
 engine.onUpdate(() => {
   const show = game.state === 'play' && !engine.input.locked && !ui.modalOpen() && !engine.noRender;
   if (show !== clickRes.classList.contains('on')) clickRes.classList.toggle('on', show);
 });
 game.onTitle = title;
 canvas.addEventListener('click', () => { if (game.state === 'play' && !ui.modalOpen()) { engine.input.lock(); engine.audio.start(); } });
-engine.input.onAction('lockchange', (locked) => { if (!locked && game.state === 'play' && !ui.modalOpen() && game.mode === 'walk' && !engine.uiBlocking) setTimeout(() => { if (!engine.input.locked && game.state === 'play' && !ui.modalOpen()) pause(); }, 120); });
+engine.input.onAction('lockchange', (locked) => {
+  if (locked || game.state !== 'play' || ui.modalOpen() || engine.uiBlocking) return;
+  // the browser ate an Esc to free the mouse: do what that Esc meant (leave the searchlight / finder / camera / print) instead of wasting it
+  if (game.mode !== 'walk' || game.camRaised || game.holding) { game.escape(); return; }
+  setTimeout(() => { if (!engine.input.locked && game.state === 'play' && !ui.modalOpen()) pause(); }, 120);
+});
 
 // ---------------------------------------------------------------- test hooks
 window.__fl.shot = async (name) => {

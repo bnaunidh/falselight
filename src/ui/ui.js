@@ -50,7 +50,13 @@ export function createUI(root = document.getElementById('ui')) {
     camf.style.display = 'block';
     camf.innerHTML = `<div class="frame"></div><div class="info">${o.left} left · flash ${o.flash ? 'ON' : 'off'} (F) · click to take · C to lower</div>`;
   };
-  U.binoculars = (on) => { binoc.style.display = on ? 'block' : 'none'; };
+  U.binoculars = (on, brg) => {
+    binoc.style.display = on ? 'block' : 'none'; if (!on) return;
+    const b = Math.round(brg || 0) % 360, pts = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    const txt = String(b).padStart(3, '0') + '° ' + pts[Math.round(b / 22.5) % 16];
+    let el = binoc.querySelector('.brg'); if (!el) { el = document.createElement('div'); el.className = 'brg'; binoc.appendChild(el); }
+    if (el.textContent !== txt) el.textContent = txt;
+  };
   U.print = (o) => {
     if (!o) { print.style.display = 'none'; return; }
     print.style.display = 'block';
@@ -155,6 +161,7 @@ export function createUI(root = document.getElementById('ui')) {
         <label>Mouse sensitivity <input data-k="sens" type="range" min="0.4" max="2.5" step="0.1" value="${o.sens}"></label>
         <label>Sound <select data-k="sound"><option value="off" ${o.sound ? '' : 'selected'}>off</option><option value="on" ${o.sound ? 'selected' : ''}>on</option></select></label>
         <label>Volume <input data-k="volume" type="range" min="0" max="1" step="0.05" value="${o.volume}"></label>
+        <label>Full screen <select data-k="fullscreen"><option value="on" ${o.fullscreen !== false ? 'selected' : ''}>on (Esc works in menus)</option><option value="off" ${o.fullscreen === false ? 'selected' : ''}>off</option></select></label>
         <button data-a="done">Done</button></div>`, 'center');
       m.querySelector('[data-a=done]').onclick = () => { const v = {}; m.querySelectorAll('[data-k]').forEach((i) => v[i.dataset.k] = i.value); o.onDone(v); };
       return;

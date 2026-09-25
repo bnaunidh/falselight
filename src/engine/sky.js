@@ -1,8 +1,8 @@
 // FALSE LIGHT — sky & weather: HDRI sky dome blended across day/dusk/night, PMREM environment, sun/moon with a
 // player-following shadow frustum, fog, rain streaks, lightning.
 import * as THREE from 'three';
-import { loadHDR } from './hdr.js?v=371673be';
-import { clamp, smoothstep, lerp } from './util.js?v=371673be';
+import { loadHDR } from './hdr.js?v=d3713743';
+import { clamp, smoothstep, lerp } from './util.js?v=d3713743';
 
 const KEYS = [   // hour -> which HDRI + light settings
   { h: 0, sky: 'night', exp: 0.55, sun: 0.035, sunCol: [0.55, 0.65, 0.9], fog: [0.012, 0.016, 0.022], env: 0.35, amb: 0.03 },

@@ -2,7 +2,7 @@
 // Produces a HalfFloat RGBA DataTexture (equirectangular) plus a few statistics the sky uses:
 // average horizon colour, zenith colour, mean luminance and the azimuth of the brightest spot (sun/moon).
 import * as THREE from 'three';
-import { fetchBuffer } from './util.js?v=371673be';
+import { fetchBuffer } from './util.js?v=d3713743';
 
 // (mantissa, exponent) -> half-float bits lookup; RGBE value = m * 2^(e-136)
 let HALF_LUT = null;
