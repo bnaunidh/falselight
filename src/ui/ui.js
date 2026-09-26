@@ -1,8 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=a148af98';
-import { createOverlays } from './overlays.js?v=a148af98';
+import { drawMap } from './mapdraw.js?v=453c91ac';
+import { createOverlays } from './overlays.js?v=453c91ac';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -212,7 +212,8 @@ export function createUI(root = document.getElementById('ui')) {
       return;
     }
     if (kind === 'death' || kind === 'end') {
-      const m = openModal(`<div class="title ${kind}"><h1>${kind === 'death' ? '' : 'FALSE LIGHT'}</h1><div class="sub big">${esc(o.text)}</div>${o.detail ? `<div class="detail">${esc(o.detail)}</div>` : ''}
+      const epi = kind === 'end' && o.paras ? `<div class="epi">${o.paras.map((t, i) => `<p style="animation-delay:${2.2 + i * 3.2}s">${esc(t)}</p>`).join('')}<p class="last" style="animation-delay:${2.8 + o.paras.length * 3.2}s">${esc(o.last || '')}</p></div>` : '';
+      const m = openModal(`<div class="title ${kind}"><h1>${kind === 'death' ? '' : 'FALSE LIGHT'}</h1><div class="sub big">${esc(o.text)}</div>${epi}${o.detail ? `<div class="detail"${epi ? ` style="animation:fl-epi 1.5s ${3.6 + (o.paras.length + 1) * 3.2}s both"` : ''}>${esc(o.detail)}</div>` : ''}
         <div class="menu">${kind === 'death' ? '<button data-a="retry">Try again</button>' : ''}<button data-a="title">Title</button></div></div>`, 'full');
       m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => o.onAction(b.dataset.a));
     }

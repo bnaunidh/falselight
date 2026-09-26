@@ -2,7 +2,7 @@
 // A print develops over 60 s (grey-blue → the image blooms in). Shaking it (Q) speeds it up.
 // A forbidden print — the Weeper looking up — gives you one second, once the face starts to
 // resolve, to turn it face-down. Only a print you are looking at can be seen.
-import { clamp } from './util.js?v=a148af98'
+import { clamp } from './util.js?v=453c91ac'
 
 export const PHOTO = { develop: 60, shakeBoost: 3.2, shakeWindow: 1.2, resolveAt: 0.55, flipWindow: 1.0, pack: 10 }
 

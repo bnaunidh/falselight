@@ -229,3 +229,9 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 /* what your body does to the screen (painted in overlays.js): under the HUD, over the world */
 .fl-body{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
 .fl-body>div{position:absolute;inset:0;background-size:100% 100%;opacity:0;will-change:opacity,transform}
+
+/* the epilogue: one paragraph at a time, then the last line on its own */
+.title.end .epi{max-width:620px;margin:22px auto 0;text-align:left}
+.title.end .epi p{font:17px/1.6 Georgia,serif;color:#d8d0bd;margin:0 0 14px;opacity:0;animation:fl-epi 1.6s ease-out both}
+.title.end .epi p.last{margin-top:26px;font-style:italic;color:#f1e6c8;text-align:center}
+@keyframes fl-epi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}

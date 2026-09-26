@@ -1,32 +1,33 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=a148af98';
-import { Objectives } from './objectives.js?v=a148af98';
-import { Radio } from './radio.js?v=a148af98';
-import { Fuel, FUEL } from './fuel.js?v=a148af98';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=a148af98';
-import { Survival, SURV } from './survival.js?v=a148af98';
-import { createItemsView } from './itemsView.js?v=a148af98';
-import { createChill } from './chill.js?v=a148af98';
-import { createPlume } from './smokePlume.js?v=a148af98';
-import { FireFinder, spokenBearing } from './firefinder.js?v=a148af98';
-import { Photos, classifyShot } from './photos.js?v=a148af98';
-import { CO } from './co.js?v=a148af98';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=a148af98';
-import { OtherLookout } from './otherLookout.js?v=a148af98';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=a148af98';
-import { GuidedHiker } from './hikers.js?v=a148af98';
-import { MorseKeyer, isSOS } from './morse.js?v=a148af98';
-import { normalizeLayout } from './layout.js?v=a148af98';
-import { createSaves } from './saves.js?v=a148af98';
-import { createRng } from './rng.js?v=a148af98';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=a148af98';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=a148af98';
-import * as S from './content/story.js?v=a148af98';
-import { createDog, setDogName } from './dog.js?v=a148af98';
-import { createWildlife } from './wildlife.js?v=a148af98';
-import { Fear, registerFearSounds } from './fear.js?v=a148af98';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=453c91ac';
+import { Objectives } from './objectives.js?v=453c91ac';
+import { Radio } from './radio.js?v=453c91ac';
+import { Fuel, FUEL } from './fuel.js?v=453c91ac';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=453c91ac';
+import { Survival, SURV } from './survival.js?v=453c91ac';
+import { createItemsView } from './itemsView.js?v=453c91ac';
+import { createChill } from './chill.js?v=453c91ac';
+import { createPlume } from './smokePlume.js?v=453c91ac';
+import { FireFinder, spokenBearing } from './firefinder.js?v=453c91ac';
+import { Photos, classifyShot } from './photos.js?v=453c91ac';
+import { CO } from './co.js?v=453c91ac';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=453c91ac';
+import { OtherLookout } from './otherLookout.js?v=453c91ac';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=453c91ac';
+import { GuidedHiker } from './hikers.js?v=453c91ac';
+import { MorseKeyer, isSOS } from './morse.js?v=453c91ac';
+import { normalizeLayout } from './layout.js?v=453c91ac';
+import { createSaves } from './saves.js?v=453c91ac';
+import { createRng } from './rng.js?v=453c91ac';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=453c91ac';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=453c91ac';
+import * as S from './content/story.js?v=453c91ac';
+import { createDog, setDogName } from './dog.js?v=453c91ac';
+import { createWildlife } from './wildlife.js?v=453c91ac';
+import { Fear, registerFearSounds } from './fear.js?v=453c91ac';
+import { epilogue } from './content/ending.js?v=453c91ac';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -105,16 +106,18 @@ export class Game {
       isPlay: () => this.state === 'play',
       walkMode: () => this.mode === 'walk' && !this.placing && !this.camRaised,
       night: () => !!this.clock && this.night,
-      weeperNear: () => (this.weeper && this.weeperH && this.weeper.state !== 'gone' ? this.weeperH.position : null),
+      // she senses every REAL threat (never a hallucination: if she's calm, it isn't there): the Weeper, the watchers at the
+      // tree line, the bear. The nearest one within her range is the one she stares down.
+      weeperNear: () => this.nearestThreat(),
       onDogWarn: (info) => {
         if (!info || info.playerDistance > 30) return;   // she froze somewhere you couldn't see it
         this._dogWarns = (this._dogWarns || 0) + 1;
         if (this._dogWarns > 2 && !this.weeper.triggered) return;
-        const st = this.weeper.state;
-        const where = ['stairs', 'door'].includes(st) ? 'at the door' : ['coming', 'hunting'].includes(st) ? 'into the dark' : 'toward the creek';
-        this.say([{ who: S.WHO.NOTE, note: true, text: info.tamed
-          ? `${this.flags.dogName || 'Juniper'} stops dead. Hackles up, ears flat, staring ${where}. A growl you feel more than hear.`
-          : `The stray has frozen on the trail, hackles up, staring ${where}.` }]);
+        // no narration: you hear her (a low growl, a bark if it's close) and see her hackles and her stare
+        const dp = this.dog && this.dog.position; if (!dp) return;
+        e.audio.play(info.distance < 18 ? 'dog_bark' : 'dog_growl', { position: dp.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 1 });
+        if (info.distance < 30) setTimeout(() => { if (this.state === 'play' && this.dog) e.audio.play('dog_growl', { position: this.dog.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.8 }); }, 1400);
+        if (info.playerDistance < 15) this.fear.spike(0.35, 'dog');
       },
     }).then((d) => {
       this.dog = d; if (window.__fl) window.__fl.dog = d; setDogName(this.flags.dogName || 'Juniper');
@@ -348,9 +351,11 @@ export class Game {
   }
   finish() {
     this.state = 'end'; this.e.uiBlocking = false; if (this.ui.modalOpen()) this.ui.closeModal(); this.e.input.unlock(); this.e.audio.music.setMood('title', 8);
-    const sent = this.photos.prints.filter((p) => p.sent).length;
-    this.ui.screen('end', { text: 'Grey in the east. Somewhere below, the truck is coming up the road.',
-      detail: `End of the first two nights. Proof sent: ${this.proofs} of ${S.PROOF_GOAL}. Prints taken: ${this.photos.prints.length} (${sent} sent). ${this.flags.lostN1 ? 'You lost Lyle Pruitt.' : 'Lyle Pruitt made it to the lot.'} Nights three to seven are still being built.`,
+    const pr = this.photos.prints, sent = pr.filter((p) => p.sent).length;
+    const E = epilogue({ proofs: this.proofs, goal: S.PROOF_GOAL, savedN1: !!this.flags.savedN1, lostN1: !!this.flags.lostN1, falseWalked: !!this.flags.falseWalked,
+      gateOpenedByIt: !!this.flags.gateOpenedByIt, faceSent: pr.some((p) => p.forbidden && p.sent), faceKept: pr.some((p) => p.forbidden && !p.sent),
+      dogName: this.dog && this.dog.tamed ? (this.flags.dogName || 'Juniper') : null, prints: pr.length, sent, treeSeen: !!this.flags.treeSeen });
+    this.ui.screen('end', { text: E.text, paras: E.paras, last: E.last, detail: E.detail,
       onAction: (a) => { this.ui.closeModal(); this.onTitle && this.onTitle(); } });
   }
   die(kind) {
@@ -1365,6 +1370,16 @@ export class Game {
     const bar = (w, h, dx, dy, m = mat, d = D) => { const b = new THREE.Mesh(new THREE.BoxGeometry(thin === 'x' ? d : w, h, thin === 'x' ? w : d), m); b.position.copy(c); b.position[wide] += dx; b.position.y += dy; b.castShadow = false; b.name = 'FL_sash_frame'; o.add(b); return b; };
     bar(W + T, T, 0, H / 2); bar(W + T, T * 1.3, 0, -H / 2); bar(T, H + T, -W / 2, 0); bar(T, H + T, W / 2, 0);
     bar(0.07, 0.018, 0, -H / 2 + T * 0.9, brass, D + 0.02);   // the pull
+  }
+  /** The nearest real threat to the dog (a Vector3) or null. */
+  nearestThreat() {
+    const dp = this.dog && this.dog.position; const c = [];
+    if (this.weeper && this.weeperH && this.weeper.state !== 'gone') c.push(this.weeperH.position);
+    for (const w of this.lostWatchers || []) if (w.pos) c.push(V3(w.pos));
+    if (this.wildlife && this.wildlife.animals) for (const a of this.wildlife.animals) if (a.kind === 'bear' && a.position && a.root && a.root.visible !== false) c.push(a.position);
+    if (!dp || !c.length) return c[0] || null;
+    let best = null, bd = Infinity; for (const p of c) { const d = p.distanceToSquared(dp); if (d < bd) { bd = d; best = p; } }
+    return best;
   }
   /** The fence gate swings between the way the model stands it (open, swung out) and shut across the gap. */
   updateGate(dt) {
