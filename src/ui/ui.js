@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=39bbb9d6';
+import { drawMap } from './mapdraw.js?v=6fdcb4f3';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -88,6 +88,14 @@ export function createUI(root = document.getElementById('ui')) {
   U.modalOpen = () => modal.style.display === 'block';
   U.closeModal = () => { if (!U.modalOpen()) return; modal.style.display = 'none'; modal.innerHTML = ''; const c = modalClose; modalClose = null; c && c(); };
   function openModal(html, cls, onClose) { modal.className = 'fl-modal ' + (cls || ''); modal.innerHTML = html; modal.style.display = 'block'; modalClose = onClose || null; return modal; }
+  /** A one-line answer (naming the dog). onDone(value) — Enter or the button; Esc keeps the default. */
+  U.ask = (title, text, value, onDone) => {
+    let done = false; const finish = (v) => { if (done) return; done = true; onDone(v); };
+    const m = openModal(`<div class="paper note ask"><h2>${esc(title)}</h2><p>${esc(text)}</p><input type="text" maxlength="20" value="${esc(value)}" spellcheck="false"><div class="menu"><button data-a="ok">That's her name</button></div></div>`, 'center', () => finish(null));
+    const inp = m.querySelector('input'); setTimeout(() => { inp.focus(); inp.select(); }, 30);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); finish(inp.value); U.closeModal(); } });
+    m.querySelector('[data-a=ok]').onclick = () => { finish(inp.value); U.closeModal(); };
+  };
   U.note = (title, text, onClose) => {
     const m = openModal(`<div class="paper note"><h2>${esc(title)}</h2><p>${esc(text).replace(/\n/g, '<br>')}</p><div class="close">E / Esc</div></div>`, 'center', onClose);
     return m;

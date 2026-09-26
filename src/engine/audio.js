@@ -208,6 +208,9 @@ export function createAudio(engine) {
     setAmbience(o) { Object.assign(A.ambience, o); },
     /** A recorded sample set straight (pickups, set-downs): metal, metal_heavy, cloth, paper, knock_one, door_close. */
     sfx(set, { position = null, volume = 1 } = {}) { if (!ctx || !A.started) return; const g = gain(1); g.connect(position ? panner(position) : bus.sfx); playSample(set, g, volume); },
+    /** Register an extra procedural sound. fn(dest, volume, H) where H = { ctx, burst, tone, filt, gain, noise, voice, env } (see src/engine/animalSounds.js). */
+    addSynth(name, fn) { SOUNDS[name] = (d, v, o) => fn(d, v, { ctx, burst, tone, filt, gain, noise, voice, env, ...o }); },
+    has(name) { return !!SOUNDS[name]; },
     play(name, { position = null, volume = 1, loop = false, text = null } = {}) {
       if (!ctx || !A.started) return { stop() {}, setVolume() {} };
       const f = SOUNDS[name]; if (!f) { console.warn('no sound', name); return { stop() {}, setVolume() {} }; }

@@ -199,3 +199,5 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .keys .klist kbd{font:600 12px/1 ui-monospace,Menlo,monospace;padding:4px 7px;border-radius:4px;background:rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.2);white-space:nowrap}
 .keys .klist button.wait kbd{background:#c9582f;color:#fff;border-color:#c9582f}
 @media (max-width:560px){.keys .klist{grid-template-columns:1fr}}
+
+.note.ask input{display:block;width:100%;margin:10px 0 12px;padding:9px 11px;font:22px/1.2 var(--hand,Georgia),serif;background:rgba(255,255,255,.55);border:1px solid rgba(0,0,0,.25);border-radius:6px;color:#2a2418}

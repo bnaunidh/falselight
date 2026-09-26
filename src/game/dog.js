@@ -6,8 +6,8 @@
 //   dog.update(dt, t) every frame while playing · dog.toJSON() / dog.restore(json) in the save
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { loadGLB } from '../engine/world.js?v=39bbb9d6';
-import { DogBrain, DOG } from './dogBrain.js?v=39bbb9d6';
+import { loadGLB } from '../engine/world.js?v=6fdcb4f3';
+import { DogBrain, DOG } from './dogBrain.js?v=6fdcb4f3';
 
 // gait clips as baked in Blender (char_dog.py): metres travelled per cycle
 const STRIDE = { walk: 0.484, trot: 0.857 };
@@ -19,12 +19,14 @@ const LINES = {
   shy: 'She backs off every time you get close. Something to eat might change her mind.',
   ate1: 'She snatches the beans and backs off to eat, watching you the whole time.',
   offer1: 'She licks the tin clean. Still wary — but she isn\'t going anywhere.',
-  tamed: `She's yours now. You call her ${DOG.name}.`,
-  stay: `"Stay." ${DOG.name} sits and watches you go.`,
-  come: `You whistle. ${DOG.name} comes trotting.`,
+  get tamed() { return `She's yours now. You call her ${DOG.name}.`; },
+  get stay() { return `"Stay." ${DOG.name} sits and watches you go.`; },
+  get come() { return `You whistle. ${DOG.name} comes trotting.`; },
   firstPet: 'Her tail thumps against your leg.',
-  door: `${DOG.name} scratches at the door and whines.`,
+  get door() { return `${DOG.name} scratches at the door and whines.`; },
 };
+/** The player names her (the lines and prompts read DOG.name live). */
+export function setDogName(n) { const v = String(n || '').trim().slice(0, 20); if (v) DOG.name = v; return DOG.name; }
 
 const POSTURES = ['sit', 'lie', 'eat'], SIDES = ['L', 'R'];
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -254,7 +256,7 @@ export async function createDog(engine, hooks = {}) {
   });
   const offCall = I.register({
     id: 'dog:call', anchor: bodyAnchor, radius: 1.0, reach: 30,
-    label: `E — Whistle for ${DOG.name}`,
+    label: () => `E — Whistle for ${DOG.name}`,
     enabled: () => playing() && V.ready && brain.tamed && brain.mode === 'stay' && root.position.distanceTo(engine.player.position) > 3.2,
     onUse: () => brain.command('come'),
   });
@@ -385,7 +387,7 @@ export async function createDog(engine, hooks = {}) {
       case 'shy': H.toast(LINES.shy, 4.5); break;
       case 'ate': if (!ev.tamed && ev.offers === 1) H.toast(LINES.ate1, 4); break;
       case 'offer1': H.toast(LINES.offer1, 4); break;
-      case 'tamed': H.toast(LINES.tamed, 5); break;
+      case 'tamed': if (H.onTamed) H.onTamed(); else H.toast(LINES.tamed, 5); break;
       case 'pet': if (!petted) { petted = true; H.toast(LINES.firstPet, 2.5); } break;
       case 'stay': H.toast(LINES.stay, 2.5); break;
       case 'come': H.toast(LINES.come, 2.5); break;

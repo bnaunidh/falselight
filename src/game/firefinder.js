@@ -1,6 +1,6 @@
 // Osborne Fire Finder: a brass sighting ring on a map table. The player turns the ring until the
 // hair in the far sight sits on the smoke, then radios the azimuth. Pure.
-import { norm360, angDiff, clamp } from './util.js?v=39bbb9d6'
+import { norm360, angDiff, clamp } from './util.js?v=6fdcb4f3'
 
 export const FINDER = { tolerance: 3, speedDegPerSec: 38, fineDegPerSec: 6 }
 

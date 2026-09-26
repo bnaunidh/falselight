@@ -1,6 +1,6 @@
 // Normalises either ENV's exports/data/layout.json or the docs/layout_plan.json fallback into one
 // shape the rules use. Pure: pass heightAt(x, z) to fill y when the source is 2-D.
-import { P, Polyline, fromBearing, dist2d, bearing } from './util.js?v=39bbb9d6'
+import { P, Polyline, fromBearing, dist2d, bearing } from './util.js?v=6fdcb4f3'
 
 const joinRoutes = (...lists) => {
   const out = []

@@ -1,30 +1,30 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=39bbb9d6';
-import { Objectives } from './objectives.js?v=39bbb9d6';
-import { Radio } from './radio.js?v=39bbb9d6';
-import { Fuel, FUEL } from './fuel.js?v=39bbb9d6';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=39bbb9d6';
-import { Survival, SURV } from './survival.js?v=39bbb9d6';
-import { createItemsView } from './itemsView.js?v=39bbb9d6';
-import { createChill } from './chill.js?v=39bbb9d6';
-import { createPlume } from './smokePlume.js?v=39bbb9d6';
-import { FireFinder, spokenBearing } from './firefinder.js?v=39bbb9d6';
-import { Photos, classifyShot } from './photos.js?v=39bbb9d6';
-import { CO } from './co.js?v=39bbb9d6';
-import { Weeper, lookupChance } from './weeper.js?v=39bbb9d6';
-import { OtherLookout } from './otherLookout.js?v=39bbb9d6';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=39bbb9d6';
-import { GuidedHiker } from './hikers.js?v=39bbb9d6';
-import { MorseKeyer, isSOS } from './morse.js?v=39bbb9d6';
-import { normalizeLayout } from './layout.js?v=39bbb9d6';
-import { createSaves } from './saves.js?v=39bbb9d6';
-import { createRng } from './rng.js?v=39bbb9d6';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=39bbb9d6';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=39bbb9d6';
-import * as S from './content/story.js?v=39bbb9d6';
-import { createDog } from './dog.js?v=39bbb9d6';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=6fdcb4f3';
+import { Objectives } from './objectives.js?v=6fdcb4f3';
+import { Radio } from './radio.js?v=6fdcb4f3';
+import { Fuel, FUEL } from './fuel.js?v=6fdcb4f3';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=6fdcb4f3';
+import { Survival, SURV } from './survival.js?v=6fdcb4f3';
+import { createItemsView } from './itemsView.js?v=6fdcb4f3';
+import { createChill } from './chill.js?v=6fdcb4f3';
+import { createPlume } from './smokePlume.js?v=6fdcb4f3';
+import { FireFinder, spokenBearing } from './firefinder.js?v=6fdcb4f3';
+import { Photos, classifyShot } from './photos.js?v=6fdcb4f3';
+import { CO } from './co.js?v=6fdcb4f3';
+import { Weeper, lookupChance } from './weeper.js?v=6fdcb4f3';
+import { OtherLookout } from './otherLookout.js?v=6fdcb4f3';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=6fdcb4f3';
+import { GuidedHiker } from './hikers.js?v=6fdcb4f3';
+import { MorseKeyer, isSOS } from './morse.js?v=6fdcb4f3';
+import { normalizeLayout } from './layout.js?v=6fdcb4f3';
+import { createSaves } from './saves.js?v=6fdcb4f3';
+import { createRng } from './rng.js?v=6fdcb4f3';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=6fdcb4f3';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=6fdcb4f3';
+import * as S from './content/story.js?v=6fdcb4f3';
+import { createDog, setDogName } from './dog.js?v=6fdcb4f3';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -87,6 +87,12 @@ export class Game {
       eatFood: (it) => { this.inv.remove(it.id); this.syncItems(); e.audio.sfx('metal', { volume: 0.25 }); },
       toast: (text, secs) => this.ui.toast(text, secs),
       say: (text) => this.say([{ who: S.WHO.NOTE, text, note: true }]),
+      onTamed: () => {   // you name her
+        this.openModal(() => this.ui.ask('She\'s yours now', 'She leans her whole weight against your leg. What do you call her?', this.flags.dogName || 'Juniper', (v) => {
+          const n = setDogName(v || this.flags.dogName || 'Juniper'); this.flags.dogName = n; this.closedModal();
+          this.ui.toast(`You call her ${n}. Her ears go up at it.`, 4);
+        }));
+      },
       isPlay: () => this.state === 'play',
       walkMode: () => this.mode === 'walk' && !this.placing && !this.camRaised,
       night: () => !!this.clock && this.night,
@@ -98,11 +104,11 @@ export class Game {
         const st = this.weeper.state;
         const where = ['stairs', 'door'].includes(st) ? 'at the door' : ['coming', 'hunting'].includes(st) ? 'into the dark' : 'toward the creek';
         this.say([{ who: S.WHO.NOTE, note: true, text: info.tamed
-          ? `Juniper stops dead. Hackles up, ears flat, staring ${where}. A growl you feel more than hear.`
+          ? `${this.flags.dogName || 'Juniper'} stops dead. Hackles up, ears flat, staring ${where}. A growl you feel more than hear.`
           : `The stray has frozen on the trail, hackles up, staring ${where}.` }]);
       },
     }).then((d) => {
-      this.dog = d; if (window.__fl) window.__fl.dog = d;
+      this.dog = d; if (window.__fl) window.__fl.dog = d; setDogName(this.flags.dogName || 'Juniper');
       if (this._dogSave !== undefined) { if (this._dogSave) d.restore(this._dogSave); else d.reset(); this._dogSave = undefined; }
       return d;
     }).catch((err) => console.warn('dog', err));
@@ -222,6 +228,7 @@ export class Game {
     this.flags = { rulesTo: 5, ...s.flags }; this.fuel = new Fuel(s.fuel); this.photos = new Photos(s.photos); this.co = new CO(s.co);
     this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = s.log || []; this.proofs = s.proofs || 0;
     this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = 0;
+    setDogName(this.flags.dogName || 'Juniper');
     if (this.dog) { if (s.dog) this.dog.restore(s.dog); else this.dog.reset(); } else this._dogSave = s.dog || null;
     if (this.chill) this.chill.load(s.chillSeen || []);
   }
@@ -239,7 +246,7 @@ export class Game {
   }
   persist() { this.saves.save({ ...(this.lastSaved || this.snapshot()), checkpoint: this.cpSnap || null }); }
   // ------------------------------------------------------------------ flow
-  newGame() { if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.chill) this.chill.load([]); this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
+  newGame() { setDogName('Juniper'); if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.chill) this.chill.load([]); this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
   continueGame() {
     const s = this.saves.load(); if (!s) return this.newGame();
     this.lastSaved = { ...s }; delete this.lastSaved.checkpoint;
