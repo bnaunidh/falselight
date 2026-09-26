@@ -9,7 +9,7 @@
 // while muted the AudioContext is suspended (after the master fades out): no audio-thread work, no one-shots, no warm-up,
 // no sample downloads, the score's scheduler stopped. Every master / per-play gain change is ramped.
 import * as THREE from 'three';
-import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=453c91ac';
+import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=b81b31af';
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);

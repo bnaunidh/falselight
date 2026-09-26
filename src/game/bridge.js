@@ -1,33 +1,34 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=453c91ac';
-import { Objectives } from './objectives.js?v=453c91ac';
-import { Radio } from './radio.js?v=453c91ac';
-import { Fuel, FUEL } from './fuel.js?v=453c91ac';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=453c91ac';
-import { Survival, SURV } from './survival.js?v=453c91ac';
-import { createItemsView } from './itemsView.js?v=453c91ac';
-import { createChill } from './chill.js?v=453c91ac';
-import { createPlume } from './smokePlume.js?v=453c91ac';
-import { FireFinder, spokenBearing } from './firefinder.js?v=453c91ac';
-import { Photos, classifyShot } from './photos.js?v=453c91ac';
-import { CO } from './co.js?v=453c91ac';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=453c91ac';
-import { OtherLookout } from './otherLookout.js?v=453c91ac';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=453c91ac';
-import { GuidedHiker } from './hikers.js?v=453c91ac';
-import { MorseKeyer, isSOS } from './morse.js?v=453c91ac';
-import { normalizeLayout } from './layout.js?v=453c91ac';
-import { createSaves } from './saves.js?v=453c91ac';
-import { createRng } from './rng.js?v=453c91ac';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=453c91ac';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=453c91ac';
-import * as S from './content/story.js?v=453c91ac';
-import { createDog, setDogName } from './dog.js?v=453c91ac';
-import { createWildlife } from './wildlife.js?v=453c91ac';
-import { Fear, registerFearSounds } from './fear.js?v=453c91ac';
-import { epilogue } from './content/ending.js?v=453c91ac';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=b81b31af';
+import { Objectives } from './objectives.js?v=b81b31af';
+import { Radio } from './radio.js?v=b81b31af';
+import { Fuel, FUEL } from './fuel.js?v=b81b31af';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=b81b31af';
+import { Survival, SURV } from './survival.js?v=b81b31af';
+import { createItemsView } from './itemsView.js?v=b81b31af';
+import { createChill } from './chill.js?v=b81b31af';
+import { createPlume } from './smokePlume.js?v=b81b31af';
+import { FireFinder, spokenBearing } from './firefinder.js?v=b81b31af';
+import { Photos, classifyShot } from './photos.js?v=b81b31af';
+import { CO } from './co.js?v=b81b31af';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=b81b31af';
+import { OtherLookout } from './otherLookout.js?v=b81b31af';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=b81b31af';
+import { GuidedHiker } from './hikers.js?v=b81b31af';
+import { MorseKeyer, isSOS } from './morse.js?v=b81b31af';
+import { normalizeLayout } from './layout.js?v=b81b31af';
+import { createSaves } from './saves.js?v=b81b31af';
+import { createRng } from './rng.js?v=b81b31af';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=b81b31af';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=b81b31af';
+import * as S from './content/story.js?v=b81b31af';
+import { createDog, setDogName } from './dog.js?v=b81b31af';
+import { createWildlife } from './wildlife.js?v=b81b31af';
+import { Fear, registerFearSounds } from './fear.js?v=b81b31af';
+import { epilogue } from './content/ending.js?v=b81b31af';
+import { Director, sosLamp } from './director.js?v=b81b31af';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -88,6 +89,16 @@ export class Game {
     this.inputs();
     this.iv = createItemsView(e); this.itemIA = new Map(); this.health = 1; this.limp = 0;
     this.fear = new Fear(); registerFearSounds(e.audio);   // the heart: game.fear.spike(k, why) from anything that scares you
+    // the nightmare director (src/game/director.js): pacing, dread, and what a tired head does
+    this.setupPhantoms();
+    this.director = new Director({ rng: this.rng });
+    { const an = (n, fb) => { const a = this.anchor(n); return a ? A3(a) : fb; };
+      this.director.setWorld({ heightAt: (x, z) => W.heightAt(x, z), cab: [0, 30, 0], door: an('IA_cab_door', an('IA_trapdoor', [-1.5, 30, 0])),
+        hatch: this.anchor('IA_trapdoor') ? A3(this.anchor('IA_trapdoor')) : null, stairFoot: an('SP_stair_foot', this.L.gate || [0, 0, 6]),
+        gate: this.L.gate || [0, 0, 6], tower: (this.L.places && this.L.places.tower) || [0, 0, 0], radio: an('IA_radio', CAB.IA_radio),
+        windows: { n: an('IA_window_n', [0, 31.3, -2.05]), e: an('IA_window_e', [2.05, 31.3, 0]), s: an('IA_window_s', [0, 31.3, 2.05]), w: an('IA_window_w', [-2.05, 31.3, 0]) },
+        treeLine: this.L.treeLine || [] }); }
+    this.dirActions = this.makeDirectorActions();
     e.player.onLand = (drop, v) => this.onLand(drop, v);
     this.itemsReady = this.iv.load().then(() => { try { this.iv.buildSurfaces(); } catch (err) { console.warn('surfaces', err); } this.syncItems(); }).catch((err) => console.warn('items', err));
     // Juniper, the stray on the spring trail (src/game/dog.js + dogBrain.js)
@@ -110,6 +121,7 @@ export class Game {
       // tree line, the bear. The nearest one within her range is the one she stares down.
       weeperNear: () => this.nearestThreat(),
       onDogWarn: (info) => {
+        if (this._dogStare && this.e.time.value < this._dogStare.until) return;   // the director's growl says it
         if (!info || info.playerDistance > 30) return;   // she froze somewhere you couldn't see it
         this._dogWarns = (this._dogWarns || 0) + 1;
         if (this._dogWarns > 2 && !this.weeper.triggered) return;
@@ -247,6 +259,7 @@ export class Game {
     return { phase: this.clock.phase, hour: this.clock.hour, flags: { ...this.flags }, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
       weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log.map((x) => ({ ...x })), proofs: this.proofs, obj: this.obj.toJSON(),
       fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, chillSeen: this.chill ? this.chill.toJSON() : [], dog: this.dog ? this.dog.toJSON() : (this._dogSave || null), wildlife: this.wildlife ? this.wildlife.toJSON() : (this._wildSave || null),
+      director: this.director ? this.director.toJSON() : null,
       player: { pos: [P.position.x, P.position.y, P.position.z], yaw: P.yaw },
       hikers: (this.hikers || []).map((h) => ({ which: h.which, s: h.rules.s, off: h.rules.off, status: h.rules.status })),
       lost: (this.lostWatchers || []).map((w) => ({ idx: w.idx, steps: w.steps })) };
@@ -259,6 +272,7 @@ export class Game {
   restore(s) {
     this.clearWorldEntities();
     this.fresh(s.phase);
+    if (this.director) { this.director.clear(this.dirActions); this.director.restore(s.director || {}); }
     this.flags = { rulesTo: 5, ...s.flags }; this.fuel = new Fuel(s.fuel); this.photos = new Photos(s.photos); this.co = new CO(s.co);
     this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = (s.log || []).map((x) => ({ ...x })); this.proofs = s.proofs || 0;
     this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = 0;
@@ -295,6 +309,7 @@ export class Game {
     this.restartPhase();
   }
   startPhase(phase, restored = false, cp = null) {
+    if (this.director) this.director.clear(this.dirActions); this._flick = null; this._duckUntil = 0;
     this._cpHour = null; this._lastZone = null; this.quietUntil = 0; this.stairN = 0; this._glimpseT = 0;
     const e = this.e;
     e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); if (this.photos) this.photos.close(); this.ui.print(null);
@@ -309,6 +324,7 @@ export class Game {
     this.exitMode(); this.holding = null;
     this.placing = null; this.syncItems();
     if (!restored) this.health = Math.max(this.health ?? 1, 0.85);   // a night's sleep (or a day's) mends most of it
+    if (!restored && !isNight(phase) && phase !== 'day1' && this.surv) this.surv.fatigue.sleep(2, 1);   // the 05:30 -> 07:30 you got in bed
     if (this.weeper.state === 'caught' || (this.weeper.state === 'gone' && !isNight(phase))) this.weeper.state = this.weeper.state === 'gone' ? 'gone' : 'sitting';
     if (['coming', 'stairs', 'door', 'hunting'].includes(this.weeper.state)) { this.weeper.state = 'screaming'; this.weeper.timer = 0; this.weeper.progress = 0; }
     const sky = e.sky;
@@ -360,7 +376,7 @@ export class Game {
   }
   die(kind) {
     if (this.state !== 'play') return;
-    this.state = 'dead'; if (this.ui.modalOpen()) this.ui.closeModal(); this.e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); this.exitMode(); this.e.audio.play('scream', { volume: 1 }); this.e.audio.music.sting('death');
+    this.state = 'dead'; if (this.director) this.director.clear(this.dirActions); if (this.ui.modalOpen()) this.ui.closeModal(); this.e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); this.exitMode(); this.e.audio.play('scream', { volume: 1 }); this.e.audio.music.sting('death');
     this.e.post.set({ blackout: 1 }); this.e.input.unlock();
     setTimeout(() => this.ui.screen('death', { text: S.UI.death[kind] || S.UI.death.generic, onAction: (a) => { this.ui.closeModal(); this.e.post.set({ blackout: 0, fear: 0 }); if (a === 'retry') this.retry(); else this.onTitle && this.onTitle(); } }), 1400);
   }
@@ -810,7 +826,7 @@ export class Game {
     reg('stove', 'IA_stove', () => this.coffee == null ? 'E — Light the stove and put the coffee on' : this.coffee < 1 ? 'The coffee pot is ticking on the burner…' : 'E — Pour a cup of coffee', () => {
       if (this.coffee == null && !this.potOnStove()) { this.ui.toast('Put the coffee pot on the burner first (it\'s an item: E picks it up, G sets it down).', 3.5); return; }
       if (this.coffee == null) { this.coffee = 0; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); }
-      else if (this.coffee >= 1) { this.coffee = null; this.surv.drink(0.3); this.surv.warmth = 1; this.co.blood = Math.max(0, this.co.blood - 0.02); this.refreshHotbar(); }
+      else if (this.coffee >= 1) { this.coffee = null; this.surv.drink(0.3); this.surv.warmth = 1; this.surv.fatigue.coffee(); this.co.blood = Math.max(0, this.co.blood - 0.02); this.refreshHotbar(); }
     }, () => this.coffee == null || this.coffee >= 1, 0.6);
     reg('books', 'IA_books', 'E — Take a book off the shelf', () => {
       const b = S.BOOKS[(this.bookI = ((this.bookI ?? -1) + 1) % S.BOOKS.length)];
@@ -967,7 +983,8 @@ export class Game {
     this.player().carrying = this.inv.carryingHeavy ? 'fuel' : null;
     this.refreshHotbar();
   }
-  slotView(it) { return it ? { icon: this.iv.icons[it.kind] || '', label: this.inv.label(it), short: KINDS[it.kind].name, fill: it.kind === 'canteen' || it.kind === 'fuel' ? it.fill : null } : null; }
+  slotView(it) { return it ? { icon: this.iv.icons[it.kind] || '', label: this.inv.label(it), short: KINDS[it.kind].name, fill: it.kind === 'canteen' || it.kind === 'fuel' ? it.fill : it.kind === 'pills' ? (it.n || 0) / PILLS.full : null } : null; }
+  fatigueHUD() { return this.surv ? this.surv.fatigue.rest : null; }
   refreshHotbar() {
     if (!this.inv) return;
     const a = this.inv.activeItem, pl = this.placing && this.inv.get(this.placing.id);
@@ -987,6 +1004,7 @@ export class Game {
       this.ui.toast(r.to === 'pack' ? 'Into the pack. C raises the camera.' : 'C raises the camera · click takes a picture.', 4);
     } else if (r.to === 'pack') this.ui.toast(`Into the pack: ${this.inv.label(it)}.`, 2);
     if (it.kind === 'backpack') this.ui.toast(`Pack on. ${this.inv.items.filter((i) => i.where === 'pack').length} things in it · I to look.`, 2.5);
+    if (it.kind === 'pills' && !this.flags.pillsFound) { this.flags.pillsFound = true; this.say(S.LINES.pillFound); }
     this.syncItems();
   }
   selectSlot(i) {
@@ -1048,6 +1066,7 @@ export class Game {
   }
   potOnStove() { const s = this.anchor('IA_stove'); return !!s && this.inv.world.some((i) => i.kind === 'pot' && Math.hypot(i.pos[0] - s.x, i.pos[2] - s.z) < 0.4 && Math.abs(i.pos[1] - (s.y - 0.05)) < 0.35); }
   toggleFlashlight() {
+    if (this._flick) { this.e.audio.play('morse_click', { volume: 0.3 }); return; }   // the lights are dead: the switch just clicks
     const FL = this.e.lights.flashlight;
     if (FL.placed && !this.inv.inHands('flashlight')) { const it = this.inv.items.find((i) => i.kind === 'flashlight' && i.where === 'world'); if (it) it.on = false; FL.on = false; this.e.audio.play('morse_click', { volume: 0.3 }); return; }
     if (!FL.on) {
@@ -1076,6 +1095,13 @@ export class Game {
     else if (it.kind === 'clock') { this.ui.toast(`The alarm clock says ${fmtHour(this.clock.hour)}. It gains a minute a day.`, 3); this.e.audio.play('morse_click', { volume: 0.15 }); }
     else if (it.kind === 'pot') this.ui.toast(this.potOnStove() ? 'It\'s on the burner.' : 'The enamel coffee pot. Set it on the stove\'s burner (G) to make coffee.', 3);
     else if (it.kind === 'oldcan') this.ui.toast(['Bent nails and a single brass washer.', 'Empty. It smells of kerosene.', 'Buttons, a fishing fly, a 1978 penny.'][((+it.id.slice(1)) || 0) % 3], 3);
+    else if (it.kind === 'pills') {
+      if (!this.inv.takePill(it)) { this.ui.toast('The bottle is empty.', 2.5); return; }
+      const r = this.surv.fatigue.pill(); this.e.audio.play('morse_click', { volume: 0.12 });
+      this.ui.toast(r.woozy ? 'Another one, dry. It sticks halfway down.' : `You swallow one dry. ${it.n} left. It'll take a while to work.`, 3);
+      if (r.woozy) setTimeout(() => { if (this.state === 'play') this.say(S.LINES.pillWoozy); }, 2500);
+      this.refreshHotbar();
+    }
     else if (it.kind === 'lantern') this.toggleLantern(it);
   }
   openPack() {
@@ -1184,7 +1210,7 @@ export class Game {
     SL.on = this.fuel.power && !!this.slLit && (sigMode ? e.input.isDown('signal') : true);
     SL.power = this.fuel.power ? 1 - this.fuel.sputter * 0.7 : 0;
     e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, genSputter: this.fuel.sputter, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1),
-      forest: this.wildlife && this.wildlife.silent ? 0 : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0,
+      forest: (this.wildlife && this.wildlife.silent) || e.time.value < (this._duckUntil || 0) ? 0 : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0,
       heater: this.co.heater ? 1 : 0, stove: this.coffee != null ? 1 : 0, coffee: this.coffee ?? 0, lamp: e.lights.cabLamp.on ? 1 : 0, clockTick: 1,
       inCab: this.inCab(), doorOpen: !this.flags.doorShut, windowsOpen: this.co.open });
     // the score follows what's happening (src/engine/music.js; changes are debounced inside, so asking every frame is fine)
@@ -1259,8 +1285,12 @@ export class Game {
     const Pl = this.player(), wx = e.sky.weather, ha = this.anchor('IA_heater');
     for (const ev of this.surv.tick(Math.max(0, hTo - hFrom), { hour: dayHour(this.clock.hour), y: Pl.position.y, zone: Pl.zone, rain: wx.rain, fog: wx.fog, wind: wx.wind,
       heater: this.co.heater, open: this.co.open, inWater: !!Pl.inWater, jog: e.input.isDown('jog') && Pl.stamina > 0.05, night: this.night,
-      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false })) {
+      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood })) {
       if (ev === 'thirsty') this.ui.toast('Your mouth is dry. Drink something: the canteen, or the spring.', 4);
+      if (/^tired[123]$/.test(ev) || ev === 'rested') this.say(S.LINES[ev]);
+      if (ev === 'crash') this.say(S.LINES.coffeeCrash);
+      if (ev === 'pill_on') this.say(S.LINES.pillOn);
+      if (ev === 'pill_off') this.say(S.LINES.pillOff);
       if (ev === 'hungry') this.ui.toast('Your stomach is knotted. Eat something: there are tins on the shelf in the cab.', 4);
     }
     // injuries mend slowly on their own, quickly asleep; a limp fades
@@ -1303,7 +1333,7 @@ export class Game {
     for (const ev of coEv) {
       if (ev === 'shiver') this.say(S.LINES.shiver);
       if (ev === 'passout') { e.post.set({ blackout: 1 }); this.say(S.LINES.passout); setTimeout(() => { this.co.wake(); e.post.set({ blackout: 0 }); this.say(S.LINES.wakeWindow); }, 3500); }
-      if (ev.startsWith('hallucinate:')) this.hallucinate(ev.split(':')[1]);
+      if (ev.startsWith('hallucinate:') && this.surv.fatigue.letsThrough(this.rng)) this.hallucinate(ev.split(':')[1]);   // the pill holds most of them back
     }
     // world entities
     this.updateHikers(dt, t);
@@ -1311,6 +1341,19 @@ export class Game {
     this.bearFear = Math.max(0, (this.bearFear || 0) - dt * 0.35);   // wildlife refreshes it every frame while the bear is close
     if (this.wildlife) this.wildlife.update(dt, t);
     this.updateWeeper(dt, t);
+    if (this.director) {   // the nightmare director: pacing, dread, the tired head
+      const now = e.time.value, cam = e.camera, fw = cam.getWorldDirection(this._dfw || (this._dfw = new THREE.Vector3())), Pl = this.player(), d = this.dog, SL = e.lights.searchlight;
+      if ((this._bsT = (this._bsT || 0) - dt) <= 0) { this._bsT = 0.25; this._bs = this.mode === 'searchlight' && SL.on ? this.beamSpot() : null; }
+      this.director.update(dt, { t: now, phase: this.clock.phase, hour: this.clock.hour, quiet: now < (this.quietUntil || 0),
+        busy: this.ui.modalOpen() || !!e.uiBlocking || this.radio.busy || !!this.resting, resting: !!this.resting,
+        zone: Pl.zone, mode: this.mode, sitting: !!this.sitting, eye: [cam.position.x, cam.position.y, cam.position.z], fwd: [fw.x, fw.y, fw.z],
+        yaw: Pl.yaw, pitch: Pl.pitch, speed: Math.hypot(Pl.velocity.x, Pl.velocity.z), flashlight: e.lights.flashlight.on, lamp: e.lights.cabLamp.on, beamSpot: this._bs,
+        fear: this.fear.level, fatigue: this.surv.fatigue, weeper: this.weeper.state, bear: this.bearFear || 0, lost: (this.lostWatchers || []).length > 0,
+        signals: this.hikers.filter((H) => H.rules.status === 'signalling').length, dog: d && d.tamed ? { pos: [d.position.x, d.position.y, d.position.z], tamed: true, name: this.flags.dogName || 'Juniper' } : null,
+        holding: this.inv.activeItem ? this.inv.activeItem.kind : null, cold: this.co.cold }, this.dirActions);
+      if (this._flick && now >= this._flick.until) { const f = this._flick; this._flick = null; if (f.lamp && !this.flags.lampOff) e.lights.cabLamp.on = true; if (f.torch && this.inv.inHands('flashlight')) e.lights.flashlight.on = true; }
+      if (this._sos != null) { const sp = this.sosSprite; sp.material.opacity = sosLamp(now - this._sos); sp.scale.setScalar(Math.max(0.5, sp.position.distanceTo(cam.position) * 0.011)); }
+    }
     if (this.dog) this.dog.update(dt, t);
     // sitting down turns you to face what the seat looks out on
     if (this.sitting && this.chill && this.chill.sitting && this.chill.sitting !== this._sitFaced) {
@@ -1371,8 +1414,62 @@ export class Game {
     bar(W + T, T, 0, H / 2); bar(W + T, T * 1.3, 0, -H / 2); bar(T, H + T, -W / 2, 0); bar(T, H + T, W / 2, 0);
     bar(0.07, 0.018, 0, -H / 2 + T * 0.9, brass, D + 0.02);   // the pull
   }
+  /** Director phantoms: one pooled body per kind, spawned hidden at init (a scare never waits on a GLB / shader compile). */
+  setupPhantoms() {
+    const e = this.e; this.phantoms = {};
+    for (const k of ['other_lookout', 'weeper', 'lost_hiker']) { const h = e.entities.spawn(k, { position: new THREE.Vector3(0, -500, 0), pose: 'stand' }); h.kind = 'phantom'; h.setVisible(false); this.phantoms[k] = h; }   // kind 'phantom': a photo never counts it as him
+    const spr = (color, sc) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.lampTex, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })); sp.renderOrder = 6; sp.visible = false; sp.scale.setScalar(sc); e.scene.add(sp); return sp; };
+    this.sosSprite = spr(0xfff6e8, 1); this.sosSprite.material.depthTest = false;
+    this.eyeGlints = [spr(0xfff0c8, 0.05), spr(0xfff0c8, 0.05)];
+  }
+  phantom(kind, pos, face, pose) {
+    const e = this.e;
+    if (kind === 'sos_light') { const sp = this.sosSprite; sp.position.copy(V3(pos)); sp.visible = true; this._sos = e.time.value;
+      return { move: (p) => sp.position.copy(V3(p)), remove: () => { sp.visible = false; this._sos = null; } }; }
+    const k = { figure: 'other_lookout', shadow: 'other_lookout', weeper: 'weeper', face: 'weeper', lost_hiker: 'lost_hiker' }[kind];
+    const h = k && this.phantoms[k]; if (!h || h.busy) return null;   // ('bootprints' -> null: no decal yet, the drips carry it)
+    h.busy = true; h.setPosition(V3(pos)); if (face) h.face(V3(face)); h.setPose(pose || 'stand'); h.setVisible(true);
+    if (kind === 'face' && face) { const hd = V3(pos).add(new THREE.Vector3(0, 1.62, 0)), d = V3(face).sub(hd).setY(0).normalize(), sd = new THREE.Vector3(-d.z, 0, d.x);
+      this.eyeGlints.forEach((g, i) => { g.position.copy(hd).addScaledVector(d, 0.1).addScaledVector(sd, i ? 0.032 : -0.032); g.visible = true; }); }
+    return { move: (p, f, ps) => { if (p) h.setPosition(V3(p)); if (f) h.face(V3(f)); if (ps) h.setPose(ps); },
+      remove: () => { h.setVisible(false); h.busy = false; if (kind === 'face') for (const g of this.eyeGlints) g.visible = false; } };
+  }
+  /** The ONE interface the director acts through (src/game/director.js ACTIONS). */
+  makeDirectorActions() {
+    const e = this.e, P = () => this.player();
+    return {
+      playAt: (n, pos, vol) => (e.audio.has(n) ? e.audio.play(n, { position: pos ? V3(pos) : null, volume: vol }) : null),
+      duckAmbience: (sec) => { this._duckUntil = e.time.value + sec; },
+      quiet: (sec) => this.quiet(sec),
+      say: (lines) => this.say(lines),
+      spawnPhantom: (kind, pos, face, pose) => this.phantom(kind, pos, face, pose),
+      flickerOut: (sec) => { const L = e.lights.cabLamp, FL = e.lights.flashlight; this._flick = { until: e.time.value + sec, lamp: this._flick ? this._flick.lamp : L.on, torch: this._flick ? this._flick.torch : FL.on }; L.on = false; FL.on = false; },
+      sting: (k) => { if (k === 'jump') e.audio.music.sting('seen'); e.audio.play('sub_boom', { volume: k === 'jump' ? 1 : 0.5 }); },
+      fearSpike: (k, why) => this.fear.spike(k, why),
+      shake: (k, sec, fov) => this.scare({ shake: k, seconds: sec, fov }),
+      hurt: (a, why) => this.hurt(a, why),
+      lids: (k) => { if (!this.resting) e.post.params.blackout = k; },
+      look: (dy, dp) => { if (this.mode !== 'walk' || this.sitting) return; const p = P(); p.yaw += dy; p.pitch = THREE.MathUtils.clamp(p.pitch + dp, -1.45, 1.45); },
+      lookAt: (pos, sec) => P().lookAt(V3(pos), sec),
+      panic: (sec) => { if (this.mode !== 'walk' || this.sitting) return; e.input.press('forward', sec * 1000); e.input.press('jog', sec * 1000); },
+      passTime: (min) => { const c = this.clock, to = c.hour + min / 60, g = c.gates.filter((q) => q.at > c.hour && q.at < to && !q.open()); c.setHour(g.length ? Math.min(...g.map((q) => q.at)) : Math.min(to, c.def.end - 0.02)); },
+      dropHeld: () => { const it = this.inv.activeItem; if (!it || it.kind === 'backpack') return null; if (this.placing) this.cancelPlace(); if (it.kind === 'camera' && this.camRaised) this.lowerCamera();
+        const p = P().position, a = P().yaw + Math.PI * (0.5 + Math.random()), at = this.iv.settle([p.x + Math.sin(a) * 0.5, p.y + 0.3, p.z + Math.cos(a) * 0.5]);
+        this.inv.place(it.id, at, Math.random() * 6.28, null); this.syncItems(); e.audio.sfx(it.kind === 'fuel' ? 'metal_heavy' : 'knock_one', { position: V3(at), volume: 0.35 }); return it.kind; },
+      movePlayer: (pos, look) => { const W = e.world, rav = W.layout && W.layout.ravine && W.layout.ravine.polygon, onTower = pos[1] > 20 || Math.hypot(pos[0], pos[2]) < 7.5;
+        if (!onTower && ((W.trail && W.trail.nearest(pos[0], pos[2]).dist > 15) || (rav && pointInPolygon(pos, rav)))) return false;   // never where the path rule would trap you
+        if (this.chill && this.chill.sitting) this.chill.stand(); if (this.mode !== 'walk') this.exitMode(); if (this.placing) this.cancelPlace();
+        P().teleport(V3(pos)); if (look) P().lookAt(V3(look)); return true; },
+      moveCabItem: (kind, pos, rotY) => { const it = this.inv.world.find((i) => i.kind === kind && i.pos && i.pos[1] > 29.5 && Math.abs(i.pos[0]) < 2.1 && Math.abs(i.pos[2]) < 2.1); if (!it) return false;
+        it.pos = this.iv.settle([pos[0], pos[1] + 0.3, pos[2]]); it.rotY = rotY; it.hook = null; this.syncItems(); return true; },
+      dogReact: (kind, pos) => { const d = this.dog; if (!d || !d.tamed || d.position.distanceTo(P().position) > 12) return false;
+        this._dogStare = { pos: V3(pos), until: e.time.value + (kind === 'growl' ? 5 : 3) };
+        e.audio.play(kind === 'growl' ? 'dog_growl' : 'dog_whine', { position: d.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.9 }); return true; },
+    };
+  }
   /** The nearest real threat to the dog (a Vector3) or null. */
   nearestThreat() {
+    if (this._dogStare && this.e.time.value < this._dogStare.until) return this._dogStare.pos;   // the director pointed her at something
     const dp = this.dog && this.dog.position; const c = [];
     if (this.weeper && this.weeperH && this.weeper.state !== 'gone') c.push(this.weeperH.position);
     for (const w of this.lostWatchers || []) if (w.pos) c.push(V3(w.pos));

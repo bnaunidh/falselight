@@ -3,8 +3,8 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=453c91ac';
-import { createSurfaces } from './surfaces.js?v=453c91ac';
+import { KINDS } from './items.js?v=b81b31af';
+import { createSurfaces } from './surfaces.js?v=b81b31af';
 
 export function createItemsView(engine) {
   const { scene, camera } = engine;
@@ -23,6 +23,8 @@ export function createItemsView(engine) {
         scene.remove(root); root.position.set(0, 0, 0); root.scale.setScalar(k.scale || 1); root.updateMatrixWorld(true);
         root.traverse((o) => { if (/^COL_/.test(o.name)) o.visible = false; });
         if (kind === 'backpack') root.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(new THREE.Color(0.55, 0.62, 0.45)); } });   // Forest Service olive: not the hiker's pack
+        // a stand-in model re-dressed (the pill bottle is the bean tin): one flat colour, glossy, lettering hidden, metal parts white
+        if (k.tint != null) root.traverse((o) => { if (k.plain && /^FL_txt_/.test(o.name)) o.visible = false; if (o.isMesh && o.material && !Array.isArray(o.material)) { const m = o.material = o.material.clone(), rim = k.plain && /alu/i.test(m.name || ''); if (k.plain) m.map = null; m.color.set(rim ? 0xe6e1d4 : k.tint); if (k.plain) { m.roughness = rim ? 0.55 : 0.32; m.metalness = 0; } m.needsUpdate = true; } });
         const box = new THREE.Box3(); root.traverse((o) => { if (o.isMesh && o.visible) box.expandByObject(o); });
         const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
         const g = new THREE.Group(); root.position.set(-c.x, -box.min.y, -c.z); g.add(root); g.name = 'item_tpl:' + kind;

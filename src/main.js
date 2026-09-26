@@ -1,12 +1,13 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=453c91ac';
-import { createUI } from './ui/ui.js?v=453c91ac';
-import { Game } from './game/bridge.js?v=453c91ac';
-import { createSaves } from './game/saves.js?v=453c91ac';
-import { UI as WORDS } from './game/content/story.js?v=453c91ac';
-import { ACTIONS, keyName } from './engine/input.js?v=453c91ac';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=453c91ac';
-import { paintCabMaps } from './ui/cabMaps.js?v=453c91ac';
+import { createEngine } from './engine/engine.js?v=b81b31af';
+import { createUI } from './ui/ui.js?v=b81b31af';
+import { Game } from './game/bridge.js?v=b81b31af';
+import { createSaves } from './game/saves.js?v=b81b31af';
+import { UI as WORDS } from './game/content/story.js?v=b81b31af';
+import { ACTIONS, keyName } from './engine/input.js?v=b81b31af';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=b81b31af';
+import { registerScareSounds } from './engine/scareSounds.js?v=b81b31af';
+import { paintCabMaps } from './ui/cabMaps.js?v=b81b31af';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -24,6 +25,7 @@ engine.audio.setVolume(+settings.volume);
 if (engine.audio.setMusicVolume) engine.audio.setMusicVolume(settings.music ?? 0.35);
 engine.audio.setMuted(!settings.sound || q.has('mute'));   // sound is OFF until the player turns it on in Settings
 registerAnimalSounds(engine.audio);   // birds, owl, coyotes, elk, deer, bear, dog (procedural)
+registerScareSounds(engine.audio);    // the director's: snaps, breath, whispers, steps, knocks, taps, the radio gone wrong (procedural)
 window.__fl = { engine, ui };
 engine.noRender = q.has('norender');   // headless logic tests: no GPU work per frame
 try {

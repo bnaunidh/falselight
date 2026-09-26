@@ -2,7 +2,7 @@
 // stuttering, a hallucination, a jump: each pushes it up; it drops slowly (your heart doesn't settle the moment the thing is
 // gone). The heart is the readout: ~64 bpm resting, climbing past 170 when something is on you, audible from about a
 // third of the way up, a lub-dub whose gap tightens as it races; ragged breathing near the top. Pure logic + two tiny synths.
-import { clamp } from './util.js?v=453c91ac'
+import { clamp } from './util.js?v=b81b31af'
 
 export const FEAR = {
   rest: 64, max: 188,        // bpm
