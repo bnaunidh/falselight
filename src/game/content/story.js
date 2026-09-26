@@ -134,47 +134,6 @@ export const LINES = {
   wakeWindow: [N('The north window is open. You didn\'t open it.')],
   ownEntry: [N('The logbook is open to a page you don\'t remember writing.')],
   end: [N('Grey in the east. Somewhere below, the truck is coming up the road.')],
-  // ---- sleep (src/game/fatigue.js events, said once each until you've slept)
-  tired1: [N('Your eyes are gritty. You\'ve been up a long time. (The bed in the cab lets the hours go by.)')],
-  tired2: [N('You\'ve been up too long. The edges of things won\'t hold still.')],
-  tired3: [N('You need to sleep. Soon. You\'re no longer sure what\'s there and what isn\'t.')],
-  rested: [N('You slept. Properly, for once.')],
-  coffeeCrash: [N('The coffee wears off all at once. Your eyelids weigh a pound each.')],
-  // ---- the pill bottle (Tillman's chlorpromazine; items.js PILLS)
-  pillFound: [N('An amber pill bottle behind the tins. Typed label: R. TILLMAN. CHLORPROMAZINE 25 MG. TAKE ONE AS DIRECTED. MAY CAUSE DROWSINESS. Somebody has written under it in pencil: "for the nights."')],
-  pillOn: [N('The edges of things settle. Your tongue is thick and your hands feel a long way off.')],
-  pillOff: [N('Whatever the pill was holding down is coming back up.')],
-  pillWoozy: [N('Two was too many. The floor tilts when you turn your head.')],
-  pillStill: [N('It\'s still there. The pill doesn\'t stop what\'s real.')],   // (optional: the first dread event you get while it has hold)
-  // ---- the nightmare director (src/game/director.js)
-  radioWrong: [
-    [D('Tamarack, Silver Fork.'), D('...Ray? Ray, is that you up there? You were supposed to come down last August.')],
-    [D('Tamarack, Silver Fork. Say again your count. We show two people in your cab.')],
-    [D('Tamarack. ...Tamarack. Your door is open.')],
-    [D('Tamarack, Silver Fork. There\'s nobody on duty at Silver Fork after twenty-one hundred.'), D('Who is this?')],
-    [D('Tamarack, Silver Fork. Dale Everly\'s mother is on the line for you.'), D('She says he\'s standing right behind you. She says don\'t turn around.')],
-    [D('Tamarack, Silver Fork. Answer the light. ...Answer the light. Answer the light.')],
-  ],
-  dogGrowl: (name) => [N(`${name} is on her feet, staring at the door. A growl so low it's more a feeling than a sound.`)],
-  dogWhimper: (name) => [N(`${name} whimpers and presses herself flat behind your legs. She won't look at the door.`)],
-  dogGrowlDark: (name) => [N(`${name} is staring down into the dark past the rail, growling.`)],
-  movedClock: [N('The alarm clock is on the floor in the middle of the cab. Facing the door.')],
-  movedThing: (what) => [N(`The ${what} is on the floor in the middle of the cab, where you'd trip on it. Facing the door.`)],
-  treeFigure: [N('Someone at the edge of the trees. He wasn\'t there the last time you looked.')],
-  stairsStop: [N('Boots on the stairs, coming up. Slow. They stop on the landing under the cab.')],   // said only the first time
-  halluWhisper: [N('Someone whispered. Right at your ear.')],
-  microsleep: [N('You were asleep. Standing up.')],
-  microsleepDrop: [N('Your hand is empty. It fell somewhere by your feet.')],
-  microsleepStairs: [N('Your knee hits a tread and you catch the rail. You were asleep on the stairs.')],
-  panicFall: [N('You go down hard.')],
-  nobodyThere: [N('There\'s nobody in the corner. There never was. The lamp hums.')],
-  sleepwalkRail: [N('You\'re standing at the rail, holding on to it. Thirty metres of dark under you. You don\'t remember coming out.')],
-  sleepwalkGate: [N('You\'re at the foot of the stairs, facing the trees. You don\'t remember coming down.')],
-  sleepwalkTrail: [N('You\'re further down the trail than you were. You don\'t remember walking.')],
-  lureWake: [N('The light is gone. So is the trail. You don\'t remember leaving it.')],
-  lureOut: [N('The light on the hill goes out. All at once, like a switch.')],
-  collapseIn: [N('You wake up on the floor. You don\'t remember lying down.')],
-  collapseCold: [N('You wake up on the ground, soaked with dew, shaking so hard your teeth click.')],
 }
 
 // ---------------------------------------------------------------- the rules card
