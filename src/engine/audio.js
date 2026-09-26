@@ -9,7 +9,7 @@
 // while muted the AudioContext is suspended (after the master fades out): no audio-thread work, no one-shots, no warm-up,
 // no sample downloads, the score's scheduler stopped. Every master / per-play gain change is ramped.
 import * as THREE from 'three';
-import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=d110de6c';
+import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=5f57277c';
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -333,6 +333,11 @@ export function createAudio(engine, opts = {}) {
     knock_one: ['impactPlank_medium_000', 'impactPlank_medium_001', 'impactPlank_medium_002', 'impactPlank_medium_003', 'impactPlank_medium_004'],
     metal: ['impactMetal_light_000', 'impactMetal_light_001', 'impactMetal_light_002', 'impactMetal_light_003', 'impactMetal_light_004'],
     metal_heavy: ['impactMetal_heavy_000', 'impactMetal_heavy_001', 'impactMetal_heavy_002'], cloth: ['cloth1', 'cloth2', 'cloth3', 'cloth4'],
+    // for the scare sounds (scareSounds.js, through H.sample): real knocks, taps, a body on the boards
+    wood_knock: ['impactWood_heavy_000', 'impactWood_heavy_001', 'impactWood_heavy_002', 'impactWood_heavy_003', 'impactWood_heavy_004'],
+    wood_thud: ['impactWood_medium_000', 'impactWood_medium_001', 'impactWood_medium_002', 'impactWood_medium_003', 'impactWood_medium_004'],
+    glass_tap: ['impactGlass_light_000', 'impactGlass_light_001', 'impactGlass_light_002', 'impactGlass_light_003', 'impactGlass_light_004'],
+    body_soft: ['impactSoft_heavy_000', 'impactSoft_heavy_001', 'impactSoft_heavy_002', 'impactSoft_heavy_003', 'impactSoft_heavy_004'],
   };
   const samples = {};
   let samplesLoading = false;
@@ -681,7 +686,7 @@ export function createAudio(engine, opts = {}) {
       if (s) s.addEventListener('ended', done); else done();
     },
     /** Register an extra procedural sound. fn(dest, volume, H) where H = { ctx, burst, tone, filt, gain, noise, voice, env } (see src/engine/animalSounds.js). */
-    addSynth(name, fn) { SOUNDS[name] = (d, v, o) => fn(d, v, { ctx, burst, tone, filt, gain, noise, voice, env, ...o }); },
+    addSynth(name, fn) { SOUNDS[name] = (d, v, o) => fn(d, v, { ctx, burst, tone, filt, gain, noise, voice, env, sample: (set, dest, vol, rate = 1, t = 0) => !!playSample(set, dest, vol, rate, t), ...o }); },
     has(name) { return !!SOUNDS[name]; },
     play(name, { position = null, volume = 1, loop = false, text = null, near = null } = {}) {
       if (!live()) return { stop() {}, setVolume() {} };
@@ -710,10 +715,10 @@ export function createAudio(engine, opts = {}) {
       if (surface === 'water') { stepLayers('water', bus.sfx, v * 1.1, jog); return; }
       const surf = surface === 'wood' ? 'wood' : surface === 'gravel' ? 'gravel' : 'dirt';
       // the recorded Kenney step (when loaded) is the body under the synthesized heel + toe for wood and the forest floor
-      const body = surf !== 'gravel' && playSample('footstep_' + surf, bus.sfx, v * (surf === 'wood' ? 0.45 : 0.3));
-      stepLayers(surf, bus.sfx, v * 0.55, jog, body ? 0.6 : 1);
+      const body = surf !== 'gravel' && playSample('footstep_' + surf, bus.sfx, v * (surf === 'wood' ? 0.6 : 0.3), surf === 'wood' ? 0.94 : 1);
+      if (!(surf === 'wood' && body)) stepLayers(surf, bus.sfx, v * 0.55, jog, body ? 0.6 : 1);   // wood: the recorded step alone (the synth heel rang like a drum under it)
       if (wet) shot(svar('wet_heel'), bus.sfx, { t: now() + 0.01, gain: v * 0.3, rate: 0.9 + Math.random() * 0.2 });
-      if (surface === 'wood' && Math.random() < (jog ? 0.06 : 0.1)) api.play('board_creak', { volume: 0.8 });
+      if (surface === 'wood' && Math.random() < (jog ? 0.02 : 0.035)) api.play('board_creak', { volume: 0.45 });
     },
     thunder(delay) { if (!audibleNow()) return; const k = delay < 1.6 ? 0 : delay < 3 ? 1 : 2; setTimeout(() => api.play('thunder', { volume: 0.9, near: k }), delay * 1000); },
     /** Pre-render every world sound now (tests / a loading screen); returns ms. */

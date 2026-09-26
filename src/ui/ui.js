@@ -1,8 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=d110de6c';
-import { createOverlays } from './overlays.js?v=d110de6c';
+import { drawMap } from './mapdraw.js?v=5f57277c';
+import { createOverlays } from './overlays.js?v=5f57277c';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -46,7 +46,7 @@ export function createUI(root = document.getElementById('ui')) {
     if (!o) { sl.style.display = 'none'; return; }
     sl.style.display = 'block';
     const f = Math.max(0, Math.min(1, o.fuel));
-    sl.innerHTML = `<div class="dial"><div class="needle" style="transform:rotate(${-60 + f * 120}deg)"></div><div class="lbl">FUEL</div></div>
+    sl.innerHTML = `<div class="lampst ${o.lit ? 'on' : 'off'}">${o.lit ? 'LAMP ON' : 'LAMP OFF'}</div><div class="dial"><div class="needle" style="transform:rotate(${-60 + f * 120}deg)"></div><div class="lbl">FUEL</div></div>
       ${o.sos && o.sos.show ? (() => { const S = o.sos, want = '...---...'.split(''), m = S.marks.slice(-9);
         const slots = want.map((w, i) => { const got = m[i]; return `<i class="${got ? (got === w ? 'ok' : 'bad') : ''} ${w === '-' ? 'dash' : 'dot'}"></i>`; }).join('');
         const k = Math.min(1, S.hold / (S.thr * 2)), thrPos = 50;
@@ -54,7 +54,7 @@ export function createUI(root = document.getElementById('ui')) {
           <div class="hold${S.keying ? ' on' : ''}"><u style="width:${Math.round(k * 100)}%" class="${S.hold > S.thr ? 'dash' : ''}"></u><b style="left:${thrPos}%"></b><em>${S.keying ? (S.hold > S.thr ? 'long' : 'short') : 'tap = short · hold = long'}</em></div>
           <div class="aim ${S.onTarget ? 'on' : ''}">${S.onTarget ? '● on their light' : '○ aim at their light'}</div></div>`; })() : ''}
       <div class="morse">${esc(o.morse || '')}</div>
-      <div class="hint">${o.power ? rk('Mouse aims the lamp · hold SPACE or click to flash · F / Esc to step back') : 'No power. Start the generator in the shed.'}</div>`;
+      <div class="hint">${o.power ? rk('E switches the lamp on / off · mouse aims · hold SPACE or click to flash it · F / Esc to step back') : 'No power. Start the generator in the shed.'}</div>`;
   };
   U.cameraFrame = (o) => {
     if (!o) { camf.style.display = 'none'; return; }
@@ -252,9 +252,9 @@ export function createUI(root = document.getElementById('ui')) {
   let sv = null;
   const buildSurv = () => {
     const ring = (cls, icon, label) => `<div class="ring ${cls}" title="${label}"><svg viewBox="0 0 36 36"><circle class="tr" cx="18" cy="18" r="15.5"/><circle class="ar" cx="18" cy="18" r="15.5" stroke-dasharray="${RING_C} ${RING_C}"/></svg><span class="ic">${icon}</span></div>`;
-    surv.innerHTML = `<div class="t"><span class="ti"></span><b></b><small></small></div><div class="rings">${ring('w', ICON.drop, 'Water')}${ring('f', ICON.food, 'Food')}${ring('h', ICON.heart, 'Health')}${ring('s', ICON.moon, 'Sleep')}</div>`;
+    surv.innerHTML = `<div class="t"><span class="ti"></span><b></b><small></small></div><div class="rings">${ring('w', ICON.drop, 'Water')}${ring('f', ICON.food, 'Food')}${ring('h', ICON.heart, 'Health')}<span class="bpm" title="Heart rate"><b>64</b><small>bpm</small></span>${ring('s', ICON.moon, 'Sleep')}</div>`;
     const q = (c) => surv.querySelector(c);
-    sv = { t: q('.t'), ti: q('.ti'), b: q('.t b'), sm: q('.t small'), rings: {}, last: {}, calmAt: 0 };
+    sv = { t: q('.t'), ti: q('.ti'), b: q('.t b'), sm: q('.t small'), bpm: q('.bpm'), bpmN: q('.bpm b'), rings: {}, last: {}, calmAt: 0 };
     for (const k of ['w', 'f', 'h', 's']) sv.rings[k] = { el: q('.ring.' + k), arc: q('.ring.' + k + ' .ar'), v: -1 };
   };
   U.survival = (o) => {
@@ -285,6 +285,7 @@ export function createUI(root = document.getElementById('ui')) {
       if (an && an.updatePlaybackRate) an.updatePlaybackRate(bpm / 60); sv.last.bpm = bpm;
     }
     sv.rings.h.el.classList.toggle('racing', (o.bpm || 64) > 100); if ((o.bpm || 64) > 100) loud = true;
+    { const n = Math.round(o.bpm || 64); if (n !== sv.last.bpmN) { sv.bpmN.textContent = n; sv.last.bpmN = n; } sv.bpm.classList.toggle('racing', n > 100); sv.bpm.classList.toggle('pounding', n > 140); }
     // quiet when everything's fine: it fades back after a few seconds of nothing changing
     const now = performance.now(); if (loud) sv.calmAt = now + 5000;
     surv.classList.toggle('calm', now > sv.calmAt);

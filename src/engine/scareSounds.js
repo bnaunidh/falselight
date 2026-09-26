@@ -9,7 +9,7 @@
 // schedule, and when the last one has ended every node the call made is disconnected. A recipe that throws plays nothing
 // (warned once) instead of taking the frame down. Pure module (no three.js, no DOM): tests/scareSounds.test.mjs.
 //
-//   import { registerScareSounds } from './engine/scareSounds.js?v=d110de6c';
+//   import { registerScareSounds } from './engine/scareSounds.js?v=5f57277c';
 //   registerScareSounds(engine.audio);          // once, after createAudio() (and after registerAnimalSounds)
 // volume 1 = close (LEVEL below calibrates each so its median peak lands where it should); the engine's panner is inverse-
 // distance (ref 3 m), so the stair steps from 25 m below want ~1-1.5 and a knock at the door 1.2.
@@ -159,7 +159,13 @@ function whisper(d, v, H) {
 // A heavy boot on an open wooden stair tread (2-by plank on stringers): the heel takes the weight, a low thud of the tread
 // and the stringers (~95-125 Hz, swept down a little as it loads, damped in ~0.1 s), the plank's own modes (230 / 460 / 920 /
 // 1800 Hz, each shorter than the one below it: wood), the heel's dull knock, grit under the sole; then the toe, lighter.
+
+// Real recordings first (Kenney CC0 impact set, assets/audio; the engine exposes them as H.sample): a knuckle on a door, a
+// fingernail on glass, a boot on a tread and a body hitting boards all sound goofy synthesized. The synth below each is
+// only the fallback (a harness without samples, or before they've loaded). v arrives trimmed by SCARE_LEVEL: undo that.
+function rec(name, v, H) { return H && typeof H.sample === 'function' && H.ctx ? { g: v / SCARE_LEVEL[name], t0: H.ctx.currentTime + 0.01 } : null }
 function stairStep(d, v, H) {
+  { const r = rec('stair_step', v, H); if (r && H.sample('footstep_wood', d, 0.75 * r.g, 0.8, r.t0)) { H.sample('wood_thud', d, 0.22 * r.g, 0.72, r.t0 + 0.012); return 0.7 } }   // a heavy boot on a tread
   const K = kit(d, v, H); if (!K) return 0;
   const T = K.t0, tEnd = T + 0.5, f0 = R(95, 125), tt = T + R(0.08, 0.12);
   const hp = K.filt('highpass', 40, 0, K.out), nz = K.noise(false, T, tEnd);
@@ -196,6 +202,7 @@ function bootDrip(d, v, H) {
 // ~2.3 / 3.5 / 5 / 7 kHz, ringing 60-90 ms), the pane buzzing low in its frame (~300-600 Hz), the knuckle's dull click. The
 // last tap softer.
 function windowTap(d, v, H) {
+  { const r = rec('window_tap', v, H); if (r) { const n = 2 + (Math.random() < 0.5 ? 1 : 0); let ok = false, t = r.t0; for (let i = 0; i < n; i++) { ok = H.sample('glass_tap', d, (0.55 - i * 0.08) * r.g, 1.15 + Math.random() * 0.1, t) || ok; t += 0.24 + Math.random() * 0.16; } if (ok) return 1.3 } }   // two or three fingernail taps on the pane
   const K = kit(d, v, H); if (!K) return 0;
   const T = K.t0, n = RI(2, 3), taps = [];
   let t = T; for (let i = 0; i < n; i++) { taps.push([t, i === n - 1 ? R(0.5, 0.7) : R(0.85, 1)]); t += R(0.2, 0.32); }
@@ -255,6 +262,9 @@ function tinnitus(d, v, H) {
 // each damped faster than the one below), the knuckle clicks, the panel's body thumps, and on the heavy ones the latch
 // rattles in its keeper. Almost a second apart; the last one late, and softer.
 function knockSlow(d, v, H) {
+  { const r = rec('knock_slow', v, H); if (r) { const sp = 0.85 + Math.random() * 0.25, T = r.t0, K = [[T, 1], [T + sp, 1.06], [T + sp * 2 + 0.1 + Math.random() * 0.25, 0.8]]; let ok = false;
+      for (const [t, a] of K) { ok = H.sample('wood_knock', d, 0.7 * a * r.g, 0.92, t) || ok; H.sample('knock_one', d, 0.25 * a * r.g, 1.1, t + 0.004); }   // three slow knocks on the door: the panel + the knuckle
+      if (ok) return 3.2 } }
   const K = kit(d, v, H); if (!K) return 0;
   const T = K.t0, sp = R(0.85, 1.1), knocks = [[T, 1], [T + sp, R(1, 1.12)], [T + sp * 2 + R(0.1, 0.35), R(0.7, 0.85)]];
   const tEnd = knocks[2][0] + 0.4;
@@ -298,6 +308,7 @@ function yawn(d, v, H) {
 // You, going down: knees first, then the rest (two heavy, damped, low thuds ~55-105 Hz: a body is soft), the slap of cloth
 // and body on the boards or the ground, clothes rustling on the way down, the breath knocked out of you.
 function bodyFall(d, v, H) {
+  { const r = rec('body_fall', v, H); if (r && H.sample('body_soft', d, 0.8 * r.g, 0.85, r.t0)) { H.sample('wood_thud', d, 0.55 * r.g, 0.75, r.t0 + 0.03); H.sample('wood_thud', d, 0.25 * r.g, 0.9, r.t0 + 0.21); return 1.2 } }   // you, hitting the boards
   const K = kit(d, v, H); if (!K) return 0;
   const T = K.t0, tb = T + R(0.18, 0.3), tEnd = tb + 0.6;
   const hp = K.filt('highpass', 35, 0, K.out), nz = K.noise(false, T, tEnd);

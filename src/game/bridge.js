@@ -1,34 +1,34 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=d110de6c';
-import { Objectives } from './objectives.js?v=d110de6c';
-import { Radio } from './radio.js?v=d110de6c';
-import { Fuel, FUEL } from './fuel.js?v=d110de6c';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=d110de6c';
-import { Survival, SURV } from './survival.js?v=d110de6c';
-import { createItemsView } from './itemsView.js?v=d110de6c';
-import { createChill } from './chill.js?v=d110de6c';
-import { createPlume } from './smokePlume.js?v=d110de6c';
-import { FireFinder, spokenBearing } from './firefinder.js?v=d110de6c';
-import { Photos, classifyShot } from './photos.js?v=d110de6c';
-import { CO } from './co.js?v=d110de6c';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=d110de6c';
-import { OtherLookout } from './otherLookout.js?v=d110de6c';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=d110de6c';
-import { GuidedHiker } from './hikers.js?v=d110de6c';
-import { MorseKeyer, isSOS } from './morse.js?v=d110de6c';
-import { normalizeLayout } from './layout.js?v=d110de6c';
-import { createSaves } from './saves.js?v=d110de6c';
-import { createRng } from './rng.js?v=d110de6c';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=d110de6c';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d110de6c';
-import * as S from './content/story.js?v=d110de6c';
-import { createDog, setDogName } from './dog.js?v=d110de6c';
-import { createWildlife } from './wildlife.js?v=d110de6c';
-import { Fear, registerFearSounds } from './fear.js?v=d110de6c';
-import { epilogue } from './content/ending.js?v=d110de6c';
-import { Director, sosLamp } from './director.js?v=d110de6c';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=5f57277c';
+import { Objectives } from './objectives.js?v=5f57277c';
+import { Radio } from './radio.js?v=5f57277c';
+import { Fuel, FUEL } from './fuel.js?v=5f57277c';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=5f57277c';
+import { Survival, SURV } from './survival.js?v=5f57277c';
+import { createItemsView } from './itemsView.js?v=5f57277c';
+import { createChill } from './chill.js?v=5f57277c';
+import { createPlume } from './smokePlume.js?v=5f57277c';
+import { FireFinder, spokenBearing } from './firefinder.js?v=5f57277c';
+import { Photos, classifyShot } from './photos.js?v=5f57277c';
+import { CO } from './co.js?v=5f57277c';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=5f57277c';
+import { OtherLookout } from './otherLookout.js?v=5f57277c';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=5f57277c';
+import { GuidedHiker } from './hikers.js?v=5f57277c';
+import { MorseKeyer, isSOS } from './morse.js?v=5f57277c';
+import { normalizeLayout } from './layout.js?v=5f57277c';
+import { createSaves } from './saves.js?v=5f57277c';
+import { createRng } from './rng.js?v=5f57277c';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=5f57277c';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=5f57277c';
+import * as S from './content/story.js?v=5f57277c';
+import { createDog, setDogName } from './dog.js?v=5f57277c';
+import { createWildlife } from './wildlife.js?v=5f57277c';
+import { Fear, registerFearSounds } from './fear.js?v=5f57277c';
+import { epilogue } from './content/ending.js?v=5f57277c';
+import { Director, sosLamp } from './director.js?v=5f57277c';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -573,7 +573,7 @@ export class Game {
       H.losT = (H.losT || 0) - dt;
       if (H.losT <= 0) { H.losT = 0.25; H.seeGround = e.view.lineOfSight(e.camera.position, lv, { trees: false }); H.seeTrees = e.view.lineOfSight(e.camera.position, lv); }
       const flick = H.seeTrees ? 1 : (0.25 + 0.75 * (Math.sin(t * 9.1 + H.rules.phase) > 0.2 ? 1 : 0.15));
-      H.lamp.visible = on && H.seeGround; H.lamp.material.opacity = flick; H.lamp.position.copy(lv); H.lamp.scale.setScalar(Math.max(0.5, d * 0.011)); H.light.position.copy(lv); H.light.intensity = on ? 1.5 : 0;
+      H.lamp.visible = on && H.seeGround; H.lamp.material.opacity = flick; H.lamp.position.copy(lv); H.lamp.scale.setScalar(Math.max(0.5, d * 0.015)); H.light.position.copy(lv); H.light.intensity = on ? 1.5 : 0;
       if (H.ent) { H.ent.setPosition(V3(r.ground)); const fwd = route_dir(r); if (fwd) H.ent.face(V3(r.ground).add(new THREE.Vector3(fwd[0], 0, fwd[2]))); H.ent.setPose(r.moving ? (Math.floor(t * 1.7) % 2 ? 'step' : 'stand') : 'stand'); H.ent.setVisible(!r.done || r.status === 'saved'); }
       if (!ev) continue;
       if (H.which === 'false') {
@@ -827,7 +827,9 @@ export class Game {
     }, () => this.clock.phase === 'day2');
     reg('rest', 'IA_bed', 'E — Lie down and rest (let the hours pass)', () => {
       if (this.clock.held) { const c = this.obj.current(); this.ui.toast('You can\'t sleep yet.' + (c ? ' ' + this.obj.text(c) + '.' : ''), 3); return; }
-      this.resting = true; this.restObjN = this.obj.list.length; this.clock.speed = 14; e.post.set({ blackout: 0.85 }); this.ui.toast('You lie down. The hours go by. (W to get up)', 3);
+      this.resting = true; this.restObjN = this.obj.list.length; this.clock.speed = 14; this.ui.toast('You lie down. The hours go by. (W to get up)', 3);
+      const b = this.bedHead(); this._lie = { k: this._lie ? this._lie.k : 0, head: b.head, t: 0 };   // onto your back on the cot, head on the west end
+      { const Pl = this.player(), eye = Pl.position.clone().add(new THREE.Vector3(0, 1.65, 0)); Pl.lookAt(eye.add(b.look.clone().sub(b.head)), 1.1); }   // the view from the pillow: up, along the cot toward your feet
     }, () => !this.resting && !this.weeper.triggered, 0.8);
     reg('door', 'IA_cab_door', () => this.flags.doorShut ? 'E — Open the door' : 'E — Shut the door', () => {
       this.flags.doorShut = !this.flags.doorShut; e.audio.play(this.flags.doorShut ? 'door_close' : 'door_open', { volume: 0.8, position: this.anchor('IA_cab_door') });
@@ -967,8 +969,16 @@ export class Game {
       const now = e.time.value;
       if (d) {
         if (this.binocular) { this.binocular = false; return; }
-        // straight from the pack or a hand: raising them never needs a free hand
+        // they have to be in your hand: from the pack they come out into a free hand first (a moment: the pack's zip, the strap)
         if (!this.inv.find('binoculars')) { this.ui.toast(this.inv.items.some((i) => i.kind === 'binoculars' && i.where === 'pack') ? 'The binoculars are in the pack, and you set the pack down.' : 'You don\'t have the binoculars with you.', 3); this.binocular = false; return; }
+        if (!this.inv.inHands('binoculars')) {
+          const r = this.inv.ready('binoculars');
+          if (!r.ok) { this.ui.toast('The binoculars are in your pack and both hands are full. Put something away first (I).', 3); this.binocular = false; return; }
+          e.audio.sfx('cloth', { volume: 0.35 }); this.syncItems(); this.refreshHotbar();
+          this.binocular = false; this._binocOutAt = now; setTimeout(() => { if (this.state === 'play' && this.mode === 'walk' && this.inv.inHands('binoculars') && this._binocOutAt === now) { this.binocular = true; this.binocAt = this.e.time.value; } }, 550);
+          return;
+        }
+        const h = this.inv.inHands('binoculars'); if (h) this.selectSlot(h.slot);
         if (this.camRaised) this.lowerCamera();
         if (this.placing) this.cancelPlace();
         this.binocular = true; this.binocAt = now;
@@ -1020,7 +1030,7 @@ export class Game {
     if (it.kind === 'camera' && !this.photos.hasCamera) {
       this.photos.giveCamera(1); this.flags.hasCamera = true; this.say(S.LINES.cameraFound); this.complete('d1_camera');
       this.ui.toast(r.to === 'pack' ? 'Into the pack. C raises the camera.' : 'C raises the camera · click takes a picture.', 4);
-    } else if (r.to === 'pack') this.ui.toast(`Into the pack: ${this.inv.label(it)}.`, 2);
+    } else if (r.to === 'pack') this.ui.toast(`Your hands are full: the ${this.inv.label(it).toLowerCase()} goes in your pack. I to get it out.`, 3.5);
     if (it.kind === 'backpack') this.ui.toast(`Pack on. ${this.inv.items.filter((i) => i.where === 'pack').length} things in it · I to look.`, 2.5);
     if (it.kind === 'pills' && !this.flags.pillsFound) { this.flags.pillsFound = true; this.say(S.LINES.pillFound); }
     this.syncItems();
@@ -1205,7 +1215,10 @@ export class Game {
     const [hFrom, hTo] = this.clock.tick(dt);
     e.sky.setTime(dayHour(this.clock.hour));
     // radio
-    if (this.resting && (this.obj.list.length !== this.restObjN || this.radio.busy || e.input.isDown('forward') || e.input.isDown('back') || this.clock.held)) { this.resting = false; this.clock.speed = 1; e.post.set({ blackout: 0 }); }
+    if (this.resting && (this.obj.list.length !== this.restObjN || this.radio.busy || e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right') || this.clock.held)) {
+      this.resting = false; this.clock.speed = 1; e.post.set({ blackout: 0 });
+      const Pl = this.player(); Pl.lookAt(new THREE.Vector3(Pl.position.x - Math.sin(Pl.yaw) * 4, Pl.position.y + 1.6, Pl.position.z - Math.cos(Pl.yaw) * 4), 0.8);   // sit up and look ahead
+    }
     for (const ev of this.radio.tick(dt)) {
       if (ev.kind === 'start') {
         const l = ev.line;
@@ -1255,7 +1268,7 @@ export class Game {
       }
       this._slAim = [SL.yaw, SL.pitch];
       const held = this.keyer.isDown ? t - this.keyer.tDown : 0;
-      this.ui.searchlight({ fuel: this.fuel.frac, morse: this.keyer.display(), power: this.fuel.power, sos: { show: !!tgt || this.keyer.isDown || (this.keyer.presses.length > 0 && t - this.keyer.tUp < 2.6), marks: this.keyer.marks(), hold: held, thr: this.keyer.threshold(), onTarget: onIt, keying: this.keyer.isDown } });
+      this.ui.searchlight({ fuel: this.fuel.frac, morse: this.keyer.display(), power: this.fuel.power, lit: !!this.slLit && this.fuel.power, sos: { show: !!tgt, marks: this.keyer.marks(), hold: held, thr: this.keyer.threshold(), onTarget: onIt, keying: this.keyer.isDown } });
     } else if (this.mode === 'finder') {
       let dir = 0; if (e.input.isDown('left')) dir -= 1; if (e.input.isDown('right')) dir += 1;
       this.finder.step(dt, dir, e.input.isDown('jog'), this.co.cold);
@@ -1270,6 +1283,7 @@ export class Game {
     if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov += (fovT - cam.fov) * Math.min(1, dt * 8); cam.updateProjectionMatrix(); }
     cam.userData.zoom = 68 / cam.fov;
     const fw = cam.getWorldDirection(this._fw || (this._fw = new THREE.Vector3()));
+    if (this.binocular && !this.inv.inHands('binoculars')) this.binocular = false;
     this.ui.binoculars(this.binocular && this.mode === 'walk', (Math.atan2(fw.x, -fw.z) * 180 / Math.PI + 360) % 360);
     // windows: slide the sashes to match the rule state
     if (!this.sashes) { this.sashes = {}; for (const k of 'nesw') { const o = e.world.objects.get('FL_sash_' + k); if (o) { this.sashes[k] = { o, base: o.position.clone(), t: 0 }; this.frameSash(o); } } }
@@ -1428,6 +1442,12 @@ export class Game {
       sh.t += dt; const k = sh.amp * Math.max(0, 1 - sh.t / sh.dur); if (k <= 0.001) this._shake = null;
       else { const c = e.camera, w = t * 38; c.position.x += Math.sin(w * 1.3) * 0.045 * k; c.position.y += Math.sin(w * 1.7 + 1) * 0.035 * k; c.rotation.z += Math.sin(w * 0.9 + 2) * 0.03 * k; }
     }
+    if (this._lie) {   // lying on the cot: the head goes down onto the pillow and back up (never a pop), the eyes close once you're down
+      const L = this._lie; L.k = this.resting ? Math.min(1, L.k + dt / 1.2) : Math.max(0, L.k - dt / 0.8);
+      const k = L.k * L.k * (3 - 2 * L.k); e.camera.position.lerp(L.head, k);
+      if (this.resting) { L.t += dt; e.post.params.blackout = 0.85 * Math.min(1, Math.max(0, (L.t - 1.6) / 2.4)); }
+      if (!this.resting && L.k <= 0) this._lie = null;
+    }
     if (this.fear.shake > 0.01 && this.mode === 'walk') {   // scared hands: a fine tremor in the view (and the torch beam)
       const c = e.camera, k = this.fear.shake * 0.0035;
       c.rotation.x += (Math.sin(t * 23.1) + Math.sin(t * 37.7 + 1.3) * 0.6) * k; c.rotation.y += (Math.sin(t * 19.3 + 2.1) + Math.sin(t * 41.9) * 0.5) * k;
@@ -1508,6 +1528,15 @@ export class Game {
     if (!c.length) { this._threatKind = null; return null; }
     let bi = 0, bd = Infinity; if (dp) c.forEach((p, i) => { const d = p.distanceToSquared(dp); if (d < bd) { bd = d; bi = i; } });
     this._threatKind = K[bi]; return c[bi];
+  }
+  /** Where your head goes on the cot (from the mattress itself: pillow at its west end) and where you look lying there. */
+  bedHead() {
+    if (!this._bed) {
+      const m = this.e.scene.getObjectByName('FL_cab_mattress'); let head = new THREE.Vector3(-1.72, 30.86, -1.54), look = new THREE.Vector3(-1.1, 32.6, -1.54);
+      if (m) { const bb = new THREE.Box3().setFromObject(m), c = bb.getCenter(new THREE.Vector3()); head = new THREE.Vector3(bb.min.x + 0.22, bb.max.y + 0.2, c.z); look = new THREE.Vector3(bb.min.x + 0.9, bb.max.y + 2.0, c.z); }
+      this._bed = { head, look };
+    }
+    return this._bed;
   }
   /** The fence gate swings between the way the model stands it (open, swung out) and shut across the gap. */
   updateGate(dt) {

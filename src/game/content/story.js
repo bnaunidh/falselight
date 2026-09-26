@@ -63,7 +63,7 @@ export const LINES = {
     D(`Copy, ${spoken}. That\'s our strike. Thanks, Tamarack. Silver Fork clear.`),
   ],
   fireBad: (spoken) => [Y(`Silver Fork, Tamarack. Glow at ${spoken}.`), D('Tamarack, we don\'t have anything on that line. Check it again.')],
-  sosN1: [],   // (shown / heard, not narrated)
+  sosN1: [D('Tamarack, Silver Fork. A hunter down on the county road called in a light flashing up on the old burn, west of you. Can you see it from up there?')],   // the radio says where (the district would): no narrator
   answeredN1: [D('Tamarack, Silver Fork. You have a light out there?'), Y('Silver Fork, Tamarack. Somebody on the burn. I\'m walking them out with the searchlight.'), D('Copy. I\'ll have the deputy meet them at the lot. Keep them on the trail.')],
   hikerStopped: [],   // (shown / heard, not narrated)
   hikerStraying: [],   // (shown / heard, not narrated)
@@ -271,7 +271,7 @@ export const OBJECTIVES = {
   d1_generator: { text: 'Start the generator before dark', hint: 'In the shed at the base. The searchlight runs off it.' },
   d1_dusk:      { text: 'Wait for dark in the cab', hint: 'The searchlight is on the roof. F takes it from anywhere in the cab or on the catwalk.' },
   n1_fire:      { text: 'A glow to the northwest. Get an azimuth.', hint: 'Fire finder, then E to radio the bearing.' },
-  n1_answer:    { text: 'Someone is flashing SOS over the burn. Answer.', hint: 'F takes the searchlight (from the cab or the catwalk). Put the beam on their light, let them finish, then send SOS back with Space: tap-tap-tap, hold-hold-hold, tap-tap-tap.' },
+  n1_answer:    { text: 'A light is flashing SOS on the burn, due west (about 260°). Answer it.', hint: 'Go out on the west side of the catwalk and look down and west: a small white light, flashing in threes, about 160 m out (B: the binoculars show your bearing). F takes the searchlight; put the beam near their light (it settles onto it), then send SOS back with Space or the mouse: tap-tap-tap, hold-hold-hold, tap-tap-tap.' },
   n1_guide:     { text: 'Walk them out to the trailhead', hint: 'Keep the beam on the trail just ahead of them. If they stop, find them again.' },
   n1_refuel:    { text: 'Fuel is low. Refuel the generator.', hint: 'Carry the can you left up top down to the shed. E at the generator pours it.', urgent: true },
   n1_gate:      { text: 'The gate rattled. Write down the time.', hint: 'Tillman would have. The logbook is on the desk in the cab: E writes the entry.', optional: true },

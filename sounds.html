@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FALSE LIGHT sound board</title>
+<style>
+:root{--bg:#141412;--ink:#e9e0c9;--dim:#a39a86;--btn:#23221e;--line:#3a372f;--acc:#d8b36a}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 "American Typewriter","Courier New",monospace}
+main{max-width:980px;margin:0 auto;padding:22px 16px 60px}
+h1{font:600 22px/1.2 Georgia,serif;margin:0 0 4px}p{color:var(--dim);margin:0 0 18px}
+h2{font:600 14px/1 Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);margin:22px 0 10px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+button{background:var(--btn);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px 11px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}button b{color:var(--acc);margin-right:4px}
+#note{position:sticky;top:0;background:var(--bg);padding:8px 0;color:var(--acc);min-height:1.4em;border-bottom:1px solid var(--line)}
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/" } }</script>
+</head>
+<body><main>
+<h1>FALSE LIGHT: sound board</h1>
+<p>Every sound in the game. Press one to hear it (turn your volume down first). Tell Claude the codes of the ones that sound goofy, like "S4, H3".</p>
+<div id="note">Nothing plays until you press a button.</div>
+<div id="board"></div>
+</main>
+<script type="module" src="src/tools/soundboard.js"></script>
+</body></html>

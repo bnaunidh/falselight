@@ -235,3 +235,12 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .title.end .epi p{font:17px/1.6 Georgia,serif;color:#d8d0bd;margin:0 0 14px;opacity:0;animation:fl-epi 1.6s ease-out both}
 .title.end .epi p.last{margin-top:26px;font-style:italic;color:#f1e6c8;text-align:center}
 @keyframes fl-epi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* the heart rate, beside the heart ring */
+.fl-surv .bpm{display:flex;flex-direction:column;justify-content:center;margin-left:-3px;color:#e0897a;line-height:1;min-width:30px}
+.fl-surv .bpm b{font:600 15px/1 var(--type);letter-spacing:.02em}
+.fl-surv .bpm small{font:9px/1 var(--type);opacity:.7;letter-spacing:.08em;margin-top:2px}
+.fl-surv .bpm.racing{color:#ff7560}.fl-surv .bpm.pounding b{animation:fl-low .5s ease-in-out infinite}
+
+.fl-sl .lampst{font:600 12px/1 var(--type);letter-spacing:.14em;margin:0 0 8px auto;width:max-content;padding:5px 9px;border-radius:5px;border:1px solid rgba(233,224,201,.25)}
+.fl-sl .lampst.on{color:#f7e2a6;background:rgba(240,200,110,.14);box-shadow:0 0 12px rgba(255,215,130,.18)}.fl-sl .lampst.off{color:rgba(233,224,201,.55);background:rgba(10,10,8,.4)}
