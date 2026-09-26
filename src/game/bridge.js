@@ -1,34 +1,34 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=7c0235c6';
-import { Objectives } from './objectives.js?v=7c0235c6';
-import { Radio } from './radio.js?v=7c0235c6';
-import { Fuel, FUEL } from './fuel.js?v=7c0235c6';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=7c0235c6';
-import { Survival, SURV } from './survival.js?v=7c0235c6';
-import { createItemsView } from './itemsView.js?v=7c0235c6';
-import { createChill } from './chill.js?v=7c0235c6';
-import { createPlume } from './smokePlume.js?v=7c0235c6';
-import { FireFinder, spokenBearing } from './firefinder.js?v=7c0235c6';
-import { Photos, classifyShot } from './photos.js?v=7c0235c6';
-import { CO } from './co.js?v=7c0235c6';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=7c0235c6';
-import { OtherLookout } from './otherLookout.js?v=7c0235c6';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=7c0235c6';
-import { GuidedHiker } from './hikers.js?v=7c0235c6';
-import { MorseKeyer, isSOS } from './morse.js?v=7c0235c6';
-import { normalizeLayout } from './layout.js?v=7c0235c6';
-import { createSaves } from './saves.js?v=7c0235c6';
-import { createRng } from './rng.js?v=7c0235c6';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=7c0235c6';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=7c0235c6';
-import * as S from './content/story.js?v=7c0235c6';
-import { createDog, setDogName } from './dog.js?v=7c0235c6';
-import { createWildlife } from './wildlife.js?v=7c0235c6';
-import { Fear, registerFearSounds } from './fear.js?v=7c0235c6';
-import { epilogue } from './content/ending.js?v=7c0235c6';
-import { Director, sosLamp } from './director.js?v=7c0235c6';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=1e6e737b';
+import { Objectives } from './objectives.js?v=1e6e737b';
+import { Radio } from './radio.js?v=1e6e737b';
+import { Fuel, FUEL } from './fuel.js?v=1e6e737b';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=1e6e737b';
+import { Survival, SURV } from './survival.js?v=1e6e737b';
+import { createItemsView } from './itemsView.js?v=1e6e737b';
+import { createChill } from './chill.js?v=1e6e737b';
+import { createPlume } from './smokePlume.js?v=1e6e737b';
+import { FireFinder, spokenBearing } from './firefinder.js?v=1e6e737b';
+import { Photos, classifyShot } from './photos.js?v=1e6e737b';
+import { CO } from './co.js?v=1e6e737b';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=1e6e737b';
+import { OtherLookout } from './otherLookout.js?v=1e6e737b';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=1e6e737b';
+import { GuidedHiker } from './hikers.js?v=1e6e737b';
+import { MorseKeyer, isSOS } from './morse.js?v=1e6e737b';
+import { normalizeLayout } from './layout.js?v=1e6e737b';
+import { createSaves } from './saves.js?v=1e6e737b';
+import { createRng } from './rng.js?v=1e6e737b';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=1e6e737b';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=1e6e737b';
+import * as S from './content/story.js?v=1e6e737b';
+import { createDog, setDogName } from './dog.js?v=1e6e737b';
+import { createWildlife } from './wildlife.js?v=1e6e737b';
+import { Fear, registerFearSounds } from './fear.js?v=1e6e737b';
+import { epilogue } from './content/ending.js?v=1e6e737b';
+import { Director, sosLamp } from './director.js?v=1e6e737b';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -643,7 +643,23 @@ export class Game {
   updateWeeper(dt, t) {
     const e = this.e, W = this.weeper, h = this.weeperH;
     const c = e.view.check(h);
-    const ctx = { check: c, binoculars: this.binocular, night: this.night, rock: A3(this.weeperSeat), gate: this.L.gate || [0, 0, 6], cab: [0, 30, 0],
+    // night two: every time you've gone a while without looking at him, he's moved: sitting a little closer to the tower
+    // (you only notice through the binoculars, or when the crying sounds nearer). He stops a third of the way.
+    if (this.clock.phase === 'night2' && W.state === 'sitting') {
+      if (c && c.visible) this._wUnseen = 0;
+      else if ((this._wUnseen = (this._wUnseen || 0) + dt) > 45 && (this.flags.weeperCreep || 0) < 0.3) { this._wUnseen = 0; this.flags.weeperCreep = Math.min(0.3, (this.flags.weeperCreep || 0) + ((this.flags.weeperCreep || 0) ? 0.06 : 0.12)); }   // (the first move takes him across the creek)
+    }
+    const creep = this.clock.phase === 'night2' ? (this.flags.weeperCreep || 0) : 0;
+    if (this._creepK !== creep) {
+      this._creepK = creep; const r = this.weeperSeat, g = this.L.gate || [0, 0, 6], x = r.x + (g[0] - r.x) * creep, z = r.z + (g[2] - r.z) * creep;
+      const lift = Math.max(0, r.y - e.world.heightAt(r.x, r.z));   // his rock's seat height above the ground
+      this._creepRock = creep ? [x, e.world.heightAt(x, z) + lift, z] : A3(r);
+      // and a boulder like his under him: his old rock stands empty (look for it)
+      const rock = e.scene.getObjectByName('weeper_rock');
+      if (creep && rock && !this._rock2) { this._rock2 = rock.clone(true); this._rock2.name = 'weeper_rock_2'; e.scene.add(this._rock2); }
+      if (this._rock2) { this._rock2.visible = !!creep; if (creep) { this._rock2.position.set(x, this._creepRock[1] - 0.25, z); this._rock2.rotation.y = rock.rotation.y + 1.1 + creep * 3; } }
+    }
+    const ctx = { check: c, binoculars: this.binocular, night: this.night, rock: this._creepRock, gate: this.L.gate || [0, 0, 6], cab: [0, 30, 0],
       trapdoor: this.anchor('IA_cab_door') ? A3(this.anchor('IA_cab_door')) : this.anchor('IA_trapdoor') ? A3(this.anchor('IA_trapdoor')) : [-1.5, 30, 0], player: this.pos(), playerInCab: this.inCab() };
     const evs = W.update(dt, ctx);
     for (const ev of evs) {
@@ -1352,6 +1368,14 @@ export class Game {
         signals: this.hikers.filter((H) => H.rules.status === 'signalling').length, dog: d && d.tamed ? { pos: [d.position.x, d.position.y, d.position.z], tamed: true, name: this.flags.dogName || 'Juniper' } : null,
         holding: this.inv.activeItem ? this.inv.activeItem.kind : null, cold: this.co.cold }, this.dirActions);
       if (this._flick && now >= this._flick.until) { const f = this._flick; this._flick = null; if (f.lamp && !this.flags.lampOff) e.lights.cabLamp.on = true; if (f.torch && this.inv.inHands('flashlight')) e.lights.flashlight.on = true; }
+      // walking the false light brings it home: its steps come up the stairs (about 20 game minutes later), then it knocks
+      { const F = this.flags;
+        if (F.falseWalked && (F.falseVisit || 0) < 2 && this.night && !this.director.ev) {
+          if (F.falseVisitAt == null) F.falseVisitAt = this.clock.hour + 0.35;
+          if (this.clock.hour >= F.falseVisitAt && (Pl.zone === 'cab' || (!F.falseVisit && Pl.zone === 'catwalk'))) {
+            this.director.force(F.falseVisit ? 'knocks' : 'stair_steps'); F.falseVisit = (F.falseVisit || 0) + 1; F.falseVisitAt = this.clock.hour + 0.3;
+          }
+        } }
       if (this._sos != null) { const sp = this.sosSprite; sp.material.opacity = sosLamp(now - this._sos); sp.scale.setScalar(Math.max(0.5, sp.position.distanceTo(cam.position) * 0.011)); }
     }
     if (this.dog) this.dog.update(dt, t);
