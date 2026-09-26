@@ -264,6 +264,47 @@ const bearBrain = (o = {}) => makeBrain({ deer: [], bear: true, bearSpots: [[0, 
   ok('it comes up to the tower on about ' + Math.round(B.visitChance * 100) + ' % of nights', Math.abs(visits / 400 - B.visitChance) < 0.06, f1(visits / 4) + ' % of 400 nights')
   ok('...and back inside the fence it will not follow', !evs3.some((e) => e.type === 'hurt') && Math.max(Math.abs(b2.bear.pos[0]), Math.abs(b2.bear.pos[2])) >= WILD.fence - 0.05, b2.bear.state)
 }
+// ------------------------------------------------------------------ 13b. callToShed: the generator sputtering at the refuel draws it up
+{
+  const route = []; for (let z = 200; z >= 6; z -= 4) route.push([4, 0, z])
+  const mk = () => bearBrain({ seed: 2, tower: [0, 0], shed: [9, 7], shedSpots: [[15, 4], [12, 10], [8.5, 11]], route, bearSpots: [[0, 220], [20, 230]] })
+  const cab = () => makeCtx({ player: [1.2, 30, 1.2], playerSafe: true, indoor: true, night: true })
+  // far off (~220 m) and out of sight: moved onto the route ~60 m out, nosing there till it's time, then up to the shed
+  const b = mk(), br = b.bear, ctx = cab()
+  b.update(DT, ctx); br.visitRoll = false   // (a night it wasn't going to come up at all)
+  const d0 = Math.hypot(br.pos[0], br.pos[2]), r = b.callToShed({ delay: 15, hidden: true }), d1 = Math.hypot(br.pos[0], br.pos[2])
+  ok('callToShed: far off and unseen, it is moved onto its route ~60 m from the tower', r === 'moved' && d0 > 150 && d1 >= 59 && d1 < 66 && Math.abs(br.pos[0] - 4) < 0.5, r + ', ' + f1(d0) + ' m -> ' + f1(d1) + ' m')
+  let visitAt = null, sniffAt = null, minCheb = Infinity; const t0 = b.time0 || 0
+  const evs = sim(b, ctx, 120, { onStep: () => {
+    if (visitAt == null && br.task === 'visit') visitAt = b.time0 - t0
+    if (sniffAt == null && br.task === 'sniff') sniffAt = b.time0 - t0
+    minCheb = Math.min(minCheb, Math.max(Math.abs(br.pos[0]), Math.abs(br.pos[2])))
+  } })
+  ok('...it waits there, then walks up ~15 s after the call', visitAt != null && Math.abs(visitAt - 15) < 0.5, 'visit at ' + f1(visitAt) + ' s')
+  ok('...and is round the shed within a minute of the call (you, coming down with the can)', sniffAt != null && sniffAt < 60, 'sniffing at ' + f1(sniffAt) + ' s')
+  ok('...never inside the fence, and the cab hears about it', minCheb >= WILD.fence - 0.05 && typed(evs, 'say').some((e) => /generator shed/.test(e.text)), f2(minCheb) + ' m')
+  // in sight: never teleported, just called (it walks the whole way)
+  const bs = mk(); bs.update(DT, cab()); bs.bear.visitRoll = false
+  const p0 = bs.bear.pos.slice(), rs = bs.callToShed({ delay: 15, hidden: false })
+  let vs = null; const ts = bs.time0 || 0
+  sim(bs, cab(), 20, { onStep: () => { if (vs == null && bs.bear.task === 'visit') vs = bs.time0 - ts } })
+  ok('callToShed in plain sight: not moved, the visit still starts ~15 s on', rs === 'called' && Math.hypot(p0[0] - bs.bear.pos[0], p0[2] - bs.bear.pos[2]) < 25 && vs != null && Math.abs(vs - 15) < 0.5, rs + ', visit at ' + f1(vs) + ' s')
+  // already been up tonight and on its way back down: it turns round
+  const bt = mk(), ct = cab(); bt.update(DT, ct); bt.bear.visitRoll = true; bt.bear.visitAt = 0
+  sim(bt, ct, 400, { stopAt: () => bt.bear.task === 'return' && Math.hypot(bt.bear.pos[0], bt.bear.pos[2]) > 50 })
+  const rt = bt.callToShed({ delay: 15, hidden: true }); let back = null; const tt = bt.time0
+  sim(bt, ct, 20, { onStep: () => { if (back == null && bt.bear.task === 'visit') back = bt.time0 - tt } })
+  ok('...already visited and heading home: called again, it turns round after the delay', rt === 'called' && back != null && Math.abs(back - 15) < 0.5, rt + ', back up at ' + f1(back) + ' s')
+  // sniffing round the shed already: it stays a while
+  const bn = mk(), cn = cab(); bn.update(DT, cn); bn.bear.visitRoll = true; bn.bear.visitAt = 0
+  sim(bn, cn, 400, { stopAt: () => bn.bear.task === 'sniff' }); bn.bear.sniffT = 2
+  ok('...already sniffing round the shed: it stays at least ' + B.sniff[0] + ' s more', bn.callToShed() === 'coming' && bn.bear.sniffT >= B.sniff[0], f1(bn.bear.sniffT) + ' s')
+  // before its first night update (the phase just started): the night is set up, not overwritten after
+  const bf = mk(); const rf = bf.callToShed({ delay: 15, hidden: true }); const va = bf.bear.visitAt
+  bf.update(DT, cab())
+  ok('...called before its first night update: the call survives the night starting', rf === 'moved' && bf.bear.nightOn && bf.bear.visitRoll && bf.bear.visitAt === va && Math.abs(va - 15) < 1e-6, rf + ', visitAt ' + f2(bf.bear.visitAt))
+  ok('...no route or no bear: nothing', makeBrain({ bear: true, route: null }).callToShed() === false && makeBrain().callToShed() === false)
+}
 // ------------------------------------------------------------------ 14. the dog barks at it every 1-2 s inside 25 m
 {
   const b = bearBrain({ seed: 6 }), br = b.bear, ctx = makeCtx({ player: [200, 0, 100], dog: { pos: [30, 0, 100], tamed: true } })

@@ -1,22 +1,23 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=239df90c';
-import { createUI } from './ui/ui.js?v=239df90c';
-import { Game } from './game/bridge.js?v=239df90c';
-import { createSaves } from './game/saves.js?v=239df90c';
-import { UI as WORDS } from './game/content/story.js?v=239df90c';
-import { ACTIONS, keyName } from './engine/input.js?v=239df90c';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=239df90c';
-import { paintCabMaps } from './ui/cabMaps.js?v=239df90c';
+import { createEngine } from './engine/engine.js?v=08bd4859';
+import { createUI } from './ui/ui.js?v=08bd4859';
+import { Game } from './game/bridge.js?v=08bd4859';
+import { createSaves } from './game/saves.js?v=08bd4859';
+import { UI as WORDS } from './game/content/story.js?v=08bd4859';
+import { ACTIONS, keyName } from './engine/input.js?v=08bd4859';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=08bd4859';
+import { paintCabMaps } from './ui/cabMaps.js?v=08bd4859';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
 const saves = createSaves();
-const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, music: 0.35, sound: false, fullscreen: true, keys: {} });
+const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, music: 0.35, sound: false, fullscreen: true, keys: {}, fps: 60, saver: 'auto' });
 if (!settings.qv2) { settings.quality = 'medium'; settings.qv2 = true; saves.saveSettings(settings); }   // older saves defaulted to 'high'
 const ui = createUI();
 ui.loading(0, 'starting');
 const engine = await createEngine(canvas, { quality: q.get('q') || settings.quality });
 engine.input.setBindings(settings.keys || {});   // your keys (Settings → Keys)
+engine.fpsCap = +(settings.fps ?? 60); engine.saverMode = settings.saver || 'auto';   // battery (Settings)
 ui.setRekey((t) => engine.input.rekey(t));   // hints and prompts name the keys you actually use
 engine.input.sensitivity = 0.0022 * settings.sens;
 engine.audio.setVolume(+settings.volume);
@@ -60,6 +61,7 @@ function title() {
   } });
 }
 // the title's living backdrop: a slow drift around the tower while the searchlight sweeps the fog
+engine.onUpdate(() => { engine.idle = game.state !== 'play' || ui.modalOpen(); });   // menus, the title, the logbook: 30 fps
 engine.onUpdate((dt, t) => {
   if (game.state !== 'title') return;
   const cam = engine.camera, SL = engine.lights.searchlight;
@@ -87,10 +89,11 @@ function openKeys(back) {
     onBack: () => { ui.closeModal(); back(); } });
 }
 function openSettings(back) {
-  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, music: settings.music ?? 0.35, sound: settings.sound, fullscreen: settings.fullscreen,
+  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, music: settings.music ?? 0.35, fps: settings.fps ?? 60, saver: settings.saver || 'auto', sound: settings.sound, fullscreen: settings.fullscreen,
     onKeys: () => { ui.closeModal(); openKeys(() => openSettings(back)); }, onDone: (v) => {
-    Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, music: +(v.music ?? 0.35), sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
+    Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, music: +(v.music ?? 0.35), fps: +(v.fps ?? 60), saver: v.saver || 'auto', sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
     if (engine.audio.setMusicVolume) engine.audio.setMusicVolume(settings.music);
+    engine.fpsCap = settings.fps; engine.saverMode = settings.saver; engine._pr = null; engine.resize();
     if (!settings.fullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
     engine.input.sensitivity = 0.0022 * settings.sens; engine.audio.setVolume(settings.volume); engine.audio.setMuted(!settings.sound);
     if (v.quality !== engine.qualityName) engine.setQuality(v.quality);

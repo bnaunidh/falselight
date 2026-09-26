@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=239df90c';
+import { drawMap } from './mapdraw.js?v=08bd4859';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -115,6 +115,7 @@ export function createUI(root = document.getElementById('ui')) {
       const m = openModal(`<div class="paper logbook"><div class="tabs">${tabs.map(([k, l]) => `<button data-p="${k}" class="${k === pg ? 'on' : ''}">${l}</button>`).join('')}</div><div class="page">${body}</div><div class="close">Tab / Esc</div></div>`, 'center', onClose);
       m.querySelectorAll('button[data-p]').forEach((b) => b.onclick = () => render(b.dataset.p));
       m.querySelectorAll('.thumb').forEach((t) => t.onclick = () => { data.onPhoto && data.onPhoto(t.dataset.id); });
+      if (data.onPage) data.onPage(pg);   // the game hears which page is open (reading the card again completes a task)
     };
     render(page);
   };
@@ -167,6 +168,8 @@ export function createUI(root = document.getElementById('ui')) {
         <label>Volume <input data-k="volume" type="range" min="0" max="1" step="0.05" value="${o.volume}"></label>
         <label>Music <input data-k="music" type="range" min="0" max="1" step="0.05" value="${o.music ?? 0.35}"></label>
         <button class="keysbtn" data-a="keys">Keys… <em>rebind any control</em></button>
+        <label>Frame rate <select data-k="fps">${[['30', '30 fps (cooler, longer battery)'], ['60', '60 fps'], ['0', 'uncapped']].map(([v, t]) => `<option value="${v}" ${String(o.fps ?? 60) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label>Battery saver <select data-k="saver">${[['auto', 'auto (on when unplugged)'], ['on', 'always on'], ['off', 'off']].map(([v, t]) => `<option value="${v}" ${(o.saver || 'auto') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         <label>Full screen <select data-k="fullscreen"><option value="on" ${o.fullscreen !== false ? 'selected' : ''}>on (Esc works in menus)</option><option value="off" ${o.fullscreen === false ? 'selected' : ''}>off</option></select></label>
         <button data-a="done">Done</button></div>`, 'center', () => { if (!left) { left = true; o.onDone(read()); } });
       let left = false;

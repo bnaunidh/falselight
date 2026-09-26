@@ -3,7 +3,7 @@
 // around but not walk, the clock runs 8x (if the game allows), fear and CO ease off, and each spot's quiet line
 // appears once. Any movement key, E or Esc (if the game wires it) gets you up. The rules live in chillSpots.js (pure).
 import * as THREE from 'three';
-import { CHILL_SPOTS, SEAT, SIT, ChillRules, seatFor, localToWorld, rotYFromBearing, facingFromBearing, mapSpots, canReach } from './chillSpots.js?v=239df90c';
+import { CHILL_SPOTS, SEAT, SIT, ChillRules, seatFor, localToWorld, rotYFromBearing, facingFromBearing, mapSpots, canReach } from './chillSpots.js?v=08bd4859';
 
 export { CHILL_SPOTS, mapSpots };
 

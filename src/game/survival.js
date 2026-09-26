@@ -1,6 +1,6 @@
 // Body and weather: air temperature (°F, the lookout is a 1983 Forest Service post), wind chill, the cab's own air,
 // thirst and hunger. Pure. Rates are per GAME hour, so resting on the bed costs water and food like real hours do.
-import { clamp } from './util.js?v=239df90c'
+import { clamp } from './util.js?v=08bd4859'
 
 export const SURV = {
   thirst: 1 / 16,       // a full water meter lasts 16 game hours

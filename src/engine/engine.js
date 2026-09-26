@@ -1,16 +1,16 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
-import { createInput } from './input.js?v=239df90c';
-import { createWorld } from './world.js?v=239df90c';
-import { createPlayer } from './player.js?v=239df90c';
-import { createSky } from './sky.js?v=239df90c';
-import { createLights } from './lights.js?v=239df90c';
-import { createPost } from './post.js?v=239df90c';
-import { createEntities, createView, createInteract } from './entities.js?v=239df90c';
-import { createAudio } from './audio.js?v=239df90c';
-import { createPhoto } from './photo.js?v=239df90c';
-import { createMountains } from './mountains.js?v=239df90c';
-import { tryJSON } from './util.js?v=239df90c';
+import { createInput } from './input.js?v=08bd4859';
+import { createWorld } from './world.js?v=08bd4859';
+import { createPlayer } from './player.js?v=08bd4859';
+import { createSky } from './sky.js?v=08bd4859';
+import { createLights } from './lights.js?v=08bd4859';
+import { createPost } from './post.js?v=08bd4859';
+import { createEntities, createView, createInteract } from './entities.js?v=08bd4859';
+import { createAudio } from './audio.js?v=08bd4859';
+import { createPhoto } from './photo.js?v=08bd4859';
+import { createMountains } from './mountains.js?v=08bd4859';
+import { tryJSON } from './util.js?v=08bd4859';
 
 export const QUALITY = {
   low: { pr: 0.75, prMin: 0.5, msaa: false, aniso: 4, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },
@@ -49,7 +49,7 @@ export async function createEngine(canvas, opts = {}) {
 
   function resize() {
     const w = canvas.clientWidth || window.innerWidth || 1440, h = canvas.clientHeight || window.innerHeight || 810;
-    const pr = E._pr || Math.min(window.devicePixelRatio || 1, quality.pr);
+    const pr = E._pr || Math.min(window.devicePixelRatio || 1, quality.pr) * (E.saving && E.saving() ? 0.8 : 1);
     renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
     E.post && E.post.resize(w, h, pr);
@@ -75,7 +75,13 @@ export async function createEngine(canvas, opts = {}) {
   };
 
   // ---------------------------------------------------------------- loop
-  let last = performance.now(), running = false, lastRAF = 0, fpsAcc = 0, fpsN = 0;
+  let last = performance.now(), running = false, lastRAF = 0, fpsAcc = 0, fpsN = 0, lastStep = 0;
+  // Battery: frames are capped (a 120 Hz screen would otherwise draw twice as often for nothing), menus / the title draw at
+  // 30, the pause screen at ~6, and on battery (saver 'auto' + unplugged, or 'on') the game runs at 30 with a lower resolution.
+  E.fpsCap = 60; E.idle = false; E.saverMode = 'auto'; E.onBattery = false;
+  E.saving = () => E.saverMode === 'on' || (E.saverMode === 'auto' && E.onBattery);
+  E.frameCap = () => (E.paused ? 6 : E.idle ? 30 : E.saving() ? 30 : E.fpsCap || 0);
+  try { navigator.getBattery && navigator.getBattery().then((b) => { const f = () => { const was = E.saving(); E.onBattery = !b.charging; if (was !== E.saving()) { E._pr = null; resize(); } }; f(); b.addEventListener('chargingchange', f); }).catch(() => {}); } catch (e) { /* no battery API */ }
   function tick(dt) {
     E.time.value += dt;
     const t = E.time.value;
@@ -93,6 +99,9 @@ export async function createEngine(canvas, opts = {}) {
     if (!running) return;
     lastRAF = now;
     requestAnimationFrame(frame);
+    const cap = E.frameCap();
+    if (cap > 0 && now - lastStep < 1000 / cap - 1.5) return;   // skip this vsync: we're ahead of the cap
+    lastStep = now;
     step(now);
   }
   // Adaptive resolution. Resizing clears the canvas, so a new size is applied BEFORE the frame renders (resizing after the
@@ -108,7 +117,8 @@ export async function createEngine(canvas, opts = {}) {
       E.fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
       if (E.adaptive && !E.paused) {
         const pr = renderer.getPixelRatio(), max = Math.min(window.devicePixelRatio || 1, quality.pr);
-        slowS = E.fps < 40 ? slowS + 1 : 0; fastS = E.fps > 57 ? fastS + 1 : 0;
+        const target = Math.min(60, E.frameCap() || 60);   // judge speed against the cap (30 fps on battery isn't 'slow')
+        slowS = E.fps < target * 0.66 ? slowS + 1 : 0; fastS = E.fps > target * 0.95 ? fastS + 1 : 0;
         let np = pr;
         if (slowS >= 3) { np = Math.max(quality.prMin || 0.5, pr - 0.1); slowS = 0; lastDrop = now; }
         else if (fastS >= 12 && now - lastDrop > 45000) { np = Math.min(max, pr + 0.05); fastS = 0; }
@@ -119,7 +129,8 @@ export async function createEngine(canvas, opts = {}) {
   E.start = () => {
     if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame);
     // hidden panes throttle rAF to nothing: keep the world alive at ~30 Hz if frames stop arriving
-    setInterval(() => { if (running && performance.now() - lastRAF > 250) step(performance.now()); }, 33);
+    // (never in a real hidden tab: that just burns battery; the Claude pane / headless tests are 'visible' but get no rAF)
+    setInterval(() => { if (running && performance.now() - lastRAF > 250 && (document.visibilityState === 'visible' || E.noRender)) step(performance.now()); }, 33);
   };
   E.setPaused = (b) => { E.paused = b; };
   E.resize = resize;
