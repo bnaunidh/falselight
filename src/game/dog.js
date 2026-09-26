@@ -6,8 +6,8 @@
 //   dog.update(dt, t) every frame while playing · dog.toJSON() / dog.restore(json) in the save
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { loadGLB } from '../engine/world.js?v=cd4f7406';
-import { DogBrain, DOG } from './dogBrain.js?v=cd4f7406';
+import { loadGLB } from '../engine/world.js?v=0cb07d852ed67db5';
+import { DogBrain, DOG } from './dogBrain.js?v=70d748b337aa8ef4';
 
 // gait clips as baked in Blender (char_dog.py): metres travelled per cycle
 const STRIDE = { walk: 0.484, trot: 0.857 };

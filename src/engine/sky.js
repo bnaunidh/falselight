@@ -1,8 +1,9 @@
 // FALSE LIGHT — sky & weather: HDRI sky dome blended across day/dusk/night, PMREM environment, sun/moon with a
 // player-following shadow frustum, fog, rain streaks, lightning.
 import * as THREE from 'three';
-import { loadHDR } from './hdr.js?v=cd4f7406';
-import { clamp, smoothstep, lerp } from './util.js?v=cd4f7406';
+import { loadHDR } from './hdr.js?v=9e47ea8e86973881';
+import { clamp, smoothstep, lerp } from './util.js?v=f2e9808ddd94306b';
+import { PRIO, SKY_SLOT, stageOfSky, skyPath } from './stream.js?v=f7881cfe4ef01982';
 
 const KEYS = [   // hour -> which HDRI + light settings
   { h: 0, sky: 'night', exp: 0.55, sun: 0.035, sunCol: [0.55, 0.65, 0.9], fog: [0.012, 0.016, 0.022], env: 0.35, amb: 0.03 },
@@ -16,22 +17,27 @@ const KEYS = [   // hour -> which HDRI + light settings
   { h: 24, sky: 'night', exp: 0.55, sun: 0.035, sunCol: [0.55, 0.65, 0.9], fog: [0.012, 0.016, 0.022], env: 0.35, amb: 0.03 },
 ];
 
-export async function createSky(engine, manifest, onProgress = () => {}) {
+// `stream` (stream.js): only the title's sky (dusk) is awaited here; the day sky comes with stage B (before New game), the
+// night sky with stage D (main.js holds the day-1 clock before dusk until it's in). Until a slot arrives the dome and the
+// environment use one that has (update() below), never a blank.
+export async function createSky(engine, manifest, onProgress = () => {}, stream = null) {
   const { scene, renderer } = engine;
   const pm = new THREE.PMREMGenerator(renderer);
-  const want = { day: 'kloofendal_overcast_puresky', dusk: 'qwantani_dusk_2_puresky', night: 'rogland_moonlit_night' };
   const tex = {}, env = {};
-  let k = 0;
-  for (const [slot, name] of Object.entries(want)) {
-    const p = manifest.hdri && manifest.hdri[name];
-    try { tex[slot] = p ? await loadHDR('assets/' + p) : null; } catch (e) { console.warn('hdri', name, e); tex[slot] = null; }
-    if (tex[slot]) env[slot] = pm.fromEquirectangular(tex[slot]).texture;
-    onProgress(++k / 3);
-  }
-  const blank = new THREE.DataTexture(new Uint16Array([15360, 15360, 15360, 15360]), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType); blank.needsUpdate = true;
+  const loadSlot = async (slot, name) => {
+    const p = skyPath(manifest, name);   // the site's .sky.bin, else the .hdr
+    try {
+      const t = p ? await loadHDR(p, null, PRIO[stageOfSky(name)]) : null;
+      if (t) { tex[slot] = t; env[slot] = pm.fromEquirectangular(t).texture; }
+    } catch (e) { console.warn('hdri', name, e); }
+  };
+  const jobs = Object.entries(SKY_SLOT).map(([slot, name]) => { const st = stageOfSky(name), pr = loadSlot(slot, name); if (stream && st !== 'A') stream.track(st, pr); return [st, pr]; });
+  await Promise.all(jobs.filter(([st]) => !stream || st === 'A').map(([, pr]) => pr));
+  onProgress(1);
+  const hb = THREE.DataUtils.toHalfFloat(0.05), blank = new THREE.DataTexture(new Uint16Array([hb, hb, hb, 15360]), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType); blank.needsUpdate = true;   // no sky at all: a dim grey, never a white dome
   // sky dome: blends two equirect HDRIs, fades into the fog colour at the horizon (aerial perspective)
   const U = {
-    uA: { value: tex.day || blank }, uB: { value: tex.day || blank }, uMix: { value: 0 }, uExp: { value: 1 },
+    uA: { value: tex.dusk || tex.day || tex.night || blank }, uB: { value: tex.dusk || tex.day || tex.night || blank }, uMix: { value: 0 }, uExp: { value: 1 },
     uFog: { value: new THREE.Color() }, uFlash: { value: 0 }, uRot: { value: 0 }, uCloudDark: { value: 0 },
   };
   const dome = new THREE.Mesh(new THREE.SphereGeometry(9000, 48, 24), new THREE.ShaderMaterial({
@@ -96,7 +102,9 @@ export async function createSky(engine, manifest, onProgress = () => {}) {
       const L = (k) => lerp(a[k], b[k], f);
       const La = (k) => a[k].map((v, j) => lerp(v, b[k][j], f));
       // sky textures
-      U.uA.value = tex[a.sky] || tex.day || blank; U.uB.value = tex[b.sky] || tex.day || blank; U.uMix.value = f;
+      // a sky that hasn't arrived yet (the public site streams them) falls back to whatever has: never the flat white blank
+      const T = (slot) => tex[slot] || tex.dusk || tex.day || tex.night || blank;
+      U.uA.value = T(a.sky); U.uB.value = T(b.sky); U.uMix.value = f;
       const storm = S.weather.rain * 0.7 + S.weather.fog * 0.2;
       U.uExp.value = L('exp') * (1 - storm * 0.55); U.uCloudDark.value = 0;
       S.dayFactor = clamp((L('sun') - 0.1) / 1.2, 0, 1);

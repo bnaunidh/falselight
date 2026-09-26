@@ -9,7 +9,9 @@
 // while muted the AudioContext is suspended (after the master fades out): no audio-thread work, no one-shots, no warm-up,
 // no sample downloads, the score's scheduler stopped. Every master / per-play gain change is ramped.
 import * as THREE from 'three';
-import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=cd4f7406';
+import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=a3b46172ad33fc64';
+import { loadq } from './loadq.js?v=3479c8521344c615';
+const AUDIO_PRIO = 1.5;   // recorded samples ride the download queue: after what New game needs, before the forest streaming in
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -347,8 +349,7 @@ export function createAudio(engine, opts = {}) {
   async function loadAmbience() {
     await Promise.all(Object.entries(AMB).map(async ([k, f]) => {
       try {
-        const r = await fetch('assets/audio/' + f); if (!r.ok) return;
-        const buf = await ctx.decodeAudioData(await r.arrayBuffer());
+        const buf = await ctx.decodeAudioData(await loadq.take('assets/audio/' + f, AUDIO_PRIO));
         const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
         const g = gain(0, bus.amb);
         if (k === 'rain') { const lp = filt('lowpass', 9000); src.connect(lp); lp.connect(g); rec.rainLP = lp; } else src.connect(g);
@@ -361,7 +362,7 @@ export function createAudio(engine, opts = {}) {
     loadAmbience();
     const names = [...new Set(Object.values(SAMPLE_SETS).flat())];
     await Promise.all(names.map(async (n) => {
-      try { const r = await fetch('assets/audio/' + n + '.ogg'); if (!r.ok) return; samples[n] = await ctx.decodeAudioData(await r.arrayBuffer()); } catch (e) { /* keep the procedural fallback */ }
+      try { samples[n] = await ctx.decodeAudioData(await loadq.take('assets/audio/' + n + '.ogg', AUDIO_PRIO)); } catch (e) { /* keep the procedural fallback */ }
     }));
   }
   function playSample(set, dest, v, rate = 1, t = 0) {

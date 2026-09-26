@@ -1,7 +1,7 @@
 // Carbon monoxide from the cab's propane heater. Pure.
 // Heater on + windows shut → the cab air fills → your blood follows → real hallucinations.
 // Windows open → your head clears, but you get cold (breath fog, shivering, stiff hands).
-import { clamp } from './util.js?v=cd4f7406'
+import { clamp } from './util.js?v=d92670d68201cefe'
 
 export const COCFG = {
   rise: 0.0034,          // cab air per second, heater on, all shut

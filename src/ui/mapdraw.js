@@ -17,6 +17,7 @@
 //   heading   radians, three.js yaw (forward = (-sin, -cos) in x/z; 0 = north)     optional: the arrow's direction
 //   dpr       optional: canvas.width / CSS width (draw in CSS pixels, stay sharp on Retina)
 // World axes: +x east, -z north. Returns { ms, cached, view, benches: [{ id, x, y, box }], labels: [screen boxes] }.
+import { drawPencil, pencilPoints } from '../game/northWoods.js?v=38b24fd4e4e18620';
 
 export const ELEV0 = 1750;             // metres above sea level of the ground at the tower (world y = 0)
 export const CONTOUR = 10, INDEX = 50;
@@ -43,6 +44,7 @@ export function mapView(data, W, H) {
   for (const p of Object.values(data.places || {})) if (p) inc(p[0], p[2]);
   for (const s of data.spots || []) if (s && s.pos) inc(s.pos[0], s.pos[2]);
   if (data.player) inc(data.player[0], data.player[2]);
+  for (const p of pencilPoints(data.pencil)) inc(p[0], p[1]);   // your own pencil marks stay on the sheet
   if (!Number.isFinite(x0)) { x0 = -200; x1 = 200; z0 = -200; z1 = 200; }
   const pad = 42; x0 -= pad; x1 += pad; z0 -= pad; z1 += pad;
   const panelW = W / H > 1.12 ? Math.round(clamp(W * 0.27, 250, 340)) : 0;
@@ -501,6 +503,7 @@ export function drawMap(canvas, data = {}) {
     if (BOXES) BOXES.push(bb);   // so "YOU ARE HERE" keeps off it too
     benches.push({ id: s.id, x, y, box: bb });
   }
+  drawPencil(g, view, k, data.pencil);   // what you've found out there, pencilled in by hand (never printed)
   // you are here
   if (data.player) {
     const x = px(data.player[0]), y = py(data.player[2]);

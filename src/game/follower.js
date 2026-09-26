@@ -4,7 +4,7 @@
 //   Stand still in the dark (no light) and it doesn't stay stopped: the steps come closer, then breathing. Too close: that's it.
 //   Turn round with the flashlight on and you catch it: a crash through the brush, running, and it hangs back a while.
 //   Walk out toward the trail and it lets you go (the last steps stop at the tree line).
-import { clamp } from './util.js?v=cd4f7406'
+import { clamp } from './util.js?v=d92670d68201cefe'
 
 export const FOLLOW = {
   onDepth: 0.4, offDepth: 0.22,   // where it picks you up / lets you go (player.depth: 0 trail … 1 deep)

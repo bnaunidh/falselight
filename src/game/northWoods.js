@@ -113,7 +113,7 @@ export const CACHE_SHELVES = [0.75, 1.35, 1.95];   // shelf board tops, both lon
 export const CACHE_LOCAL = {
   door: [0.62, 1.1, 3.36],       // outside, at the hasp (unlock / break / open / shut)
   doorIn: [0, 1.25, 2.5],        // inside: open / shut
-  sheet: [-1.96, 1.45, 1.86],    // the sign-out clipboard, on the west wall by the door
+  sheet: [-1.97, 1.45, 1.77],    // the sign-out clipboard, on a stud of the west wall by the door
   toolbox: [1.7, 0.66, 4.02],    // the red FIRE TOOLS box, outside right of the door
   boot: [-0.72, CACHE_FLOOR, 2.2],
   inside: [0, CACHE_FLOOR, 0.4], front: [0, 0, 4.8], hinge: [-0.65, 0.2, 3.07],

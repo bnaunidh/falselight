@@ -1,7 +1,7 @@
 // FALSE LIGHT — first-person player: walking/jogging, capsule vs COL_wall OBBs, ground from the heightfield and
 // raycasts onto COL_floor/COL_ramp (stairs climb smoothly), the trail-corridor rule, head bob, footsteps.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=cd4f7406';
+import { clamp, damp } from './util.js?v=f2e9808ddd94306b';
 
 const EYE = 1.65, RADIUS = 0.3, STEP = 0.5;
 
@@ -91,7 +91,7 @@ export function createPlayer(engine) {
     const rav = w.layout && w.layout.ravine && w.layout.ravine.polygon;
     if (rav && rav.length > 2 && inPoly(x, z, rav)) { api.blockedWhy = 'ravine'; return false; }
     if (w.rect && (x < w.rect.min[0] + BORDER || x > w.rect.max[0] - BORDER || z < w.rect.min[1] + BORDER || z > w.rect.max[1] - BORDER)) { api.blockedWhy = 'mountains'; return false; }
-    if (api.extraBlocked && api.extraBlocked(x, z)) { api.blockedWhy = 'thicket'; return false; }
+    const xb = api.extraBlocked && api.extraBlocked(x, z); if (xb) { api.blockedWhy = typeof xb === 'string' ? xb : 'thicket'; return false; }
     return true;
   }
   function pushOutTrunks(p) {   // tree trunks are solid once you're off the trail

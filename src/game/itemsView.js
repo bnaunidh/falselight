@@ -3,10 +3,11 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=cd4f7406';
-import { makeTentBag } from './tents.js?v=cd4f7406';
-const PROC = { tentBag: makeTentBag };   // items built here rather than loaded
-import { createSurfaces } from './surfaces.js?v=cd4f7406';
+import { KINDS } from './items.js?v=0a1e69d327a2184c';
+import { makeTentBag } from './tents.js?v=8256affaddf0bab6';
+import { makeCacheKey, makeFilmPack, makeWaterJug } from './fireCache.js?v=e8cfe5ff077d6729';
+const PROC = { tentBag: makeTentBag, cacheKey: makeCacheKey, filmPack: makeFilmPack, waterJug: makeWaterJug };   // items built here rather than loaded
+import { createSurfaces } from './surfaces.js?v=a693dd057324b286';
 
 export function createItemsView(engine) {
   const { scene, camera } = engine;
@@ -67,7 +68,7 @@ export function createItemsView(engine) {
     set(meshes.get(item.id)); if (vm && vmKind === 'lantern' && item.where === 'hand') set(vm);
   };   // (the beam shows it's on; a lens glow read as a halo from behind)
   const HOLD = { lantern: [0.19, -0.3, -0.38], clock: [0.12, -0.12, -0.24], pot: [0.15, -0.2, -0.3], oldcan: [0.12, -0.13, -0.24], fuel: [0.17, -0.17, -0.3], flashlight: [0.125, -0.12, -0.25], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
-    canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23], pills: [0.1, -0.1, -0.21], tent: [0.13, -0.17, -0.3] };
+    canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23], pills: [0.1, -0.1, -0.21], tent: [0.13, -0.17, -0.3], key: [0.1, -0.1, -0.21], film: [0.11, -0.11, -0.23], water: [0.14, -0.19, -0.3] };
   V.hold = (kind, t = 0, moving = 0) => {
     if (kind !== vmKind || (!vm && kind && T[kind] && HOLD[kind])) {
       if (vm) { camera.remove(vm); vm = null; }

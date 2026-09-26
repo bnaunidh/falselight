@@ -2,7 +2,7 @@
 // Produces a HalfFloat RGBA DataTexture (equirectangular) plus a few statistics the sky uses:
 // average horizon colour, zenith colour, mean luminance and the azimuth of the brightest spot (sun/moon).
 import * as THREE from 'three';
-import { fetchBuffer } from './util.js?v=cd4f7406';
+import { loadq } from './loadq.js?v=3479c8521344c615';
 
 // (mantissa, exponent) -> half-float bits lookup; RGBE value = m * 2^(e-136)
 let HALF_LUT = null;
@@ -100,10 +100,51 @@ export function hdrStats({ width: W, height: H, rgbe }) {
     peakLum: best, peakU: bestAz, peakEl: bestEl };
 }
 
-export async function loadHDR(path, onProgress) {
-  const buf = await fetchBuffer(path, onProgress);
-  const img = parseRGBE(buf);
+// The public site's skies (tools/build_site.py): 'FLSK' + u32 [version, W, H, K, LW, LH], then the top K rows (d.y down to
+// about -0.047, i.e. everything the dome shows) exactly, as 4 planes (R, G, B, E) of rows stored as differences from the
+// left neighbour; then the rest of the sphere as a small LW x LH RGBE image (same coding) that only feeds the blurred
+// environment map. Returns parseRGBE's shape (rgbe = the exact rows, GL order) plus the small lower image.
+export function parseSkyBin(buffer) {
+  const b = new Uint8Array(buffer);
+  if (b.length < 28 || b[0] !== 70 || b[1] !== 76 || b[2] !== 83 || b[3] !== 75) throw new Error('not a FALSE LIGHT sky');
+  const dv = new DataView(b.buffer, b.byteOffset, 28);
+  const [, W, H, K, LW, LH] = [0, 1, 2, 3, 4, 5].map((i) => dv.getUint32(4 + i * 4, true));
+  if (b.length < 28 + 4 * (K * W + LW * LH)) throw new Error('sky truncated');
+  const rgbe = new Uint8Array(W * H * 4);
+  let p = 28;
+  for (let c = 0; c < 4; c++) for (let y = 0; y < K; y++) {   // top-origin row y -> GL row H-1-y (row 0 = nadir, as parseRGBE)
+    let acc = 0, o = (H - 1 - y) * W * 4 + c;
+    for (let x = 0; x < W; x++, o += 4) { acc = (acc + b[p++]) & 255; rgbe[o] = acc; }
+  }
+  const lr = new Uint8Array(LW * LH * 4);
+  for (let c = 0; c < 4; c++) for (let y = 0; y < LH; y++) { let acc = 0; for (let x = 0; x < LW; x++) { acc = (acc + b[p++]) & 255; lr[(y * LW + x) * 4 + c] = acc; } }
+  const low = new Float32Array(LW * LH * 3);
+  for (let i = 0; i < LW * LH; i++) { const e = lr[i * 4 + 3], f = e ? Math.pow(2, e - 136) : 0; for (let c = 0; c < 3; c++) low[i * 3 + c] = lr[i * 4 + c] ? (lr[i * 4 + c] + 0.5) * f : 0; }
+  return { width: W, height: H, rgbe, exposure: 1, keep: K, low, lowW: LW, lowH: LH };
+}
+// fill the GL rows below the exact part (top-origin rows K..H-1) of a half-float RGBA array by bilinear upsampling
+function fillLower(out, { width: W, height: H, keep: K, low, lowW: LW, lowH: LH }) {
+  const s = (H - K) / LH, sx = W / LW, row = new Float32Array(LW * 3), toHalf = THREE.DataUtils.toHalfFloat;
+  for (let y = K; y < H; y++) {
+    let ly = (y - K + 0.5) / s - 0.5; ly = Math.min(LH - 1, Math.max(0, ly));
+    const y0 = Math.floor(ly), y1 = Math.min(LH - 1, y0 + 1), fy = ly - y0;
+    for (let i = 0; i < LW * 3; i++) row[i] = low[y0 * LW * 3 + i] * (1 - fy) + low[y1 * LW * 3 + i] * fy;
+    const o0 = (H - 1 - y) * W * 4;
+    for (let x = 0; x < W; x++) {
+      const lx = (x + 0.5) / sx - 0.5, xf = Math.floor(lx), fx = lx - xf;
+      const x0 = ((xf % LW) + LW) % LW, x1 = (x0 + 1) % LW, o = o0 + x * 4;
+      for (let c = 0; c < 3; c++) out[o + c] = toHalf(Math.min(65000, row[x0 * 3 + c] * (1 - fx) + row[x1 * 3 + c] * fx));
+    }
+  }
+}
+
+export async function loadHDR(path, onProgress, prio = 1) {
+  const buf = await loadq.take(path, prio);   // (through the download queue: counted, prioritised, ?v-stamped on the site)
+  if (onProgress) onProgress(1);
+  const sky = /\.sky\.bin(\?|$)/.test(path);
+  const img = sky ? parseSkyBin(buf) : parseRGBE(buf);
   const data = rgbeToHalf(img);
+  if (sky) fillLower(data, img);
   const tex = new THREE.DataTexture(data, img.width, img.height, THREE.RGBAFormat, THREE.HalfFloatType);
   tex.mapping = THREE.EquirectangularReflectionMapping;
   tex.colorSpace = THREE.LinearSRGBColorSpace;

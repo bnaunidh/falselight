@@ -1,8 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=cd4f7406';
-import { createOverlays } from './overlays.js?v=cd4f7406';
+import { drawMap } from './mapdraw.js?v=a1c2c13dfaee14dc';
+import { createOverlays } from './overlays.js?v=03c410562b019ac7';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -229,13 +229,27 @@ export function createUI(root = document.getElementById('ui')) {
       m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => o.onAction(b.dataset.a));
     }
   };
-  U.loading = (f, label) => {
-    let l = document.getElementById('fl-loading');
-    if (f == null) { if (l) l.remove(); return; }
-    if (!l) { l = $('div', '', document.body); l.id = 'fl-loading'; l.innerHTML = '<div class="t">FALSE LIGHT</div><div class="bar"><i></i></div><div class="l"></div><div class="tip"></div>'; }
-    const tips = ['Stay on the trail.', 'Count before you answer.', 'Keep one can of fuel above the gate.', 'A real hiker\'s light bobs when they walk.', 'The stairs are not yours after dark.'];
-    l.querySelector('.tip').textContent = tips[Math.floor(Date.now() / 6000) % tips.length];
-    l.querySelector('i').style.width = Math.round(f * 100) + '%'; l.querySelector('.l').textContent = label || '';
+  // The loading bar lives on the boot poster that index.html paints before any script (#fl-boot). U.loading(f, label) sets
+  // the bar (0..1) and its line; U.loading(null) hides the line; U.loading(f, label, mode) also moves the poster on:
+  // 'boot' (poster + title) -> 'menu' (the title menu is drawn over it) -> 'scene' (the live backdrop shows through) ->
+  // 'play' (only the line, and only when there is something to wait for); 'wait' marks a line the player is waiting on;
+  // 'gone' removes the poster.
+  const TIPS = ['Stay on the trail.', 'Count before you answer.', 'Keep one can of fuel above the gate.', 'A real hiker\'s light bobs when they walk.', 'The stairs are not yours after dark.'];
+  let tipTimer = null;
+  U.loading = (f, label, mode) => {
+    let l = document.getElementById('fl-boot');
+    if (!l) {   // (a page without the poster: build one)
+      l = $('div', '', document.body); l.id = 'fl-boot'; l.dataset.mode = 'boot';
+      l.innerHTML = '<div class="t2-left"><h1 class="t2-title">FALSE<br>LIGHT</h1></div><div class="fl-boot-status"><div class="l"></div><div class="bar"><i></i></div><div class="tip"></div></div>';
+    }
+    if (mode === 'gone') { l.classList.add('gone'); clearInterval(tipTimer); setTimeout(() => l.remove(), 1300); return; }
+    if (mode === 'wait') l.classList.add('wait'); else if (mode) { l.classList.remove('wait'); l.dataset.mode = mode; }
+    const tip = l.querySelector('.tip');
+    if (tip && !tipTimer) { const put = () => { tip.textContent = TIPS[Math.floor(Date.now() / 6000) % TIPS.length]; }; put(); tipTimer = setInterval(put, 6000); }
+    l.classList.toggle('on', f != null); l.classList.toggle('idle', f == null);
+    if (f == null) { l.classList.remove('wait'); return; }
+    l.querySelector('.bar i').style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%';
+    if (label != null) l.querySelector('.l').textContent = label;
   };
   U.update = (dt) => {
     if (subTimer > 0) { subTimer -= dt; if (subTimer <= 0) subs.style.opacity = 0; }

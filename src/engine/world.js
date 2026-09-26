@@ -2,9 +2,47 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=cd4f7406';
+import { clamp, smoothstep, fbm, hash2 } from './util.js?v=f2e9808ddd94306b';
+import { loadq, tryTakeJSON } from './loadq.js?v=3479c8521344c615';
+import { stageOfModel, PRIO } from './stream.js?v=f7881cfe4ef01982';
 
 const loader = new GLTFLoader();
+// The public site's GLBs point at shared, content-named texture files (tools/optimize_glb.py: tex/<hash>.webp|jpg|png).
+// Those come through the download queue (counted, prioritised, fetched once) and reach the loader as blob: URLs; and a
+// file used by several models is decoded ONCE: every model gets its own Texture on the one Source (one GPU upload).
+const texBlobs = new Map();       // 'assets/models/tex/x.webp' -> { url, refs }
+const sharedSources = new Map();  // 'tex/x.webp' -> Promise<Texture> (the first model's)
+loader.manager.setURLModifier((u) => { const b = texBlobs.get(u); return b ? b.url : u; });
+loader.register((parser) => {
+  const own = parser.loadImageSource.bind(parser);
+  parser.loadImageSource = (i, ldr) => {
+    const uri = parser.json.images[i] && parser.json.images[i].uri;
+    if (typeof uri !== 'string' || !uri.startsWith('tex/')) return own(i, ldr);
+    if (!sharedSources.has(uri)) { const p = own(i, ldr); sharedSources.set(uri, p); p.catch(() => sharedSources.delete(uri)); }
+    return sharedSources.get(uri).then((t) => t.clone());
+  };
+  return { name: 'FL_shared_texture_files' };
+});
+const IMG_TYPE = { webp: 'image/webp', jpg: 'image/jpeg', png: 'image/png' };
+async function texBlob(path, prio) {   // a blob: URL for one texture file, reference-counted (dropped when no load needs it)
+  let b = texBlobs.get(path);
+  if (!b) {
+    b = { url: null, refs: 0 };
+    texBlobs.set(path, b);
+    b.ready = loadq.take(path, prio).then((buf) => { b.url = URL.createObjectURL(new Blob([buf], { type: IMG_TYPE[path.split('.').pop()] || '' })); }, () => { texBlobs.delete(path); });
+  }
+  b.refs++;
+  await b.ready;
+  return b;
+}
+function dropBlob(path) { const b = texBlobs.get(path); if (b && --b.refs <= 0) { if (b.url) URL.revokeObjectURL(b.url); texBlobs.delete(path); } }
+function texURIs(buf) {   // the external 'tex/' images a GLB names (from its JSON chunk)
+  try {
+    const dv = new DataView(buf); if (dv.getUint32(0, true) !== 0x46546C67) return [];
+    const js = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, dv.getUint32(12, true))));
+    return [...new Set((js.images || []).map((im) => im.uri).filter((u) => typeof u === 'string' && u.startsWith('tex/')))];
+  } catch (e) { return []; }
+}
 // Glass you can see: at a glancing angle a pane goes silver with reflection (Fresnel), so a shut window reads as glass and
 // an open one as a hole. The sashes (the panes that slide open) also carry forty summers of grime: a dirty lower edge,
 // thumb smudges by the pull, dried rain streaks.
@@ -35,9 +73,22 @@ function sashGlass(base) {
 }
 
 export const gltfCache = new Map();
-export async function loadGLB(path) {
-  if (!gltfCache.has(path)) gltfCache.set(path, loader.loadAsync(assetURL(path)));
+/** A parsed GLB, loaded once per path (every caller shares it). The bytes come through the download queue. */
+export async function loadGLB(path, prio = PRIO.B) {
+  if (!gltfCache.has(path)) gltfCache.set(path, (async () => {
+    const buf = await loadq.take(path, prio);
+    const base = path.slice(0, path.lastIndexOf('/') + 1);
+    const need = texURIs(buf).filter((u) => !sharedSources.has(u)).map((u) => base + u);
+    await Promise.all(need.map((p) => texBlob(p, prio)));
+    try { return await loader.parseAsync(buf, base); } finally { need.forEach(dropBlob); }
+  })());
   return gltfCache.get(path);
+}
+/** Load an image (terrain layers, the splat map) through the queue. */
+async function queuedBitmap(path, prio, opts = {}) {
+  const buf = await loadq.take(path, prio);
+  const blob = new Blob([buf], { type: IMG_TYPE[path.split('?')[0].split('.').pop()] || 'image/jpeg' });
+  return createImageBitmap(blob, { imageOrientation: opts.flipY ? 'flipY' : 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
 }
 
 // ------------------------------------------------------------------ polyline nearest-point index
@@ -84,20 +135,41 @@ class TrailIndex {
   }
 }
 
+// heightfield as uint16 steps stored as residuals r = q - (left + up - upleft) mod 65536, high-byte plane then low-byte
+// plane (tools/build_site.py); rebuilt into the same float array the rest of the engine reads
+function decodeHeightU16(buf, W, Hn, { yMin, step }) {
+  const b = new Uint8Array(buf), n = W * Hn;
+  if (b.length < n * 2) throw new Error('height u16 truncated');
+  const q = new Uint16Array(n), out = new Float32Array(n);
+  for (let j = 0, k = 0; j < Hn; j++) {
+    for (let i = 0; i < W; i++, k++) {
+      const pred = (i ? q[k - 1] : 0) + (j ? q[k - W] : 0) - (i && j ? q[k - W - 1] : 0);
+      const v = (pred + ((b[k] << 8) | b[n + k])) & 0xFFFF;
+      q[k] = v; out[k] = yMin + v * step;
+    }
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------ terrain splat material
 async function buildLayerArrays(names, manifest, size = 1024) {
   const kinds = { diff: [], arm: [], nor_gl: [] };
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  // all twelve layer images download at once (the site ships them at 1024, plus a 512 set for the low setting); they're
+  // drawn into the one canvas in order below
+  const pathOf = (t, kind) => t && ((size <= 512 && t[kind + '_512']) || t[kind]);
+  const bmps = {}, byPath = new Map();
+  const bitmap = (p) => { if (!byPath.has(p)) { const pr = queuedBitmap('assets/' + p, PRIO.A); pr.catch(() => {}); byPath.set(p, pr); } return byPath.get(p); };
+  for (const kind of Object.keys(kinds)) bmps[kind] = names.map((nm) => { const p = pathOf(manifest.textures && manifest.textures[nm], kind); return p ? bitmap(p) : null; });
   for (const kind of Object.keys(kinds)) {
     const data = new Uint8Array(size * size * 4 * names.length);
     for (let li = 0; li < names.length; li++) {
-      const t = manifest.textures && manifest.textures[names[li]];
       let ok = false;
-      if (t && t[kind]) {
+      if (bmps[kind][li]) {
         try {
-          const bmp = await loadImageBitmap('assets/' + t[kind]);
-          ctx.drawImage(bmp, 0, 0, size, size); bmp.close && bmp.close();
+          const bmp = await bmps[kind][li];
+          ctx.drawImage(bmp, 0, 0, size, size);
           data.set(ctx.getImageData(0, 0, size, size).data, li * size * size * 4); ok = true;
         } catch (e) { console.warn('terrain layer', names[li], kind, e); }
       }
@@ -118,6 +190,7 @@ async function buildLayerArrays(names, manifest, size = 1024) {
     tex.needsUpdate = true;
     kinds[kind] = tex;
   }
+  for (const pr of byPath.values()) pr.then((b) => b.close && b.close(), () => {});
   return kinds;
 }
 
@@ -230,7 +303,9 @@ function patchWind(mat, soft) {
   ${soft ? '' : 'transformed.xz += vec2(sin(uFLTime * 0.37 + ph * 0.3), cos(uFLTime * 0.29 + ph * 0.3)) * uFLWind * 0.35 * pow(max(position.y, 0.0) / 50.0, 2.0);'}
 }`);
   };
-  mat.customProgramCacheKey = () => 'fl-wind-' + (soft ? 's' : 't') + mat.uuid;
+  // the injected GLSL depends only on `soft` (the uniforms point at the shared WIND objects, wired per material by
+  // onBeforeCompile), so every veg material of a kind of wind can share one program: ~4 compiles instead of ~49
+  mat.customProgramCacheKey = () => 'fl-wind-' + (soft ? 's' : 't');
 }
 
 function prepVegMaterial(mat, isFoliage, msaa) {
@@ -246,7 +321,7 @@ function prepVegMaterial(mat, isFoliage, msaa) {
 
 class VegSet {
   constructor(kind, lods, placements, ranges, opts) {
-    this.kind = kind; this.lods = lods; this.inst = placements; this.ranges = ranges;
+    this.kind = kind; this.lods = lods; this.inst = placements; this.ranges = ranges; this.fadeIn = !!opts.fadeIn;
     this.group = new THREE.Group(); this.group.name = 'veg:' + kind;
     this.meshes = lods.map((parts, li) => parts.map((p) => {
       const geo = p.geometry.clone();
@@ -304,14 +379,15 @@ class VegSet {
       const d = Math.sqrt((p[0] - cx) ** 2 + (p[2] - cz) ** 2);
       let want = top; for (let li = 0; li < top; li++) if (d < R[li]) { want = li; break; }
       const c = cur[i];
-      if (c < 0) { cur[i] = want; tr[i] = 1; }
+      if (c < 0) { cur[i] = want; from[i] = -1; tr[i] = this.fadeIn ? 0 : 1; }   // (a kind that streamed in: dissolves in)
       else if (want !== c) {
         const edge = R[Math.min(want, c)], H = Math.max(2, edge * 0.035);
         if (Math.abs(d - edge) > H && tr[i] >= 1) { from[i] = c; cur[i] = want; tr[i] = 0; }   // past the slack: start the dissolve
       }
       if (tr[i] >= 1) push(cur[i], i, 1);
-      else { const a = push(from[i], i, 1 - tr[i]), b = push(cur[i], i, -tr[i]); slots.push(i, from[i], a, cur[i], b); }
+      else { const a = from[i] >= 0 ? push(from[i], i, 1 - tr[i]) : -1, b = push(cur[i], i, -tr[i]); slots.push(i, from[i], a, cur[i], b); }
     }
+    this.fadeIn = false;
     this.meshes.forEach((parts, li) => parts.forEach((im) => {
       im.count = counts[li];
       const a = im.instanceMatrix, fa = im.geometry.attributes.instFade;
@@ -336,8 +412,8 @@ class VegSet {
   }
 }
 
-async function loadVegKind(kind, path, msaa) {
-  const g = await loadGLB(path);
+async function loadVegKind(kind, path, msaa, prio) {
+  const g = await loadGLB(path, prio);
   const root = g.scene; root.updateMatrixWorld(true);
   const lodRoots = [0, 1, 2].map((i) => root.getObjectByName(`${kind}_LOD${i}`)).filter(Boolean);
   const roots = lodRoots.length ? lodRoots : [root];
@@ -402,19 +478,26 @@ function buildHorizon(heightAt, rect, fireSites) {
 }
 
 // ------------------------------------------------------------------ the world
-export async function createWorld(engine, manifest, onProgress = () => {}) {
+// `stream` (engine.js / stream.js) says which download stage each model belongs to. createWorld resolves once the title's
+// set (stage A: terrain, tower, the big trees) is built; everything else keeps arriving and registers itself as it lands
+// (colliders, anchors, surfaces, vegetation + its trunks), and stream.ready(stage) tells the game when a stage is in.
+export async function createWorld(engine, manifest, onProgress = () => {}, stream = null) {
   const { scene } = engine;
   const W = { anchors: new Map(), colliders: [], layout: null, fires: new Map(), objects: new Map(), vegSets: [], modelRoots: [] };
   const prog = (f, label) => onProgress(f, label);
+  const track = (stage, p) => (stream ? stream.track(stage, p) : p);
+  const stageOf = (name) => stageOfModel(name, manifest.models && manifest.models[name]);
+  let built = false;   // past the title set: from here on, arrivals update the live world
 
   // --- layout + heightfield
-  const layout = (await tryJSON('assets/data/layout.json')) || (await tryJSON('docs/layout_plan.json')) || { places: {} };
+  const layout = (await tryTakeJSON('assets/data/layout.json', PRIO.A)) || (await tryTakeJSON('docs/layout_plan.json', PRIO.A)) || { places: {} };
   W.layout = layout;
-  const hmeta = await tryJSON('assets/data/terrain_height.json');
+  const hmeta = await tryTakeJSON('assets/data/terrain_height.json', PRIO.A);
   let H = null, HW = 0, HH = 0, hx0 = 0, hz0 = 0, hc = 1;
   if (hmeta) {
-    try { H = new Float32Array(await fetchBuffer('assets/data/terrain_height.bin', (f) => prog(0.05 + f * 0.1, 'terrain'))); } catch (e) { console.warn('height bin', e); }
     [HW, HH] = hmeta.size; [hx0, hz0] = hmeta.origin; hc = hmeta.cell;
+    const u = hmeta.u16;   // the public site: 1.3 mm steps as prediction residuals (tools/build_site.py), a third of the bytes
+    try { H = u ? decodeHeightU16(await loadq.take('assets/' + u.path, PRIO.A), HW, HH, u) : new Float32Array(await loadq.take('assets/data/terrain_height.bin', PRIO.A)); } catch (e) { console.warn('height bin', e); }
   }
   const heightAt = (x, z) => {
     if (!H) return 0;
@@ -441,7 +524,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   };
 
   // --- terrain mesh
-  const splatJ = await tryJSON('assets/data/terrain_splat.json');
+  const splatJ = await tryTakeJSON('assets/data/terrain_splat.json', PRIO.A);
   const L = splatJ ? splatJ.layers : null;
   const names = L ? [L.r.name, L.g.name, L.b.name, (L.burn || L.a || L.r).name] : ['forest_floor', 'rocky_trail', 'mossy_rock', 'burned_ground_01'];
   const tiles = L ? [L.r.tileMeters, L.g.tileMeters, L.b.tileMeters, (L.burn || L.r).tileMeters] : [3.2, 2.2, 3, 3];
@@ -449,7 +532,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   const arrays = await buildLayerArrays(names, manifest, engine.quality.terrainTex);
   let splatTex;
   try {
-    const bmp = await loadImageBitmap('assets/data/terrain_splat.png', { flipY: false });
+    const bmp = await queuedBitmap('assets/data/terrain_splat.png', PRIO.A, { flipY: false });
     splatTex = new THREE.Texture(bmp); splatTex.flipY = false; splatTex.needsUpdate = true;
   } catch (e) {
     splatTex = new THREE.DataTexture(new Uint8Array([200, 30, 25, 255]), 1, 1); splatTex.needsUpdate = true;
@@ -469,33 +552,36 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
       const x = x0 + i * step, z = z0 + j * step; const y = heightAt(x, z); const nv = hN(x, z);
       pos[k * 3] = x; pos[k * 3 + 1] = y; pos[k * 3 + 2] = z; nor[k * 3] = nv.x; nor[k * 3 + 1] = nv.y; nor[k * 3 + 2] = nv.z; k++;
     }
-    const idx = [];
-    for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i, b = a + 1, c = a + n, d = c + 1; idx.push(a, c, b, b, c, d); }
+    const idx = new (k + n * 4 > 65535 ? Uint32Array : Uint16Array)(((n - 1) * (n - 1) + 4 * (n - 1)) * 6); let q = 0;
+    for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i, b = a + 1, c = a + n, d = c + 1; idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d; }
     // skirts (hide LOD cracks)
     const edges = [[...Array(n).keys()].map((i) => i), [...Array(n).keys()].map((i) => i * n + n - 1), [...Array(n).keys()].map((i) => (n - 1) * n + (n - 1 - i)), [...Array(n).keys()].map((i) => (n - 1 - i) * n)];
     for (const e of edges) {
       const start = k;
       for (const vi of e) { pos[k * 3] = pos[vi * 3]; pos[k * 3 + 1] = pos[vi * 3 + 1] - 2.5; pos[k * 3 + 2] = pos[vi * 3 + 2]; nor[k * 3] = nor[vi * 3]; nor[k * 3 + 1] = nor[vi * 3 + 1]; nor[k * 3 + 2] = nor[vi * 3 + 2]; k++; }
-      for (let t = 0; t < e.length - 1; t++) { const a = e[t], b = e[t + 1], c = start + t, d = start + t + 1; idx.push(a, b, c, b, d, c); }
+      for (let t = 0; t < e.length - 1; t++) { const a = e[t], b = e[t + 1], c = start + t, d = start + t + 1; idx[q++] = a; idx[q++] = b; idx[q++] = c; idx[q++] = b; idx[q++] = d; idx[q++] = c; }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, k * 3), 3));
     g.setAttribute('normal', new THREE.BufferAttribute(nor.subarray(0, k * 3), 3));
-    g.setIndex(idx); g.computeBoundingSphere();
+    g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeBoundingSphere();
     const m = new THREE.Mesh(g, tmat); m.receiveShadow = true; m.matrixAutoUpdate = false;
     return m;
   };
   for (let z0 = rect.min[1]; z0 < rect.max[1] - 1; z0 += CH) {
     for (let x0 = rect.min[0]; x0 < rect.max[0] - 1; x0 += CH) {
-      const c = { x: x0 + CH / 2, z: z0 + CH / 2, lod0: mkChunk(x0, z0, 1), lod1: mkChunk(x0, z0, 4) };
-      c.lod0.castShadow = false;   // terrain self-shadowing isn't worth a second pass over 200k tris
-      terrainGroup.add(c.lod0, c.lod1); chunks.push(c);
+      // the 1 m detail level is built only where the camera comes near (W.update): most of the map is only ever seen
+      // from afar, and the full set cost ~0.35 s of boot and ~34 MB
+      const c = { x: x0 + CH / 2, z: z0 + CH / 2, x0, z0, lod0: null, lod1: mkChunk(x0, z0, 4) };
+      terrainGroup.add(c.lod1); chunks.push(c);
     }
     prog(0.25 + 0.15 * (z0 - rect.min[1]) / (rect.max[1] - rect.min[1]), 'terrain');
     await new Promise((r) => setTimeout(r, 0));
   }
   scene.add(terrainGroup);
   W.terrain = { group: terrainGroup, chunks };
+  const lod0Queue = [];
+  const buildLod0 = (c) => { if (c.lod0) return; c.lod0 = mkChunk(c.x0, c.z0, 1); c.lod0.castShadow = false; c.lod0.visible = false; terrainGroup.add(c.lod0); };   // (no self-shadowing: not worth a second pass over 200k tris)
 
   // --- horizon + creek
   // (the old low horizon ring is replaced by src/engine/mountains.js)
@@ -548,19 +634,26 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   const glass = [];
   const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
   const ANISO = Math.min(engine.renderer.capabilities.getMaxAnisotropy ? engine.renderer.capabilities.getMaxAnisotropy() : 8, engine.quality.aniso || 8);
+  // While the game builds its item templates (W.holdRegistration(itemsReady), main.js) a world model that lands waits
+  // before registering: the templates' loader saves and restores the colliders/anchors around itself, and a bench or a
+  // streamed prop registering in between used to be cut off (walk-through). Templates never touch world state at all.
+  let hold = null;
+  W.holdRegistration = (p) => { const h = Promise.resolve(p).catch(() => {}); hold = h; h.then(() => { if (hold === h) hold = null; }); };
   async function addModel(name, pos = null, rotY = 0, scale = 1) {
     const e = manifest.models && manifest.models[name];
     if (!e) return null;
+    const tpl = !!pos && pos.y < -100;   // an item template (loaded far below the world)
     try {
-      const g = await loadGLB('assets/' + e.path);
+      const g = await loadGLB('assets/' + e.path, PRIO[stageOf(name)]);
+      while (!tpl && hold) await hold;
       const root = (pos ? g.scene.clone(true) : g.scene);
       if (pos) { root.position.copy(pos); root.rotation.y = rotY; root.scale.setScalar(scale); }
       root.updateMatrixWorld(true);
-      const toRemove = [];
+      let cols = 0;
       root.traverse((o) => {
         const n = o.name || '';
-        if (n.startsWith('COL_')) { o.visible = false; if (o.isMesh) { o.material = new THREE.MeshBasicMaterial({ visible: false }); W.colliders.push({ name: n, type: n.startsWith('COL_ramp') ? 'ramp' : n.startsWith('COL_floor') ? 'floor' : 'wall', mesh: o, enabled: true }); } return; }
-        if (/^(IA_|SP_|LIGHT_|FACE_|FL_searchlight_beam_origin)/.test(n)) { const v = new THREE.Vector3(); o.getWorldPosition(v); W.anchors.set(n, v); }
+        if (n.startsWith('COL_')) { o.visible = false; if (o.isMesh) { o.material = new THREE.MeshBasicMaterial({ visible: false }); if (!tpl) { W.colliders.push({ name: n, type: n.startsWith('COL_ramp') ? 'ramp' : n.startsWith('COL_floor') ? 'floor' : 'wall', mesh: o, enabled: true }); cols++; } } return; }
+        if (!tpl && /^(IA_|SP_|LIGHT_|FACE_|FL_searchlight_beam_origin)/.test(n)) { const v = new THREE.Vector3(); o.getWorldPosition(v); W.anchors.set(n, v); }
         if (o.isMesh) {
           o.castShadow = true; o.receiveShadow = true;
           const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -576,11 +669,12 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
             if (/searchlight_lens/i.test(m.name)) { m.transparent = true; m.opacity = 0.5; }
           }
         }
-        W.objects.set(n, o);
+        if (!tpl) W.objects.set(n, o);
       });
       scene.add(root);
-      if (pos && pos.y < -100) return root;      // an item template (loaded far below the world): not a static surface
+      if (tpl) return root;      // not a static surface either
       W.modelRoots.push(root);
+      if (cols) W._collidersDirty = true;   // (streamed in: the player's collision is rebuilt once, next frame)
       return root;
     } catch (err) { console.warn('model', name, err); return null; }
   }
@@ -598,27 +692,27 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
     W.anchors.set('SP_cab_bed', new THREE.Vector3(-1, 30, -0.7)); W.anchors.set('SP_stair_foot', new THREE.Vector3(-0.2, 0, 3));
   }
   W.glassMaterials = glass;
-  const cab = await addModel('cab_interior');
-  W.cabRoot = cab;
+  W.cabRoot = null;
+  // the cab, the placed props and the Weeper's rock arrive in their download stage (stream.js) and register as they land;
+  // game.init waits for stage B (the cab, the trailhead, anything with interaction anchors)
+  track(stageOf('cab_interior'), addModel('cab_interior').then((r) => { W.cabRoot = r; }));
   // searchlight nodes
   W.searchlight = { yaw: W.objects.get('FL_searchlight_yaw') || null, pitch: W.objects.get('FL_searchlight_pitch') || null };
 
   // --- placed props (whatever exists)
   prog(0.52, 'props');
   for (const pp of layout.propPlacements || []) {
-    const r = await addModel(pp.model, new THREE.Vector3(...pp.position), pp.rotY || 0, pp.scale || 1);
-    if (r) r.name = 'placed:' + pp.model;
+    track(stageOf(pp.model), addModel(pp.model, new THREE.Vector3(...pp.position), pp.rotY || 0, pp.scale || 1).then((r) => { if (r) r.name = 'placed:' + pp.model; }));
   }
   // the Weeper's rock
   if (layout.weeperRock) {
     const wr = layout.weeperRock;
-    const r = await addModel('veg_rocks_boulder', new THREE.Vector3(wr.position[0], wr.position[1] - 0.25, wr.position[2]), Math.atan2(wr.facing[0], wr.facing[2]), 1.6);
-    if (r) r.name = 'weeper_rock';
+    track(stageOf('veg_rocks_boulder'), addModel('veg_rocks_boulder', new THREE.Vector3(wr.position[0], wr.position[1] - 0.25, wr.position[2]), Math.atan2(wr.facing[0], wr.facing[2]), 1.6).then((r) => { if (r) r.name = 'weeper_rock'; }));
     W.weeperSeat = new THREE.Vector3(wr.position[0], wr.rockTopY != null ? wr.rockTopY : wr.position[1] + 1.35, wr.position[2]);
   }
 
   // --- vegetation
-  const scatter = await tryJSON('assets/data/scatter.json');
+  const scatter = await tryTakeJSON('assets/data/scatter.json', PRIO.A);
   if (scatter && W.trail.segs && W.trail.segs.length) {
     let seed = 1411; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const add = (k, x, z, sMin, sMax, dy = -0.15) => { (scatter[k] = scatter[k] || []).push([x, heightAt(x, z) + dy, z, rnd() * 6.283, sMin + rnd() * (sMax - sMin)]); };
@@ -664,14 +758,25 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
       scatter[k] = scatter[k].filter((p) => dCreek(p[0], p[2]) > clear);
     }
   }
+  // trunk list for line-of-sight tests and the player's collision (trees only, LOD-independent), per kind as it arrives:
+  // a kind that isn't in yet has no trunks either (no invisible trees to walk into)
+  W.trunks = []; W.trunkGrid = new Map();
+  const addTrunks = (k) => {
+    if (!/fir|hemlock|snag/.test(k)) return;
+    for (const p of scatter[k]) {
+      const tr = [p[0], p[2], (/fir_c/.test(k) ? 1.0 : /fir_b/.test(k) ? 0.8 : 0.55) * p[4]]; W.trunks.push(tr);
+      const key = Math.floor(tr[0] / 20) + ',' + Math.floor(tr[1] / 20); if (!W.trunkGrid.has(key)) W.trunkGrid.set(key, []); W.trunkGrid.get(key).push(tr);
+    }
+  };
   if (scatter) {
-    const kinds = Object.keys(scatter);
+    const kinds = Object.keys(scatter), title = [];
     let done = 0;
     for (const kind of kinds) {
       const e = manifest.models && manifest.models[kind];
       if (!e) { done++; continue; }
-      try {
-        const lods = await loadVegKind(kind, 'assets/' + e.path, engine.msaa);
+      const st = stageOf(kind);
+      const p = (async () => { try {
+        const lods = await loadVegKind(kind, 'assets/' + e.path, engine.msaa, PRIO[st]);
         const isTree = /fir|hemlock|snag|sapling/.test(kind);
         const q = engine.quality;
         const ranges = isTree ? (kind === 'veg_sapling' ? [q.treeLod0 * 0.6, q.treeLod1 * 0.6, q.treeLod2 * 0.5] : [q.treeLod0, q.treeLod1, q.treeLod2])
@@ -686,17 +791,14 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
         };
         const seat = SEAT[kind] || (isTree ? [kind === 'veg_sapling' ? 0.2 : 0.9, 0, 0.2, 1] : [0.5, 0.5, 0.05, 1]);
         const vs = new VegSet(kind, lods, scatter[kind], ranges, { castShadow: isTree || /rocks|stump|log/.test(kind), baseScale: seat[3],
-          heightAt, footprint: seat[0], align: seat[1], sink: seat[2] });
-        scene.add(vs.group); W.vegSets.push(vs);
+          heightAt, footprint: seat[0], align: seat[1], sink: seat[2], fadeIn: built });   // a kind that streams in dissolves in
+        scene.add(vs.group); W.vegSets.push(vs); addTrunks(kind);
       } catch (err) { console.warn('veg', kind, err); }
-      done++; prog(0.55 + 0.35 * done / kinds.length, 'forest');
+      done++; if (!built) prog(0.55 + 0.35 * done / kinds.length, 'forest'); })();
+      if (st === 'A') title.push(p); else track(st, p);
     }
+    await Promise.all(title);   // the title set; the rest of the forest keeps coming
   }
-  // trunk list for line-of-sight tests (trees only, LOD-independent)
-  W.trunks = [];
-  if (scatter) for (const k of Object.keys(scatter)) if (/fir|hemlock|snag/.test(k)) for (const p of scatter[k]) W.trunks.push([p[0], p[2], (/fir_c/.test(k) ? 1.0 : /fir_b/.test(k) ? 0.8 : 0.55) * p[4]]);
-  W.trunkGrid = new Map();
-  for (const t of W.trunks) { const k = Math.floor(t[0] / 20) + ',' + Math.floor(t[1] / 20); if (!W.trunkGrid.has(k)) W.trunkGrid.set(k, []); W.trunkGrid.get(k).push(t); }
 
   // --- ripple rings + droplets where something breaks the water
   {
@@ -728,15 +830,24 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
   // --- per-frame
   let lodTimer = 0; const lastCam = new THREE.Vector3(1e9, 0, 0);
   W.update = (dt, t, cam) => {
+    if (W._collidersDirty && engine.player && engine.player.rebuildColliders) { W._collidersDirty = false; engine.player.rebuildColliders(); }
     if (W.waterNormal) { W.waterNormal.offset.y = -t * 0.28; W.waterNormal.offset.x = Math.sin(t * 0.21) * 0.03; }
     if (W._ripples) for (const r of W._ripples) { if (!r.m.visible) continue; r.t += dt; const k2 = r.t / 1.4; r.m.scale.setScalar(0.3 + k2 * 2.6 * r.s); r.m.material.opacity = Math.max(0, 0.55 * (1 - k2)); if (k2 >= 1) r.m.visible = false; }
     WIND.time.value = t; WIND.amount.value = engine.sky ? 0.25 + (engine.sky.weather.wind || 0) * 0.9 : 0.35;
     lodTimer -= dt;
     if (lodTimer <= 0 || cam.distanceToSquared(lastCam) > 36) {
       lodTimer = 0.5; lastCam.copy(cam);
-      for (const c of chunks) { const d = Math.hypot(c.x - cam.x, c.z - cam.z); const near = d < engine.quality.terrainLod0; c.lod0.visible = near; c.lod1.visible = !near; }
+      const R0 = engine.quality.terrainLod0;
+      for (const c of chunks) {
+        const d = Math.hypot(c.x - cam.x, c.z - cam.z), near = d < R0;
+        if (near) buildLod0(c);   // in range and not built yet (a jump, a new phase): now, a coarse chunk underfoot would show
+        else if (!c.lod0 && d < R0 + 96 && !lod0Queue.includes(c)) lod0Queue.push(c);   // coming into range: ahead of time, one a frame
+        if (c.lod0) c.lod0.visible = near;
+        c.lod1.visible = !near;
+      }
       W._vegQueue = W.vegSets.slice();
     }
+    if (lod0Queue.length) buildLod0(lod0Queue.shift());
     for (const v of W.vegSets) if (v.fading) v.tick(dt);   // trees mid-dissolve between detail levels
     if (W._vegQueue && W._vegQueue.length) {   // at most two sets per frame: no single frame does the whole forest
       for (let k = 0; k < 2 && W._vegQueue.length; k++) { const v = W._vegQueue.shift(); v.update(cam); }
@@ -748,5 +859,6 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
     }
   };
   prog(0.95, 'world ready');
+  built = true;
   return W;
 }

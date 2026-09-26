@@ -102,11 +102,22 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .title .warn{margin-top:26px;font-style:italic;opacity:.6}
 .title .credit{position:absolute;bottom:14px;font-size:11px;opacity:.35}
 .pause .menu{display:flex;flex-direction:column;gap:10px;max-width:300px}
-#fl-loading{position:fixed;inset:0;z-index:50;background:#030405;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#cfc6b1}
-#fl-loading .t{font-size:44px;letter-spacing:.3em;margin-bottom:26px}
-#fl-loading .bar{width:320px;height:2px;background:rgba(255,255,255,.12)}
-#fl-loading .bar i{display:block;height:100%;width:0;background:#d9c28e;transition:width .2s}
-#fl-loading .l{margin-top:12px;font-family:var(--type);font-size:12px;opacity:.6;letter-spacing:.1em}
+/* ---------- loading: the boot poster in index.html (the title, before any script) + its bar, driven by ui.js U.loading.
+   modes: boot (poster + title text) -> menu (the title menu is drawn over it: text hidden) -> scene (the live backdrop
+   shows: poster fades) -> play (only the status line, and only while .on). Sits under #ui, over the canvas. */
+#fl-boot{position:fixed;inset:0;z-index:5;pointer-events:none;color:#e9e1cf;transition:opacity 1.2s}
+#fl-boot::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 95% at 72% 38%,#121820 0%,#070a0d 52%,#020304 100%);transition:opacity 1.6s ease}
+#fl-boot>.t2-left{position:relative;transition:opacity .9s}
+#fl-boot:not([data-mode=boot])>.t2-left{opacity:0}
+#fl-boot[data-mode=scene]::before,#fl-boot[data-mode=play]::before{opacity:0}
+#fl-boot.gone{opacity:0}
+.fl-boot-status{position:absolute;right:4vw;top:4.5vh;width:min(360px,60vw);text-align:right;font-family:var(--type);font-size:11.5px;letter-spacing:.08em;color:#d6c7a3;opacity:.85;transition:opacity .6s;text-shadow:0 1px 3px #000}
+.fl-boot-status .bar{height:2px;margin-top:7px;background:rgba(255,255,255,.12)}
+.fl-boot-status .bar i{display:block;height:100%;width:0;background:#d9c28e;transition:width .3s}
+.fl-boot-status .tip{margin-top:9px;font-family:Georgia,"Times New Roman",serif;font-style:italic;font-size:13px;letter-spacing:0;opacity:.6}
+#fl-boot:not([data-mode=boot]) .tip{display:none}
+#fl-boot[data-mode=play]:not(.on) .fl-boot-status,#fl-boot.idle .fl-boot-status{opacity:0}
+#fl-boot.wait .fl-boot-status{opacity:1;color:#ffe3a8}
 
 /* ---------- title v2: over the live scene ---------- */
 .fl-modal.full.clear{background:transparent;backdrop-filter:none}
@@ -138,7 +149,6 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .controls2 .kgrid div{display:flex;gap:12px;align-items:center;font-size:15px}
 .controls2 kbd{min-width:62px;text-align:center;font-family:var(--type);font-size:12px;padding:4px 8px;border:1px solid rgba(40,30,20,.35);border-bottom-width:3px;background:#f4eee0}
 .note2{font-size:14px;opacity:.8}
-#fl-loading .tip{position:absolute;bottom:9vh;font-style:italic;font-size:14px;opacity:.55}
 @media (max-width:760px){.t2-left{padding:8vh 6vw 0}.t2-foot{flex-wrap:wrap;gap:10px}}
 
 #fl-clickres{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;

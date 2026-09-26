@@ -1,16 +1,17 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
-import { createInput } from './input.js?v=cd4f7406';
-import { createWorld } from './world.js?v=cd4f7406';
-import { createPlayer } from './player.js?v=cd4f7406';
-import { createSky } from './sky.js?v=cd4f7406';
-import { createLights } from './lights.js?v=cd4f7406';
-import { createPost } from './post.js?v=cd4f7406';
-import { createEntities, createView, createInteract } from './entities.js?v=cd4f7406';
-import { createAudio } from './audio.js?v=cd4f7406';
-import { createPhoto } from './photo.js?v=cd4f7406';
-import { createMountains } from './mountains.js?v=cd4f7406';
-import { tryJSON } from './util.js?v=cd4f7406';
+import { createInput } from './input.js?v=18bc18106d93c298';
+import { createWorld, loadGLB } from './world.js?v=0cb07d852ed67db5';
+import { createPlayer } from './player.js?v=b6d77ebb90cd80ec';
+import { createSky } from './sky.js?v=68a95a40cff6b4bd';
+import { createLights } from './lights.js?v=792a7514929cb178';
+import { createPost } from './post.js?v=44767cb562821303';
+import { createEntities, createView, createInteract } from './entities.js?v=8f9567db8a1d7143';
+import { createAudio } from './audio.js?v=c1349688caf5e45f';
+import { createPhoto } from './photo.js?v=d4ecc9fcde07cf48';
+import { createMountains } from './mountains.js?v=6559f3372d4228da';
+import { loadq, tryTakeJSON } from './loadq.js?v=3479c8521344c615';
+import { createStream, PRIO } from './stream.js?v=f7881cfe4ef01982';
 
 export const QUALITY = {
   low: { pr: 0.75, prMin: 0.5, msaa: false, aniso: 4, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },
@@ -56,10 +57,18 @@ export async function createEngine(canvas, opts = {}) {
   }
   window.addEventListener('resize', resize);
 
+  // Resolves once the title's set (stream stage A) is built; everything else keeps downloading in the background, most
+  // urgent first, and E.stream.ready(stage) says when a stage is in (src/engine/stream.js).
   E.loadWorld = async (onProgress = () => {}) => {
-    E.manifest = (await tryJSON('assets/manifest.json')) || E.manifest;
-    E.world = await createWorld(E, E.manifest, (f, l) => onProgress(f * 0.85, l));
-    E.sky = await createSky(E, E.manifest, (f) => onProgress(0.85 + f * 0.1, 'sky'));
+    E.manifest = (await tryTakeJSON('assets/manifest.json?v=eed2e6ece49f4eb0', PRIO.A)) || E.manifest;   // (the site build stamps this URL with ?v=<hash>)
+    loadq.setFiles(E.manifest.files);
+    const S = E.stream = createStream(E.manifest);
+    const layout = null;   // (the plan reads the prop list from the manifest on the site; the dev server loads on demand)
+    S.plan(layout, quality.terrainTex);
+    for (const [st, path] of S.models) S.track(st, loadGLB(path, PRIO[st]));   // parsed as soon as it arrives: a stage is 'in' when its models are ready to use
+    const bar = (f, label) => onProgress(Math.min(0.97, 0.88 * S.progress('A') + 0.1 * f), label);   // mostly bytes: it never freezes on one big file
+    E.world = await createWorld(E, E.manifest, bar, S);
+    E.sky = await createSky(E, E.manifest, (f) => bar(0.95, 'sky'), S);
     E.mountains = createMountains(E);   // the distant Cascades (FL_mountains) + a night-sky band; updates itself via E.onUpdate
     E.view = createView(E);
     E.lights = createLights(E);
@@ -70,6 +79,7 @@ export async function createEngine(canvas, opts = {}) {
     E.photo = createPhoto(E);
     resize();
     E.player.teleport('SP_stair_foot');
+    S.seal();
     onProgress(1, 'ready');
     return E.world;
   };

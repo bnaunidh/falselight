@@ -1,13 +1,19 @@
-// FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=cd4f7406';
-import { createUI } from './ui/ui.js?v=cd4f7406';
-import { Game } from './game/bridge.js?v=cd4f7406';
-import { createSaves } from './game/saves.js?v=cd4f7406';
-import { UI as WORDS } from './game/content/story.js?v=cd4f7406';
-import { ACTIONS, keyName } from './engine/input.js?v=cd4f7406';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=cd4f7406';
-import { registerScareSounds } from './engine/scareSounds.js?v=cd4f7406';
-import { paintCabMaps } from './ui/cabMaps.js?v=cd4f7406';
+// FALSE LIGHT — boot: engine → title menu → world (streamed) → game → play. window.__fl exposes test hooks.
+// Loading on slow Wi-Fi (src/engine/stream.js): index.html paints the title before any script; the menu works as soon as
+// the engine exists; the live backdrop fades in once the title's set is in (stage A); New game / Continue wait only for
+// stage B (the cab, the trailhead, the item templates: the game is built then); the rest of the forest streams in during
+// day 1, and the day-1 clock holds before dusk until the night (stage D) is in.
+import { createEngine } from './engine/engine.js?v=de9f81663ad5201e';
+import { createUI } from './ui/ui.js?v=210cdbc9f49f078c';
+import { Game } from './game/bridge.js?v=9d26555a1e1af976';
+import { createSaves } from './game/saves.js?v=9b2daabbbb6263ff';
+import { UI as WORDS } from './game/content/story.js?v=cacd237e47164d96';
+import { ACTIONS, keyName } from './engine/input.js?v=18bc18106d93c298';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=98d47a28f0d0689d';
+import { registerScareSounds } from './engine/scareSounds.js?v=03d6d9f843586f50';
+import { paintCabMaps } from './ui/cabMaps.js?v=136aa42d94fcba49';
+import { loadq } from './engine/loadq.js?v=3479c8521344c615';
+import { watchUpdates } from './engine/updates.js?v=ae8a658deea46809';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -15,7 +21,7 @@ const saves = createSaves();
 const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, music: 0.35, sound: false, fullscreen: true, keys: {}, fps: 60, saver: 'auto' });
 if (!settings.qv2) { settings.quality = 'medium'; settings.qv2 = true; saves.saveSettings(settings); }   // older saves defaulted to 'high'
 const ui = createUI();
-ui.loading(0, 'starting');
+ui.loading(0, 'opening the lookout…');
 const engine = await createEngine(canvas, { quality: q.get('q') || settings.quality });
 engine.input.setBindings(settings.keys || {});   // your keys (Settings → Keys)
 engine.fpsCap = +(settings.fps ?? 60); engine.saverMode = settings.saver || 'auto';   // battery (Settings)
@@ -28,45 +34,133 @@ registerAnimalSounds(engine.audio);   // birds, owl, coyotes, elk, deer, bear, d
 registerScareSounds(engine.audio);    // the director's: snaps, breath, whispers, steps, knocks, taps, the radio gone wrong (procedural)
 window.__fl = { engine, ui };
 engine.noRender = q.has('norender');   // headless logic tests: no GPU work per frame
+const skip = q.get('skip');
+let game = null, gameReady = false, pending = null, stream = null;   // the game is built once stage B is in; pending = Begin/Continue clicked before that
+const inTitle = () => !game || game.state === 'title';
+// the offline cache (public site only): a new build is taken at the title, never mid-run
+const upd = watchUpdates({ isSafe: () => inTitle(), note: (t) => ui.loading(1, t, 'wait') });
+
+if (!skip) title();   // the menu works now (settings, controls, sound); Begin waits for what it needs
+else ui.loading(0, 'loading', 'play');
+setInterval(() => { if (!gameReady || pending || (game && game.clock && game.clock.held === 'assets')) tickLoading(); }, 300);   // the loading line
+await upd.firstVisit(1500);   // first visit to the site: let the offline cache take the page, so what downloads next is kept
 try {
-  await engine.loadWorld((f, l) => ui.loading(f, l));
+  await engine.loadWorld(() => {});   // (progress: the loading line reads the download queue itself)
 } catch (err) {
-  console.error(err); ui.loading(1, 'failed to load: ' + err.message); throw err;
+  console.error(err); ui.loading(1, 'failed to load: ' + err.message, 'wait'); throw err;
 }
-const game = new Game(engine, ui);
-game.init();
-ui.loading(0.97, 'gear'); await game.itemsReady;
-try { paintCabMaps(engine, { spots: game.chill ? game.chill.spots : [] }); } catch (err) { console.warn('cab maps', err); }   // the wall trail map + the fire finder's disc, drawn to match the world
-window.__fl.game = game;
-ui.loading(null);
+stream = window.__fl.stream = engine.stream;
+for (const s of Object.keys(stream.stages)) stream.ready(s);   // (marks each stage done as it lands)
 engine.sky.setTime(20.2); engine.sky.setWeather({ fog: 0.45, rain: 0, wind: 0.4 });
+if (!skip) titleScene();
 engine.start();
+// the live backdrop: compile its shaders behind the poster, then let the poster fade into it
+(async () => {
+  await precompile(4000);
+  await new Promise((r) => setTimeout(r, 250));
+  if (!skip && inTitle()) ui.loading(gameReady ? null : stream.progress('B'), gameReady ? null : progressLabel(), 'scene');   // (even if the game got ready first)
+})();
+
+// stage B: the game itself (interactions, the director and the item templates read the cab and the trailhead at init)
+stream.ready('B').then(async () => {
+  game = new Game(engine, ui);
+  game.onPause = pause; game.onTitle = title;
+  let release; engine.world.holdRegistration(new Promise((r) => { release = r; }));   // world models landing now wait for the item templates
+  game.init();
+  game.itemsReady.then(release, release);
+  await game.itemsReady;
+  try { paintCabMaps(engine, { spots: game.chill ? game.chill.spots : [] }); } catch (err) { console.warn('cab maps', err); }   // the wall trail map + the fire finder's disc, drawn to match the world
+  await precompile(4000);   // (the first frame of day 1 doesn't freeze on shader compiles)
+  window.__fl.game = game; gameReady = true;
+  if (skip) {
+    await stream.ready('E');   // the phase tests: everything in first
+    ui.hideHUD(false); game.fresh(skip); game.skipTo(skip); if (q.get('h')) game.setTime(+q.get('h'));
+    ui.loading(null, null, 'play');
+  }
+  tickLoading();
+}).catch((err) => { console.error(err); ui.loading(1, 'failed to start: ' + err.message, 'wait'); });
+// placement surfaces on the props that streamed in after the game was built (one rebuild, when the night set is in)
+stream.ready('D').then(() => { if (game && game.iv && game.iv.buildSurfaces) setTimeout(() => { try { game.iv.buildSurfaces(); } catch (e) { console.warn('surfaces', e); } }, 0); });
+// everything in: keep it for next time (the offline cache stores what loaded before it took the page, and the audio)
+stream.ready('E').then(() => {
+  const files = engine.manifest.files || {};
+  upd.backfill([...Object.values(stream.stages).flatMap((s) => s.paths), ...Object.keys(files).filter((k) => k.startsWith('audio/')).map((k) => 'assets/' + k)]);
+  if (inTitle() && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  tickLoading();
+});
+
+// compile the scene's shaders off the first visible frame (parallel where the GPU driver allows); never wait long for it
+function precompile(ms) {
+  if (engine.noRender || !engine.renderer.compileAsync) return Promise.resolve();
+  return Promise.race([engine.renderer.compileAsync(engine.scene, engine.camera).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
+}
+// the loading line: what the player is waiting for, in real bytes
+function MB(b) { return (b / 1e6).toFixed(b < 1e7 ? 1 : 0) + ' MB'; }
+// (the bar is always 'ready to begin': every byte of stages A and B; engine.stream exists as soon as the manifest is in)
+function progressLabel() {
+  const S = engine.stream; if (!S) return 'opening the lookout…';
+  const left = S.bytesLeft('B'), rate = loadq.bps;
+  return (engine.world ? 'the trailhead' : 'the tower') + ' · ' + Math.round(S.progress('B') * 100) + '%' + (left > 0 ? ' · ' + MB(left) + ' to go' + (rate > 2e4 ? ' · ' + Math.round(rate / 1e3) + ' KB/s' : '') : '');
+}
+function tickLoading() {
+  const S = engine.stream, pB = S ? S.progress('B') : 0;
+  const nightWait = game && game.clock && game.clock.held === 'assets';
+  if (nightWait) ui.loading(S.progress('D'), 'the night is still coming in · ' + Math.round(S.progress('D') * 100) + '%', 'wait');
+  else if (pending) { const night = pending === 'continue' && needsNight(), p = night ? S.progress('D') : pB; ui.loading(p, 'starting as soon as ' + (night ? 'the night' : 'the trailhead') + ' is in · ' + Math.round(p * 100) + '%', 'wait'); }
+  else if (!gameReady) ui.loading(pB, progressLabel());
+  else ui.loading(null);
+  if (pending && canBegin(pending) && game.state === 'title' && document.querySelector('.t2')) begin(pending);   // clicked early: start now
+}
+// the night never starts without its sky and its cast: day 1 holds just before dusk until stage D is in
+engine.onUpdate(() => { if (game && game.clock && game.clock.phase === 'day1' && !stream.isDone('D')) game.clock.addGate('assets', 20.2, () => stream.isDone('D')); });
 
 function continueLabel() {
   const sv = saves.load(); if (!sv) return '';
   const names = { day1: 'Day 1', night1: 'Night 1', day2: 'Day 2', night2: 'Night 2' };
   return names[sv.phase] ? names[sv.phase] + ' · where you left off' : '';
 }
+// what Begin / Continue wait for: the game (stage B); a night save (or one at dusk) also its night (stage D)
+function needsNight() { const sv = saves.load(); return !!sv && (sv.phase !== 'day1' || (sv.hour || 0) >= 19.5); }
+function canBegin(a) {
+  if (!gameReady) return false;
+  if (a === 'continue' && needsNight()) return stream.isDone('D');
+  return true;
+}
+function begin(a) {
+  if (!canBegin(a)) { pending = a; tickLoading(); return; }   // the menu stays usable; it starts by itself when ready
+  pending = null;
+  ui.closeModal(); ui.hideHUD(false); engine.audio.start();
+  engine.lights.searchlight.on = false; engine.lights.searchlight.operating = false;
+  if (a === 'continue') game.continueGame(); else game.newGame();
+  engine.input.lock(); goFullscreen();   // (after a wait with no click, the 'Click to continue' overlay takes the mouse)
+  ui.loading(null, null, 'play');
+}
+// the title's living backdrop (once the world is in): dusk going to night around the tower, the lamp lit in the cab
+function titleScene() {
+  if (!engine.sky || !engine.lights) return;
+  engine.sky.setTime(engine.sky.tex.night ? 20.9 : 20.2); engine.sky.setWeather({ fog: 0.5, rain: 0, wind: 0.45, lightning: 0 });   // (no night sky yet: stay at dusk)
+  engine.lights.cabLamp.on = true;
+}
 function title() {
   engine.audio.music.setMood('title', 4);
-  game.state = 'title'; engine.input.unlock(); ui.hideHUD(true); ui.tracker(null);
-  if (game.calmBody) game.calmBody();   // no frost / red / heartbeat left over on the title screen
-  engine.sky.setTime(20.9); engine.sky.setWeather({ fog: 0.5, rain: 0, wind: 0.45, lightning: 0 });
-  engine.lights.cabLamp.on = true;
+  if (game) { game.state = 'title'; if (game.calmBody) game.calmBody(); }   // no frost / red / heartbeat left over on the title screen
+  engine.input.unlock(); ui.hideHUD(true); ui.tracker(null);
+  titleScene();
   ui.screen('title', { canContinue: saves.has(), continueLabel: continueLabel(), sound: settings.sound, onAction: (a) => {
     if (a === 'settings') return openSettings(title);
     if (a === 'controls') return ui.screen('controls', { controls: controlsList(), onBack: () => { ui.closeModal(); title(); } });
     if (a === 'sound') { settings.sound = !settings.sound; saves.saveSettings(settings); engine.audio.setMuted(!settings.sound); engine.audio.start(); ui.closeModal(); return title(); }
-    ui.closeModal(); ui.hideHUD(false); engine.audio.start();
-    engine.lights.searchlight.on = false; engine.lights.searchlight.operating = false;
-    if (a === 'continue') game.continueGame(); else game.newGame();
-    engine.input.lock(); goFullscreen();
+    begin(a);
   } });
+  if (!engine.world) ui.loading(0, null, 'menu');
+  else if (engine.stream && engine.stream.isDone('A')) ui.loading(gameReady ? null : engine.stream.progress('B'), gameReady ? null : progressLabel(), 'scene');
+  upd.poke();
 }
 // the title's living backdrop: a slow drift around the tower while the searchlight sweeps the fog
-engine.onUpdate(() => { engine.idle = game.state !== 'play' || ui.modalOpen(); });   // menus, the title, the logbook: 30 fps
+engine.onUpdate(() => { engine.idle = !game || game.state !== 'play' || ui.modalOpen(); });   // menus, the title, the logbook: 30 fps
 engine.onUpdate((dt, t) => {
-  if (game.state !== 'title') return;
+  if (!inTitle() || skip) return;
+  if (engine.sky.tex.night && engine.sky.hour < 20.9) engine.sky.setTime(Math.min(20.9, engine.sky.hour + dt * 0.05));   // the night sky arrived: ease on into it
   const cam = engine.camera, SL = engine.lights.searchlight;
   const a = 2.35 + t * 0.018, R = 46;
   const x = Math.sin(a) * R, z = Math.cos(a) * R;
@@ -119,20 +213,18 @@ function pause() {
       resume();
     } });
 }
-game.onPause = pause;
 // if the mouse isn't captured while playing (Chrome refuses to re-lock right after Esc), say so instead of looking frozen
 const clickRes = document.createElement('div'); clickRes.id = 'fl-clickres';
 clickRes.innerHTML = '<div>Click to continue</div><small>the game is running — your mouse just isn\'t captured</small>';
 document.body.appendChild(clickRes);
 clickRes.addEventListener('click', () => { engine.input.lock(); engine.audio.start(); goFullscreen(); });
 engine.onUpdate(() => {
-  const show = game.state === 'play' && !engine.input.locked && !ui.modalOpen() && !engine.noRender;
+  const show = !!game && game.state === 'play' && !engine.input.locked && !ui.modalOpen() && !engine.noRender;
   if (show !== clickRes.classList.contains('on')) clickRes.classList.toggle('on', show);
 });
-game.onTitle = title;
-canvas.addEventListener('click', () => { if (game.state === 'play' && !ui.modalOpen()) { engine.input.lock(); engine.audio.start(); } });
+canvas.addEventListener('click', () => { if (game && game.state === 'play' && !ui.modalOpen()) { engine.input.lock(); engine.audio.start(); } });
 engine.input.onAction('lockchange', (locked) => {
-  if (locked || game.state !== 'play' || ui.modalOpen() || engine.uiBlocking) return;
+  if (locked || !game || game.state !== 'play' || ui.modalOpen() || engine.uiBlocking) return;
   // the browser ate an Esc to free the mouse: do what that Esc meant (leave the searchlight / finder / camera / print) instead of wasting it
   if (game.mode !== 'walk' || game.camRaised || game.holding || game.placing || (game.chill && game.chill.sitting)) { game.escape(); return; }
   setTimeout(() => { if (!engine.input.locked && game.state === 'play' && !ui.modalOpen()) pause(); }, 120);
@@ -156,11 +248,9 @@ window.__fl.test = () => {
   ok('tower colliders', W.colliders.filter((c) => c.type === 'ramp').length >= 12, W.colliders.length);
   ok('anchors', ['IA_searchlight', 'IA_generator', 'IA_trapdoor', 'SP_stair_foot'].every((a) => W.anchors.has(a)), [...W.anchors.keys()].length);
   ok('vegetation', W.vegSets.length >= 10, W.vegSets.length);
-  ok('game ready', !!game.L && !!game.weeperH, game.state);
+  ok('game ready', !!game && !!game.L && !!game.weeperH, game && game.state);
   ok('trail rule blocks off-path', (() => { const p = engine.player; const s = p.position.clone(); p.teleport(new s.constructor(0, 0, 40)); p.position.x = 30; p.update(1 / 60); const blocked = Math.abs(p.position.x - 30) > 1 || W.trail.nearest(p.position.x, p.position.z).dist < 3; p.position.copy(s); return true; })());
   const pass = R.filter((r) => r.pass).length;
   return { pass, fail: R.length - pass, results: R };
 };
 
-if (q.get('skip')) { ui.hideHUD(false); game.fresh(q.get('skip')); game.skipTo(q.get('skip')); if (q.get('h')) game.setTime(+q.get('h')); }
-else title();
