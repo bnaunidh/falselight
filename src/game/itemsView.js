@@ -3,10 +3,10 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=c8446c4c';
-import { makeTentBag } from './tents.js?v=c8446c4c';
+import { KINDS } from './items.js?v=687d625a';
+import { makeTentBag } from './tents.js?v=687d625a';
 const PROC = { tentBag: makeTentBag };   // items built here rather than loaded
-import { createSurfaces } from './surfaces.js?v=c8446c4c';
+import { createSurfaces } from './surfaces.js?v=687d625a';
 
 export function createItemsView(engine) {
   const { scene, camera } = engine;

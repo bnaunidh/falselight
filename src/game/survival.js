@@ -1,8 +1,8 @@
 // Body and weather: air temperature (°F, the lookout is a 1983 Forest Service post), wind chill, the cab's own air,
 // thirst and hunger, and sleep (this.fatigue: src/game/fatigue.js). Pure. Rates are per GAME hour, so resting on the bed
 // costs water and food like real hours do (and pays the sleep back).
-import { clamp } from './util.js?v=c8446c4c'
-import { Fatigue } from './fatigue.js?v=c8446c4c'
+import { clamp } from './util.js?v=687d625a'
+import { Fatigue } from './fatigue.js?v=687d625a'
 
 export const SURV = {
   thirst: 1 / 16,       // a full water meter lasts 16 game hours
@@ -69,7 +69,7 @@ export class Survival {
     once('thirsty', this.water < SURV.lowWater, this.water > SURV.lowWater + 0.1)
     once('hungry', this.food < SURV.lowFood, this.food > SURV.lowFood + 0.1)
     once('freezing', this.feelsF < 36, this.feelsF > 42)
-    for (const e of this.fatigue.tick(dtH, { resting: ctx.resting, sitting: ctx.sitting, jog: ctx.jog, coldTarget: this.coldTarget, feelsF: this.feelsF, water: this.water, food: this.food, co: ctx.co })) ev.push(e)
+    for (const e of this.fatigue.tick(dtH, { resting: ctx.resting, sitting: ctx.sitting, jog: ctx.jog, coldTarget: this.coldTarget, feelsF: this.feelsF, water: this.water, food: this.food, co: ctx.co, kinH: ctx.kinH })) ev.push(e)
     return ev
   }
   /** How cold your body gets (feeds the shiver / stiff hands model). */

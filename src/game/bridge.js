@@ -1,38 +1,38 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=c8446c4c';
-import { Objectives } from './objectives.js?v=c8446c4c';
-import { Radio } from './radio.js?v=c8446c4c';
-import { Fuel, FUEL } from './fuel.js?v=c8446c4c';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=c8446c4c';
-import { Survival, SURV } from './survival.js?v=c8446c4c';
-import { createItemsView } from './itemsView.js?v=c8446c4c';
-import { createChill } from './chill.js?v=c8446c4c';
-import { createPlume } from './smokePlume.js?v=c8446c4c';
-import { FireFinder, spokenBearing } from './firefinder.js?v=c8446c4c';
-import { Photos, classifyShot } from './photos.js?v=c8446c4c';
-import { CO } from './co.js?v=c8446c4c';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=c8446c4c';
-import { OtherLookout } from './otherLookout.js?v=c8446c4c';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=c8446c4c';
-import { GuidedHiker } from './hikers.js?v=c8446c4c';
-import { MorseKeyer, isSOS } from './morse.js?v=c8446c4c';
-import { normalizeLayout } from './layout.js?v=c8446c4c';
-import { createSaves } from './saves.js?v=c8446c4c';
-import { createRng } from './rng.js?v=c8446c4c';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=c8446c4c';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=c8446c4c';
-import * as S from './content/story.js?v=c8446c4c';
-import { createDog, setDogName } from './dog.js?v=c8446c4c';
-import { createWildlife } from './wildlife.js?v=c8446c4c';
-import { Fear, registerFearSounds } from './fear.js?v=c8446c4c';
-import { epilogue } from './content/ending.js?v=c8446c4c';
-import { Director, sosLamp } from './director.js?v=c8446c4c';
-import { createPhotoBoard } from './photoBoard.js?v=c8446c4c';
-import { makeTent } from './tents.js?v=c8446c4c';
-import { makeSpringFlow } from './spring.js?v=c8446c4c';
-import { Follower } from './follower.js?v=c8446c4c';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=687d625a';
+import { Objectives } from './objectives.js?v=687d625a';
+import { Radio } from './radio.js?v=687d625a';
+import { Fuel, FUEL } from './fuel.js?v=687d625a';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=687d625a';
+import { Survival, SURV } from './survival.js?v=687d625a';
+import { createItemsView } from './itemsView.js?v=687d625a';
+import { createChill } from './chill.js?v=687d625a';
+import { createPlume } from './smokePlume.js?v=687d625a';
+import { FireFinder, spokenBearing } from './firefinder.js?v=687d625a';
+import { Photos, classifyShot } from './photos.js?v=687d625a';
+import { CO } from './co.js?v=687d625a';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=687d625a';
+import { OtherLookout } from './otherLookout.js?v=687d625a';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=687d625a';
+import { GuidedHiker } from './hikers.js?v=687d625a';
+import { MorseKeyer, isSOS } from './morse.js?v=687d625a';
+import { normalizeLayout } from './layout.js?v=687d625a';
+import { createSaves } from './saves.js?v=687d625a';
+import { createRng } from './rng.js?v=687d625a';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=687d625a';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=687d625a';
+import * as S from './content/story.js?v=687d625a';
+import { createDog, setDogName } from './dog.js?v=687d625a';
+import { createWildlife } from './wildlife.js?v=687d625a';
+import { Fear, registerFearSounds } from './fear.js?v=687d625a';
+import { epilogue } from './content/ending.js?v=687d625a';
+import { Director, sosLamp } from './director.js?v=687d625a';
+import { createPhotoBoard } from './photoBoard.js?v=687d625a';
+import { makeTent } from './tents.js?v=687d625a';
+import { makeSpringFlow } from './spring.js?v=687d625a';
+import { Follower } from './follower.js?v=687d625a';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -773,7 +773,10 @@ export class Game {
     const savePose = h.pose;
     if (forbidden) h.setPose('sit_lookup');
     e.audio.play('camera_shutter', { volume: 1 });
+    const ghosts = [...Object.values(this.phantoms || {}).filter((h) => h.visible), ...[this.sosSprite, ...(this.eyeGlints || [])].filter((o) => o && o.visible)];
+    for (const g of ghosts) g.setVisible ? g.setVisible(false) : (g.visible = false);   // hallucinations don't develop
     const shot = await e.photo.capture({ flash });
+    for (const g of ghosts) g.setVisible ? g.setVisible(true) : (g.visible = true);
     if (forbidden) h.setPose(savePose);
     const cls = classifyShot(shot.meta, { flash, night: this.night });
     const subject = cls.weeper ? 'weeper' : cls.subject;
@@ -789,7 +792,7 @@ export class Game {
   lowerCamera() { this.camRaised = false; this.ui.cameraFrame(null); this.fovTarget = 68; }
   sendFlow(channel) {
     const ph = this.clock.phase, h = this.clock.hour;
-    const items = this.photos.sendable().map((p) => ({ p, label: `${p.id} · ${p.subject === 'nothing' ? 'nothing much' : p.subject === 'weeper' ? 'the man at the creek' : p.subject.replace('_', ' ')}${p.faceDown ? ' · face-down' : ''}${this.weeper.triggered && (this.weeper.carrier === p.id || (this.weeper.carrier === 'next' && p.subject === 'weeper')) ? ' · the one he follows' : ''}`, img: p.faceDown ? null : p.dataURL }));
+    const items = this.photos.sendable().map((p) => ({ p, label: `${p.id} · ${p.subject === 'nothing' ? 'nothing much' : p.subject === 'weeper' ? 'the man at the creek' : p.subject.replace('_', ' ')}${p.faceDown ? ' · face-down' : ''}${this.weeper.triggered && (this.weeper.carrier === p.id || (this.weeper.carrier === 'next' && p.subject === 'weeper')) ? ' · the one he follows' : ''}`, img: p.faceDown || (p.forbidden && !p.seen) || p.develop < 1 ? null : p.dataURL }));
     this.openModal(() => this.ui.choose('Send which print?', items, (it) => {
       const r = sendPrint(it.p, channel, { phase: ph, hour: h, day: PHASES[ph].day });
       if (!r.ok) { this.ui.toast(r.why); return; }
@@ -954,7 +957,7 @@ export class Game {
       rules: S.RULES.slice(0, this.flags.rulesTo || 5), rulesTyped: 5,
       tillman: this.flags.readTillman ? S.PREV_LOG.map((en) => ({ ...en, text: S.coDistort(en.text, this.co.blood) })) : [],
       mine: this.log.map((en) => ({ ...en, text: S.coDistort(en.text, this.co.blood) })),
-      photos: this.photos.prints.map((p) => ({ id: p.id, dataURL: p.dataURL, develop: p.develop, faceDown: p.faceDown, sent: !!p.sent })),
+      photos: this.photos.prints.map((p) => ({ id: p.id, dataURL: (p.forbidden && !p.faceDown && !p.seen) || p.develop < 1 ? null : p.dataURL, develop: p.develop, faceDown: p.faceDown, sent: !!p.sent })),
       proofs: this.proofs, proofGoal: S.PROOF_GOAL,
       onPhoto: (id) => { const p = this.photos.get(id); if (!p || p.sent) { this.ui.toast('You sent that one away.', 2); return; } this.ui.closeModal(); p.pin = null; this.holding = id; this.photos.open(id); },
       onPage: (pg) => { if (pg === 'rules' && this.obj.has('rules_more')) this.complete('rules_more'); },   // opened on (or turned to) the card
@@ -1577,18 +1580,20 @@ export class Game {
     const Pl = this.player(), wx = e.sky.weather, ha = this.anchor('IA_heater');
     for (const ev of this.surv.tick(Math.max(0, hTo - hFrom), { hour: dayHour(this.clock.hour), y: Pl.position.y, zone: Pl.zone, rain: wx.rain, fog: wx.fog, wind: wx.wind,
       heater: this.co.heater, open: this.co.open, inWater: !!Pl.inWater, jog: e.input.isDown('jog') && Pl.stamina > 0.05, night: this.night,
-      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood, shelter: !!this.restIn, sun: (this._sunT = (this._sunT || 0) - dt) <= 0 ? (this._sunT = 0.5, this._sun = this.sunOn()) : (this._sun || 0) })) {
+      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood, shelter: !!this.restIn, kinH: this.clock.held ? dt / 73 : 0, sun: (this._sunT = (this._sunT || 0) - dt) <= 0 ? (this._sunT = 0.5, this._sun = this.sunOn()) : (this._sun || 0) })) {
       if (ev === 'thirsty') this.ui.toast('Your mouth is dry. Drink something: the canteen, or the spring.', 4);
       if (/^tired[123]$/.test(ev) || ev === 'rested') this.say(S.LINES[ev]);
       if (ev === 'crash') this.say(S.LINES.coffeeCrash);
       if (ev === 'pill_on') this.say(S.LINES.pillOn);
       if (ev === 'pill_off') this.say(S.LINES.pillOff);
-      if (ev === 'hungry') this.ui.toast('Your stomach is knotted. Eat something: there are tins on the shelf in the cab.', 4);
+      if (ev === 'hungry') { const cabTins = this.inv.world.some((i) => i.kind === 'food' && i.pos && i.pos[1] > 29.5 && Math.abs(i.pos[0]) < 2.1 && Math.abs(i.pos[2]) < 2.1), carried = this.inv.find('food');
+        this.ui.toast(carried ? 'Your stomach is knotted. Eat something: you have a tin with you.' : cabTins ? 'Your stomach is knotted. There are tins on the shelf in the cab.' : 'Your stomach is knotted, and you\'re out of food up here.', 4); }
+      if (ev === 'freezing') this.ui.toast('You\'re shaking. Get inside: the heater, dry off, something hot.', 4);
     }
     // injuries mend slowly on their own, quickly asleep; a limp fades
     if (this.health < 1 && e.time.value - (this.hurtAt ?? -99) > 8) this.health = Math.min(1, this.health + dt * (this.resting ? 1 / 25 : this.sitting ? 1 / 90 : 1 / 240));
     this.limp = Math.max(0, this.limp - dt / 45);
-    Pl.speedMul = this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1);
+    Pl.speedMul = Math.max(0.6, this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1));   // (never so slow you can't get away)
     this.survT = (this.survT || 0) - dt;
     if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph, health: this.health, bpm: this.fear.bpm, sick: this.surv.sick, sleep: this.fatigueHUD ? this.fatigueHUD() : null }); this.refreshHotbar(); }
     // items: the thing in your hand, the placing ghost, wheel = switch hands (or turn what you're placing)

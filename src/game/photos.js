@@ -2,7 +2,7 @@
 // A print develops over 60 s (grey-blue → the image blooms in). Shaking it (Q) speeds it up.
 // A forbidden print — the Weeper looking up — gives you one second, once the face starts to
 // resolve, to turn it face-down. Only a print you are looking at can be seen.
-import { clamp } from './util.js?v=c8446c4c'
+import { clamp } from './util.js?v=687d625a'
 
 export const PHOTO = { develop: 60, shakeBoost: 3.2, shakeWindow: 1.2, resolveAt: 0.55, flipWindow: 1.0, pack: 10 }
 
@@ -89,11 +89,13 @@ export class Photos {
 export function classifyShot(meta, { flash = false, night = false } = {}) {
   const ents = (meta && meta.entities) || []
   let best = null
+  const size = (e) => (e.onScreen ?? 0) / Math.max(1, e.distance ?? 1)   // how big it is in the frame, not just whether it's in it
   for (const e of ents) {
-    const seenEnough = (e.onScreen ?? 0) > 0.002 && e.inFrustum !== false && !e.occluded
+    if (e.kind === 'phantom') continue   // what isn't there doesn't develop
+    const seenEnough = (e.onScreen ?? 0) > 0.002 && e.inFrustum !== false && !e.occluded && (e.distance ?? 0) < 90
     const lightOk = !night || e.lit || (flash && (e.distance ?? 99) < 14)
-    if (seenEnough && lightOk && (!best || (e.onScreen ?? 0) > (best.onScreen ?? 0))) best = e
+    if (seenEnough && lightOk && (!best || size(e) > size(best))) best = e
   }
-  const weeper = ents.find((e) => e.kind === 'weeper' && (e.onScreen ?? 0) > 0.0005 && e.inFrustum !== false && !e.occluded)
+  const weeper = ents.find((e) => e.kind === 'weeper' && (e.onScreen ?? 0) > 0.0005 && e.inFrustum !== false && !e.occluded && (e.distance ?? 0) < 80 && (!night || e.lit || (flash && (e.distance ?? 99) < 14)))
   return { subject: best ? best.kind : 'nothing', weeper: weeper || null }
 }

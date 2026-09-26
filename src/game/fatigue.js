@@ -13,7 +13,7 @@
 //   level       0 rested … 1 wrecked: what you FEEL (debt − coffee + sedation + woozy). Symptoms, speed, the HUD.
 //   halluLevel  what your head does with it: level, pressed down hard by the pill. The director's hallucinations run on it.
 //   rest        1 − level: the HUD's sleep ring (1 = rested, like water / food).
-import { clamp, smooth } from './util.js?v=c8446c4c'
+import { clamp, smooth } from './util.js?v=687d625a'
 
 export const FAT = {
   wreck: 18,          // game hours awake: rested (0) → wrecked (1)
@@ -56,15 +56,16 @@ export class Fatigue {
   /** dtH: game hours. ctx: { resting, sitting, jog, coldTarget (0..1), feelsF, water, food, co (blood 0..1) } → events */
   tick(dtH, ctx = {}) {
     const ev = []
-    if (!(dtH > 0)) return ev
+    const kin = Math.max(dtH || 0, ctx.kinH || 0)   // the body's chemistry runs on real time too (a held clock doesn't stop the coffee or the pill)
+    if (!(kin > 0)) return ev
     // coffee: gut → blood, fading; the crash when it's mostly gone
-    const cin = this.cafGut * Math.min(1, FAT.cafIn * dtH); this.cafGut -= cin; this.caf = clamp(this.caf + cin - FAT.cafFade * dtH * (this.caf > 0 ? 1 : 0))
-    this.cups = Math.max(0, this.cups - dtH / 6)
+    const cin = this.cafGut * Math.min(1, FAT.cafIn * kin); this.cafGut -= cin; this.caf = clamp(this.caf + cin - FAT.cafFade * kin * (this.caf > 0 ? 1 : 0))
+    this.cups = Math.max(0, this.cups - kin / 6)
     if (this.cafPeak > 0 && this.caf < 0.2 && this.cafGut < 0.05) { this.crashDue += FAT.crash * this.cafPeak / FAT.cafLift; this.cafPeak = 0; ev.push('crash') }
     // the pill: gut → blood, cleared slowly
-    const pin = this.gut * (1 - Math.exp(-FAT.onset * dtH)); this.gut -= pin; this.drug += pin; this.drug = Math.max(0, this.drug * Math.exp(-FAT.clear * dtH))
-    this.woozy = Math.max(0, this.woozy - dtH)
-    this.fresh = Math.max(0, (this.fresh || 0) - dtH * 3)
+    const pin = this.gut * (1 - Math.exp(-FAT.onset * kin)); this.gut -= pin; this.drug += pin; this.drug = Math.max(0, this.drug * Math.exp(-FAT.clear * kin))
+    this.woozy = Math.max(0, this.woozy - kin)
+    this.fresh = Math.max(0, (this.fresh || 0) - kin * 3)
     if (ctx.resting) {   // the bed pays it off (worse with coffee in you, or a freezing / sweltering cab)
       this.asleep += dtH
       const bad = (ctx.feelsF != null && (ctx.feelsF < 45 || ctx.feelsF > 80)) ? 0.6 : 1

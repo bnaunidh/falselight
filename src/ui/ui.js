@@ -1,8 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=c8446c4c';
-import { createOverlays } from './overlays.js?v=c8446c4c';
+import { drawMap } from './mapdraw.js?v=687d625a';
+import { createOverlays } from './overlays.js?v=687d625a';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -81,9 +81,12 @@ export function createUI(root = document.getElementById('ui')) {
     if (el.textContent !== txt) el.textContent = txt;
   };
   U.print = (o) => {
-    if (!o) { print.style.display = 'none'; return; }
+    if (!o) { if (print._k !== 'none') { print.style.display = 'none'; print._k = 'none'; } return; }
     print.style.display = 'block';
     const dev = Math.max(0, Math.min(1, o.develop));
+    // rebuilt only when something you'd see changes (it used to re-parse the whole image into the page every frame)
+    const key = [o.dataURL ? o.dataURL.length : 0, o.faceDown ? 1 : 0, Math.round(dev * 60), o.resolving ? 1 : 0, o.resolving ? Math.round((o.windowLeft || 0) * 10) : 0].join('|');
+    if (print._k === key) return; print._k = key;
     const k = Math.pow(dev, 1.6);
     print.innerHTML = `<div class="card${o.faceDown ? ' down' : ''}"><div class="img" style="background-image:url(${o.faceDown ? '' : o.dataURL || ''});filter:brightness(${0.45 + 0.55 * k}) contrast(${0.25 + 0.75 * k}) saturate(${k}) blur(${(1 - k) * 3}px);opacity:${0.08 + 0.92 * k}"></div>
       <div class="tint" style="opacity:${o.faceDown ? 0 : 0.85 * (1 - k)}"></div>${o.faceDown ? '<div class="back">Polaroid</div>' : ''}</div>
