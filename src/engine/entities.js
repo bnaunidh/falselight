@@ -1,8 +1,8 @@
 // FALSE LIGHT — entities (posed static meshes, instant pose swaps), what-can-be-seen tests (engine.view),
 // line of sight (terrain + tower + tree trunks), and the crosshair interaction registry.
 import * as THREE from 'three';
-import { loadGLB } from './world.js?v=42224745';
-import { clamp } from './util.js?v=42224745';
+import { loadGLB } from './world.js?v=a148af98';
+import { clamp } from './util.js?v=a148af98';
 
 // ------------------------------------------------------------------ placeholder people (until the Blender characters land)
 function placeholderFigure(kind) {
@@ -174,7 +174,7 @@ export function createInteract(engine) {
   document.body.append(el, dot);
   const dir = new THREE.Vector3(), p = new THREE.Vector3(), tmp = new THREE.Vector3();
   const api = {
-    current: null, crosshair: dot, promptEl: el,
+    current: null, crosshair: dot, promptEl: el, canReach: null,
     register(t) { targets.set(t.id, t); return () => targets.delete(t.id); },
     unregister(id) { targets.delete(id); },
     targets,
@@ -194,6 +194,7 @@ export function createInteract(engine) {
         if (along < 0.1 || along > maxD + (t.radius || 0.4)) continue;
         const off = tmp.addScaledVector(dir, -along).length();
         if (off > (t.radius || 0.4)) continue;
+        if (api.canReach && !api.canReach(t, pos)) continue;   // the game's say: e.g. not through a wall
         const s = off + along * 0.1;
         if (s < bs) { bs = s; best = t; }
       }

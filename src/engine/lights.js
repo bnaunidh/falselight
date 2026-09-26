@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=42224745';
+import { clamp, damp } from './util.js?v=a148af98';
 
 // The searchlight beam: light scattered by haze inside the cone. Each pixel the cone covers gets ONE fragment (front faces
 // from outside, back faces from inside) and works out analytically how much beam its view ray crosses: the ray's closest
@@ -97,10 +97,22 @@ export function createLights(engine) {
   flash.castShadow = q.flashShadows; flash.shadow.mapSize.set(512, 512); flash.shadow.camera.near = 0.2; flash.shadow.bias = -0.0005;
   camera.add(flash); flash.position.set(0.12, -0.075, -0.34); flash.target.position.set(0.02, -0.04, -4); camera.add(flash.target);   // at the lens of the torch in your hand, so it lights the path, not the torch
   const FL = {
-    on: false, battery: 1, light: flash,
+    on: false, battery: 1, light: flash, placed: null,
+    /** A torch set down still on keeps shining where it lies: the same spot light, moved out of your hand. p = { pos, dir } | null. */
+    setPlaced(p) {
+      if (p) {
+        if (flash.parent !== scene) { scene.add(flash); scene.add(flash.target); }
+        flash.position.copy(p.pos); flash.target.position.copy(p.pos).addScaledVector(p.dir, 4); flash.target.position.y -= 0.12;
+        flash.updateMatrixWorld(); flash.target.updateMatrixWorld();
+      } else if (flash.parent !== camera) {
+        camera.add(flash); camera.add(flash.target); flash.position.set(0.12, -0.075, -0.34); flash.target.position.set(0.02, -0.04, -4);
+      }
+      FL.placed = p || null;
+    },
     isLit(p) {
       if (!FL.on) return false;
-      const o = new THREE.Vector3(); flash.getWorldPosition(o); const d = new THREE.Vector3(); camera.getWorldDirection(d);
+      const o = new THREE.Vector3(); flash.getWorldPosition(o); const d = new THREE.Vector3();
+      if (FL.placed) d.copy(FL.placed.dir); else camera.getWorldDirection(d);
       const to = new THREE.Vector3().subVectors(p, o); if (to.length() > 30) return false;
       return to.angleTo(d) < flash.angle && engine.view.lineOfSight(o, p);
     },

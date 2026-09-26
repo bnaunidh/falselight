@@ -2,9 +2,38 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=42224745';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=a148af98';
 
 const loader = new GLTFLoader();
+// Glass you can see: at a glancing angle a pane goes silver with reflection (Fresnel), so a shut window reads as glass and
+// an open one as a hole. The sashes (the panes that slide open) also carry forty summers of grime: a dirty lower edge,
+// thumb smudges by the pull, dried rain streaks.
+function glassFresnel(m, k) {
+  if (m.userData.fresnel) return m; m.userData.fresnel = k;
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `#include <opaque_fragment>
+      { float fr = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 3.0); gl_FragColor.a = clamp(gl_FragColor.a + fr * ${k.toFixed(2)}, 0.0, 0.9); }`);
+  };
+  m.customProgramCacheKey = () => 'fl-glass-' + k;
+  return m;
+}
+let _sash = null;
+function sashGlass(base) {
+  if (_sash) return _sash;
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  let seed = 7; const R = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  g.fillStyle = 'rgb(62,62,62)'; g.fillRect(0, 0, S, S);                                   // alpha ≈ 0.24: clean-ish glass
+  const low = g.createLinearGradient(0, S, 0, S * 0.6); low.addColorStop(0, 'rgba(170,170,170,0.9)'); low.addColorStop(1, 'rgba(170,170,170,0)');
+  g.fillStyle = low; g.fillRect(0, S * 0.6, S, S * 0.4);                                    // grime settled along the bottom rail
+  for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(150,150,150,${0.15 + R() * 0.3})`; g.beginPath(); g.ellipse(S * (0.1 + R() * 0.8), S * (0.45 + R() * 0.5), 3 + R() * 7, 4 + R() * 9, R() * 3, 0, 7); g.fill(); }   // smudges
+  for (let i = 0; i < 40; i++) { const x = R() * S, y = R() * S * 0.7; g.strokeStyle = `rgba(130,130,130,${0.12 + R() * 0.2})`; g.lineWidth = 1 + R() * 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - 0.5) * 3, y + 12 + R() * 50); g.stroke(); }   // rain streaks
+  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(140,140,140,${R() * 0.35})`; g.fillRect(R() * S, R() * S, 1, 1); }   // dust
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; t.flipY = false;
+  _sash = base.clone(); _sash.name = 'FL_glass_sash'; _sash.alphaMap = t; _sash.opacity = 1; _sash.color = new THREE.Color(0.86, 0.85, 0.8);
+  _sash.userData = {}; glassFresnel(_sash, 0.55);
+  return _sash;
+}
+
 export const gltfCache = new Map();
 export async function loadGLB(path) {
   if (!gltfCache.has(path)) gltfCache.set(path, loader.loadAsync(assetURL(path)));
@@ -175,7 +204,7 @@ function patchFade(mat, foliage) {
     if (foliage) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
 #ifdef USE_MAP
 { vec2 dx = dFdx(vMapUv * 2048.0), dy = dFdy(vMapUv * 2048.0); float mip = max(0.0, 0.5 * log2(max(dot(dx, dx), dot(dy, dy))));
-  diffuseColor.a *= 1.0 + mip * 0.28; }
+  diffuseColor.a *= 1.0 + min(mip, 3.0) * 0.18; }   // (capped: past a few mips the boost lifts stray texels into floating specks)
 #endif`);
   };
   mat.customProgramCacheKey = () => prevKey() + '|fade' + (foliage ? 'F' : '');
@@ -271,7 +300,7 @@ class VegSet {
       let placed = false;
       for (let li = 0; li < nL && !placed; li++) {
         const lo = li ? R[li - 1] : 0, hi = R[li]; if (hi == null) break;
-        const B = Math.max(4, hi * 0.07);                       // fade band half-width grows with distance
+        const B = Math.max(1.5, hi * 0.022);                    // fade band half-width grows with distance (kept narrow: a wide band leaves whole stands of trees stippled into pixel noise)
         if (d < hi - B) { push(li, i, 1); placed = true; }
         else if (d < hi + B) {
           const t = (d - (hi - B)) / (2 * B);
@@ -309,7 +338,7 @@ async function loadVegKind(kind, path, msaa) {
       if (col) { const a = new Float32Array(col.count * 3); for (let i = 0; i < col.count; i++) { a[i * 3] = col.getX(i); a[i * 3 + 1] = col.getY(i); a[i * 3 + 2] = col.getZ(i); } geo.setAttribute('flwind', new THREE.BufferAttribute(a, 3)); geo.deleteAttribute('color'); }
       const mat = prepVegMaterial(o.material.clone(), /foliage|impostor/i.test(o.material.name), msaa);
       if (geo.getAttribute('flwind')) patchWind(mat, soft);
-      patchFade(mat, mat.alphaTest > 0);
+      patchFade(mat, mat.alphaTest > 0 && !/impostor/i.test(o.material.name || ''));   // impostors: no mip alpha boost (their soft halo would become floating specks)
       // part matrix relative to the LOD root, but keep the LOD root's own offset out (LODs sit side by side in Blender)
       const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
       parts.push({ geometry: geo, material: mat, matrix: m });
@@ -517,7 +546,10 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
           for (const m of mats) {
             if (!m) continue;
             for (const k of TEX_SLOTS) if (m[k] && m[k].anisotropy !== ANISO) { m[k].anisotropy = ANISO; m[k].needsUpdate = true; }   // planks and bark stay sharp at grazing angles
-            if (m.name === 'FL_glass') { m.transparent = true; m.opacity = 0.18; m.roughness = 0.08; m.metalness = 0; m.depthWrite = false; glass.push(m); o.castShadow = false; }
+            if (m.name === 'FL_glass') {
+              m.transparent = true; m.opacity = 0.16; m.roughness = 0.06; m.metalness = 0; m.depthWrite = false; m.envMapIntensity = 1.6; glassFresnel(m, 0.6); glass.push(m); o.castShadow = false;
+              if (/^FL_sash_/.test(n)) { o.material = sashGlass(m); glass.push(o.material); }   // the panes that open: their own weathered glass (and a frame, from the game)
+            }
             if (/wiremesh|mesh$/i.test(m.name) || m.alphaTest > 0) { m.alphaTest = Math.max(0.35, m.alphaTest); m.transparent = false; m.side = THREE.DoubleSide; o.castShadow = true; }
             if (/oilstain/i.test(m.name)) { m.transparent = true; m.depthWrite = false; o.castShadow = false; }
             if (/searchlight_lens/i.test(m.name)) { m.transparent = true; m.opacity = 0.5; }

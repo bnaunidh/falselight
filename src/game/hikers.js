@@ -4,8 +4,8 @@
 //   * If the beam sits off the trail they follow it off the trail — 8 m out, the ground drops away.
 // The False Light obeys the same beam, but it is too steady, sits too high and answers too fast,
 // and its route ends at the tower gate, not the trailhead.
-import { Polyline, clamp, dist2d } from './util.js?v=42224745'
-import { patternFor, LightSignal } from './morse.js?v=42224745'
+import { Polyline, clamp, dist2d } from './util.js?v=a148af98'
+import { patternFor, LightSignal } from './morse.js?v=a148af98'
 
 export const HIKER = { walk: 1.15, unlitStop: 4, onRouteTol: 7, stray: 0.85, strayBack: 1.0, fallAt: 8, lampHeight: 1.15, falseHeight: 2.7 }
 

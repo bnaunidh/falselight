@@ -1,32 +1,32 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=42224745';
-import { Objectives } from './objectives.js?v=42224745';
-import { Radio } from './radio.js?v=42224745';
-import { Fuel, FUEL } from './fuel.js?v=42224745';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=42224745';
-import { Survival, SURV } from './survival.js?v=42224745';
-import { createItemsView } from './itemsView.js?v=42224745';
-import { createChill } from './chill.js?v=42224745';
-import { createPlume } from './smokePlume.js?v=42224745';
-import { FireFinder, spokenBearing } from './firefinder.js?v=42224745';
-import { Photos, classifyShot } from './photos.js?v=42224745';
-import { CO } from './co.js?v=42224745';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=42224745';
-import { OtherLookout } from './otherLookout.js?v=42224745';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=42224745';
-import { GuidedHiker } from './hikers.js?v=42224745';
-import { MorseKeyer, isSOS } from './morse.js?v=42224745';
-import { normalizeLayout } from './layout.js?v=42224745';
-import { createSaves } from './saves.js?v=42224745';
-import { createRng } from './rng.js?v=42224745';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=42224745';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=42224745';
-import * as S from './content/story.js?v=42224745';
-import { createDog, setDogName } from './dog.js?v=42224745';
-import { createWildlife } from './wildlife.js?v=42224745';
-import { Fear, registerFearSounds } from './fear.js?v=42224745';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=a148af98';
+import { Objectives } from './objectives.js?v=a148af98';
+import { Radio } from './radio.js?v=a148af98';
+import { Fuel, FUEL } from './fuel.js?v=a148af98';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=a148af98';
+import { Survival, SURV } from './survival.js?v=a148af98';
+import { createItemsView } from './itemsView.js?v=a148af98';
+import { createChill } from './chill.js?v=a148af98';
+import { createPlume } from './smokePlume.js?v=a148af98';
+import { FireFinder, spokenBearing } from './firefinder.js?v=a148af98';
+import { Photos, classifyShot } from './photos.js?v=a148af98';
+import { CO } from './co.js?v=a148af98';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=a148af98';
+import { OtherLookout } from './otherLookout.js?v=a148af98';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=a148af98';
+import { GuidedHiker } from './hikers.js?v=a148af98';
+import { MorseKeyer, isSOS } from './morse.js?v=a148af98';
+import { normalizeLayout } from './layout.js?v=a148af98';
+import { createSaves } from './saves.js?v=a148af98';
+import { createRng } from './rng.js?v=a148af98';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=a148af98';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=a148af98';
+import * as S from './content/story.js?v=a148af98';
+import { createDog, setDogName } from './dog.js?v=a148af98';
+import { createWildlife } from './wildlife.js?v=a148af98';
+import { Fear, registerFearSounds } from './fear.js?v=a148af98';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -753,6 +753,9 @@ export class Game {
       const open = this.co.toggleWindow(k); e.audio.play(open ? 'window_open' : 'window_close', { volume: 0.7, position: this.anchor('IA_window_' + k) });
     }, () => true, 0.7);
     reg('searchlight', 'IA_searchlight', 'E — Take the searchlight', () => this.enterSearchlight(), () => true, 0.7);
+    // the cab's walls: what's inside the cab is used from inside, what's out on the catwalk from outside (the door and the lamp on the roof: both)
+    const BOTH = new Set(['door', 'searchlight']);
+    I.canReach = (t, pos) => { if (BOTH.has(t.id) || pos.y < 28.5) return true; return (Math.abs(pos.x) < 2.1 && Math.abs(pos.z) < 2.1) === this.inCab(); };
     const fullCan = () => this.inv.inHands('fuel', (i) => i.fill > 0.01);
     const tankTxt = () => `tank ${this.fuel.tank.toFixed(1)} of ${FUEL.capacity} L`;
     const startGen = () => { const r = this.fuel.start(); if (r.ok) { e.audio.play('generator_start'); this.complete('d1_generator'); } else this.ui.toast('The tank is dry. Bring a can of fuel (the cans are outside the shed door).', 3.5); };
@@ -973,6 +976,7 @@ export class Game {
     const r = this.inv.take(id);
     if (!r.ok) { this.ui.toast(r.why, 3); return; }
     this.e.audio.sfx(it.kind === 'fuel' ? 'metal_heavy' : it.kind === 'backpack' ? 'cloth' : 'metal', { volume: it.kind === 'fuel' ? 0.35 : 0.3 });
+    if (it.kind === 'flashlight' && it.on && r.to !== 'pack') this.e.lights.flashlight.on = true;
     if (it.kind === 'camera' && !this.photos.hasCamera) {
       this.photos.giveCamera(1); this.flags.hasCamera = true; this.say(S.LINES.cameraFound); this.complete('d1_camera');
       this.ui.toast(r.to === 'pack' ? 'Into the pack. C raises the camera.' : 'C raises the camera · click takes a picture.', 4);
@@ -1006,7 +1010,7 @@ export class Game {
     const pl = this.placing; if (!pl || !pl.spot) return;
     if (!pl.spot.ok) { this.ui.toast('Nowhere to put it there. Look at a floor, a shelf, a table, a peg or the ground.', 2.5); return; }
     const it = this.inv.get(pl.id), p = pl.spot.pos;
-    if (it.kind === 'flashlight') this.e.lights.flashlight.on = false;
+    if (it.kind === 'flashlight') it.on = !!this.e.lights.flashlight.on;   // set down still on, it keeps shining where it lies
     if (it.kind === 'camera' && this.camRaised) this.lowerCamera();
     this.inv.place(pl.id, [p.x, p.y, p.z], pl.rotY, pl.spot.hook || null);
     this.placing = null; this.iv.ghost(null);
@@ -1040,10 +1044,11 @@ export class Game {
   potOnStove() { const s = this.anchor('IA_stove'); return !!s && this.inv.world.some((i) => i.kind === 'pot' && Math.hypot(i.pos[0] - s.x, i.pos[2] - s.z) < 0.4 && Math.abs(i.pos[1] - (s.y - 0.05)) < 0.35); }
   toggleFlashlight() {
     const FL = this.e.lights.flashlight;
+    if (FL.placed && !this.inv.inHands('flashlight')) { const it = this.inv.items.find((i) => i.kind === 'flashlight' && i.where === 'world'); if (it) it.on = false; FL.on = false; this.e.audio.play('morse_click', { volume: 0.3 }); return; }
     if (!FL.on) {
       const f = this.inv.find('flashlight');
       if (!f) { this.ui.toast('You don\'t have the flashlight with you.', 2.5); return; }
-      if (f.where === 'pack') { const r = this.inv.ready('flashlight'); if (!r.ok) { this.ui.toast('The flashlight is in the pack and your hands are full.', 3); return; } this.ui.toast('You dig the flashlight out of the pack.', 2); this.syncItems(); }
+      if (f.where === 'pack') { const r = this.inv.ready('flashlight'); if (!r.ok) { this.ui.toast('The flashlight is in the pack and your hands are full.', 3); return; } this.syncItems(); }
     }
     FL.on = !FL.on; this.e.audio.play('morse_click', { volume: 0.3 });
   }
@@ -1211,7 +1216,7 @@ export class Game {
     const fw = cam.getWorldDirection(this._fw || (this._fw = new THREE.Vector3()));
     this.ui.binoculars(this.binocular && this.mode === 'walk', (Math.atan2(fw.x, -fw.z) * 180 / Math.PI + 360) % 360);
     // windows: slide the sashes to match the rule state
-    if (!this.sashes) { this.sashes = {}; for (const k of 'nesw') { const o = e.world.objects.get('FL_sash_' + k); if (o) this.sashes[k] = { o, base: o.position.clone(), t: 0 }; } }
+    if (!this.sashes) { this.sashes = {}; for (const k of 'nesw') { const o = e.world.objects.get('FL_sash_' + k); if (o) { this.sashes[k] = { o, base: o.position.clone(), t: 0 }; this.frameSash(o); } } }
     for (const k in this.sashes) {
       const s = this.sashes[k], tgt = this.co.windows[k] ? 1 : 0; if (Math.abs(s.t - tgt) < 1e-3 && s.done) continue;
       s.t += Math.sign(tgt - s.t) * Math.min(Math.abs(tgt - s.t), dt * 1.6); s.done = Math.abs(s.t - tgt) < 1e-3;
@@ -1266,7 +1271,18 @@ export class Game {
     const act = this.inv.activeItem;
     const moving = e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right') ? 1 : 0;
     this.iv.hold(this.mode === 'walk' && !this.camRaised && !this.binocular && !this.placing && act ? act.kind : null, t, moving);
-    if (e.lights.flashlight.on && !this.inv.inHands('flashlight')) e.lights.flashlight.on = false;
+    { const FL = e.lights.flashlight, ti = this.inv.items.find((i) => i.kind === 'flashlight');
+      if (ti && ti.where === 'world' && ti.on && ti.pos) {   // a torch left on where you set it down
+        if (!FL.placed || FL.placed.id !== ti.id || FL.placed.at !== ti.pos) {
+          const r = ti.rotY || 0, dir = ti.hook ? new THREE.Vector3(Math.sin(r) * 0.4, -1, Math.cos(r) * 0.4).normalize() : new THREE.Vector3(Math.sin(r), -0.04, Math.cos(r)).normalize();
+          FL.setPlaced({ id: ti.id, at: ti.pos, dir, pos: new THREE.Vector3(ti.pos[0], ti.pos[1] + 0.05, ti.pos[2]).addScaledVector(dir, 0.14) });
+        }
+        FL.on = true;
+      } else {
+        if (FL.placed) { FL.setPlaced(null); if (!this.inv.inHands('flashlight')) FL.on = false; }
+        if (FL.on && !this.inv.inHands('flashlight')) FL.on = false;
+      }
+    }
     this.iv.setTorchGlow(e.lights.flashlight.on);
     // dread: the lights stutter when something wrong is close (the Weeper, the thing at the tree line, a bear on you)
     { const W = this.weeper, me = this.pos(); let d = 0;
@@ -1338,6 +1354,17 @@ export class Game {
       const c = e.camera, k = this.fear.shake * 0.0035;
       c.rotation.x += (Math.sin(t * 23.1) + Math.sin(t * 37.7 + 1.3) * 0.6) * k; c.rotation.y += (Math.sin(t * 19.3 + 2.1) + Math.sin(t * 41.9) * 0.5) * k;
     }
+  }
+  /** A sliding sash is a pane of glass in a painted wood frame with a brass pull: give the bare pane its frame (children, so
+   *  they slide with it). Open, the frame sits over the next pane and the gap is plain air; shut, it's square in its opening. */
+  frameSash(o) {
+    const g = o.geometry; if (!g.boundingBox) g.computeBoundingBox(); const bb = g.boundingBox, sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+    const thin = sz.x < sz.z ? 'x' : 'z', wide = thin === 'x' ? 'z' : 'x', W = sz[wide], H = sz.y, T = 0.045, D = 0.035;
+    const mat = this._sashMat || (this._sashMat = new THREE.MeshStandardMaterial({ color: 0x6f6454, roughness: 0.78, metalness: 0 }));
+    const brass = this._brassMat || (this._brassMat = new THREE.MeshStandardMaterial({ color: 0xa8864a, roughness: 0.35, metalness: 0.9 }));
+    const bar = (w, h, dx, dy, m = mat, d = D) => { const b = new THREE.Mesh(new THREE.BoxGeometry(thin === 'x' ? d : w, h, thin === 'x' ? w : d), m); b.position.copy(c); b.position[wide] += dx; b.position.y += dy; b.castShadow = false; b.name = 'FL_sash_frame'; o.add(b); return b; };
+    bar(W + T, T, 0, H / 2); bar(W + T, T * 1.3, 0, -H / 2); bar(T, H + T, -W / 2, 0); bar(T, H + T, W / 2, 0);
+    bar(0.07, 0.018, 0, -H / 2 + T * 0.9, brass, D + 0.02);   // the pull
   }
   /** The fence gate swings between the way the model stands it (open, swung out) and shut across the gap. */
   updateGate(dt) {

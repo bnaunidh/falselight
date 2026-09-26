@@ -66,22 +66,22 @@ function paintSweat() {
   return c;
 }
 
-/** Hurt: a dark blood-red rim with veins branching in from it (what a pounding head looks like from inside). */
+/** Hurt: no lines, no "veins": a soft, blotchy dark-red closing in from the edges (low-res noise, so the browser's own
+ *  upscale blurs it like the edge of your sight going), which the heart makes throb. */
 function paintHurt() {
-  const c = canvas(), g = c.getContext('2d'), R = rng(5);
-  const rim = g.createRadialGradient(W / 2, H / 2, H * 0.28, W / 2, H / 2, W * 0.62);
-  rim.addColorStop(0, 'rgba(90,0,0,0)'); rim.addColorStop(0.55, 'rgba(90,0,0,0.18)'); rim.addColorStop(1, 'rgba(40,0,0,0.92)');
-  g.fillStyle = rim; g.fillRect(0, 0, W, H);
-  g.lineCap = 'round';
-  const vein = (x, y, a, len, w, depth) => {
-    g.beginPath(); g.moveTo(x, y);
-    for (let i = 0; i < len; i++) {
-      x += Math.cos(a) * 4; y += Math.sin(a) * 4; a += (R() - 0.5) * 0.5; g.lineTo(x, y);
-      if (depth < 2 && R() < 0.07) { g.strokeStyle = `rgba(70,0,4,${0.35 + w * 0.4})`; g.lineWidth = w * 3; g.stroke(); vein(x, y, a + (R() - 0.5) * 1.6, len * 0.5 | 0, w * 0.6, depth + 1); g.beginPath(); g.moveTo(x, y); }
-    }
-    g.strokeStyle = `rgba(70,0,4,${0.35 + w * 0.4})`; g.lineWidth = w * 3; g.stroke();
-  };
-  for (let i = 0; i < 46; i++) { const [x, y] = edgePoint(R); vein(x, y, Math.atan2(H / 2 - y, W / 2 - x) + (R() - 0.5) * 0.9, 18 + (R() * 30 | 0), 0.5 + R() * 0.5, 0); }
+  const w = 320, h = 180, c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+  const img = g.createImageData(w, h), R = rng(5);
+  const N = 9, lat = Array.from({ length: (N + 1) * (N + 1) }, () => R());
+  const vn = (x, y) => { const xi = Math.floor(x) % N, yi = Math.floor(y) % N, xf = x - Math.floor(x), yf = y - Math.floor(y), u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), L = (a, b) => lat[(b % N) * (N + 1) + (a % N)];
+    return (L(xi, yi) * (1 - u) + L(xi + 1, yi) * u) * (1 - v) + (L(xi, yi + 1) * (1 - u) + L(xi + 1, yi + 1) * u) * v; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = Math.abs(x / w - 0.5) * 2, dy = Math.abs(y / h - 0.5) * 2, e = Math.pow(Math.pow(dx, 3) + Math.pow(dy, 3), 1 / 3);
+    const n = vn(x / w * 6, y / h * 6) * 0.65 + vn(x / w * 13 + 3, y / h * 13 + 7) * 0.35;
+    const k = Math.max(0, Math.min(1, (e - 0.5 + (n - 0.5) * 0.35) / 0.5));
+    const a = Math.pow(k, 1.6), q = (y * w + x) * 4;
+    img.data[q] = 70 + 40 * (1 - k); img.data[q + 1] = 0; img.data[q + 2] = 2; img.data[q + 3] = Math.min(255, a * 245);
+  }
+  g.putImageData(img, 0, 0);
   return c;
 }
 
@@ -105,7 +105,7 @@ export function createOverlays(root) {
       want.cold = cold; want.heat = heat; want.hurt = hurt;
       if (cold > 0.01 || L.cold) set(layer('cold', paintFrost), Math.pow(cold, 0.8), 1.12 - 0.12 * cold);   // it grows inward
       if (heat > 0.01 || L.heat) set(layer('heat', paintSweat), heat * (0.85 + 0.15 * Math.sin(performance.now() / 900)));
-      if (hurt > 0.01 || L.hurt) set(layer('hurt', paintHurt), Math.min(1, hurt * (0.72 + 0.4 * pulse)), 1.04 - 0.03 * hurt - 0.012 * pulse * hurt);
+      if (hurt > 0.01 || L.hurt) set(layer('hurt', paintHurt), Math.min(1, hurt * (0.6 + 0.4 * pulse)), 1.1 - 0.1 * hurt);   // it closes in as you get worse
     },
     clear() { for (const l of Object.values(L)) set(l, 0); },
     get state() { return { ...want, painted: Object.keys(L) }; },

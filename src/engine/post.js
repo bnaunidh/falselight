@@ -81,7 +81,7 @@ export function createPost(engine) {
         uv = 0.5 + (uv - 0.5) * (1.0 - thump * 0.006);
         if (uHeat > 0.001) { float t = uTime; vec2 q = uv - 0.5; uv += uHeat * (0.0012 + dot(q, q) * 0.006) * vec2(sin(uv.y * 38.0 + t * 5.3) + 0.5 * sin(uv.y * 91.0 - t * 7.1), sin(uv.x * 29.0 + t * 4.2)); }
         vec2 d = uv - 0.5; float r2 = dot(d, d);
-        float ca = 0.0012 + r2 * 0.004 + uCO * 0.004 + uFear * 0.002 + thump * 0.004 + uHurt * r2 * 0.01;
+        float ca = 0.0003 + r2 * 0.0016 + uCO * 0.004 + uFear * 0.002 + thump * 0.004 + uHurt * r2 * 0.01;   // a whisper of lens fringe: more painted red/blue pixels on every needle edge
         vec3 c;
         c.r = texture2D(tScene, uv - d * ca).r; c.g = texture2D(tScene, uv).g; c.b = texture2D(tScene, uv + d * ca).b;
         if (uCO > 0.2) { vec3 ghost = texture2D(tScene, uv + vec2(0.012 * sin(uTime * 0.6), 0.004) * uCO).rgb; c = mix(c, max(c, ghost), 0.35 * uCO); }
@@ -92,12 +92,12 @@ export function createPost(engine) {
         c = mix(vec3(l), c, uSat * (1.0 - uCO * 0.45) * (1.0 - uHurt * 0.55) * (1.0 - uCold * 0.3) * (1.0 - uFear * 0.25));
         c *= mix(vec3(1.0), vec3(0.88, 0.97, 1.1), uCold);                  // cold: the colour drains toward blue
         c *= mix(vec3(1.0), vec3(1.1, 0.97, 0.84), uHeat);                  // heat: everything goes amber
-        c = mix(c, c * vec3(1.15, 0.32, 0.28), uHurt * smoothstep(0.06, 0.34, r2) * (0.75 + 0.5 * uPulse));   // hurt: the edges bleed red, in time
+        c = mix(c, c * vec3(1.05, 0.5, 0.45), uHurt * smoothstep(0.1, 0.4, r2) * (0.35 + 0.25 * uPulse));   // hurt: the edges bleed red, in time
         c = (c - 0.5) * uCon + 0.5;
         float fv = uFear + thump * 0.35 + uHurt * 0.3; float vig = smoothstep(0.95, 0.25 - fv * 0.2, sqrt(r2) * (1.0 + fv * 0.6));
         c *= mix(0.55, 1.0, vig);
         float g = hash(vUv * uRes + fract(uTime * 13.1)) - 0.5;
-        c += g * uGrain * (0.35 + 0.65 * (1.0 - l));
+        c += g * uGrain * (0.25 + 0.45 * (1.0 - l));
         c *= 1.0 - uBlack;
         gl_FragColor = vec4(max(c, 0.0), 1.0);
         #include <colorspace_fragment>

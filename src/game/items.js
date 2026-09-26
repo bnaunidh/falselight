@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=42224745'
+import { clamp } from './util.js?v=a148af98'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -18,13 +18,21 @@ export const KINDS = {
   pot:        { name: 'Coffee pot', model: 'prop_pot_enamel', pack: false, scale: 0.78 },
   oldcan:     { name: 'Rusted can', model: 'prop_can_rusted', pack: true, scale: 0.8 },
   lantern:    { name: 'Hurricane lantern', model: 'prop_lantern', pack: false, light: true },
+  // Tillman's prescription, left on the cab shelf: chlorpromazine 25 mg (src/game/fatigue.js pill()). No bottle model yet:
+  // the food tin at 0.55 (4.7 x 6.2 cm), amber with a white rim, no lettering (itemsView: tint + plain). TODO a real
+  // prop_pill_bottle (amber vial, white cap, a typed pharmacy label).
+  pills:      { name: 'Pill bottle', model: 'prop_food_tin', pack: true, scale: 0.55, tint: 0x9a5418, plain: true },
 }
-/** Where the cab's movable things start (three coords; settled onto whatever is under them). */
+export const PILLS = { full: 6, label: 'R. TILLMAN · CHLORPROMAZINE 25 MG · TAKE ONE AS DIRECTED · MAY CAUSE DROWSINESS' }
+/** Where the cab's movable things start (three coords; settled onto whatever is under them). [kind, pos, rotY, since (the
+ *  inventory version that added it: older saves get only what's newer), extra fields] */
 export const CAB_ITEMS = [
   ['clock', [1.78, 31.0, -1.875], 0], ['pot', [1.74, 31.05, 1.62], 0.4],
   ['oldcan', [0.45, 30.4, -1.875], 0.3], ['oldcan', [0.59, 30.4, -1.875], 1.9], ['oldcan', [-1.73, 30.55, 1.865], 0.8],
   ['lantern', [-1.15, 31.0, 1.865], 2.9], ['lantern', [8.3, 1.62, 5.72], 1.2],   // one on the cab's south shelf, one on the shed shelf
+  ['pills', [0.89, 31.3, -1.87], 0.5, 2, { n: PILLS.full }],   // beside the tins on the north shelf
 ]
+const CAB_V = 2
 export const CANTEEN_SIPS = 4
 
 export class Inventory {
@@ -33,9 +41,12 @@ export class Inventory {
     this.active = s.active ?? 0
     this.nextId = s.nextId ?? 1
     this.cabV = s.cabV ?? 0
-    if (this.cabV < 1 && s.items) this.addCabItems()   // a save from before the cab's things were movable
+    if (this.cabV < CAB_V && s.items) this.addCabItems(this.cabV)   // a save from before (some of) the cab's things were movable
   }
-  addCabItems() { for (const [kind, pos, rotY] of CAB_ITEMS) this.create(kind, { where: 'world', pos: [...pos], rotY, settle: true, on: false }); this.cabV = 1 }
+  addCabItems(from = 0) {
+    for (const [kind, pos, rotY, since = 1, extra = {}] of CAB_ITEMS) if (since > from) this.create(kind, { where: 'world', pos: [...pos], rotY, settle: true, on: false, ...extra })
+    this.cabV = CAB_V
+  }
   /** The kit you walk up with + what's already at the lookout. where: { fuel: [[x,y,z],...], cab: {...} } */
   static start(where = {}) {
     const inv = new Inventory()
@@ -101,6 +112,8 @@ export class Inventory {
     const r = this.unstow(p.id); return r.ok ? { ok: true, item: p, fromPack: true } : r
   }
   remove(id) { this.items = this.items.filter((i) => i.id !== id) }
+  /** One pill out of the bottle (false when it's empty). */
+  takePill(it) { if (!it || it.kind !== 'pills' || !(it.n > 0)) return false; it.n--; return true }
   sip(it) { if (!it || it.kind !== 'canteen' || it.fill <= 0) return false; it.fill = clamp(it.fill - 1 / CANTEEN_SIPS); if (it.fill < 1e-3) it.fill = 0; return true }
   label(it) {
     if (!it) return ''
@@ -108,6 +121,7 @@ export class Inventory {
     if (it.kind === 'fuel') return k.name + (it.fill > 0.99 ? ' (full, 5 L)' : it.fill > 0.01 ? ` (${Math.round(it.fill * 50) / 10} L)` : ' (empty)')
     if (it.kind === 'canteen') return k.name + (it.fill > 0 ? ` (${Math.round(it.fill * CANTEEN_SIPS)}/${CANTEEN_SIPS})` : ' (empty)')
     if (it.kind === 'lantern') return k.name + (it.on ? ' (lit)' : '')
+    if (it.kind === 'pills') return k.name + (it.n > 0 ? ` (${it.n} left)` : ' (empty)')
     return k.name
   }
   toJSON() { return { items: this.items.map((i) => ({ ...i })), active: this.active, nextId: this.nextId, cabV: this.cabV } }
