@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=45434b3a';
+import { clamp, damp } from './util.js?v=eef1304c';
 
 // The searchlight beam: light scattered by haze inside the cone. Each pixel the cone covers gets ONE fragment (front faces
 // from outside, back faces from inside) and works out analytically how much beam its view ray crosses: the ray's closest
@@ -157,7 +157,7 @@ export function createLights(engine) {
       glow.visible = I > 0.02; glow.material.opacity = Math.min(1, I * 1.2);
       const lit = FL.on || !!FL.placed; flash.intensity = lit ? 130 * (0.5 + 0.5 * FL.battery) * api.dipsAt(t, 2) : 0; flash.shadow.autoUpdate = lit;   // (a torch set down still on: FL.placed)
       LAMP.flicker = damp(LAMP.flicker, 0, 3, dt);
-      lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) * api.dipsAt(t, 0) : 0;
+      lamp.intensity = LAMP.on ? 3.2 * (LAMP.power ?? 1) * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) * api.dipsAt(t, 0) : 0;   // (power: the generator; a dying tank browns it out)
       // the bulb itself glows only while the lamp is on (it stayed lit, 'a different on', when you pulled the chain)
       if (!LAMP.bulbs) { LAMP.bulbs = []; scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && /cab_bulb/i.test(m.name || '') && !LAMP.bulbs.includes(m)) { m.userData.emis = m.emissiveIntensity ?? 1; LAMP.bulbs.push(m); } }); }
       const bk = lamp.intensity / 3.2;

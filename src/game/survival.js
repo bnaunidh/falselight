@@ -1,8 +1,8 @@
 // Body and weather: air temperature (°F, the lookout is a 1983 Forest Service post), wind chill, the cab's own air,
 // thirst and hunger, and sleep (this.fatigue: src/game/fatigue.js). Pure. Rates are per GAME hour, so resting on the bed
 // costs water and food like real hours do (and pays the sleep back).
-import { clamp } from './util.js?v=45434b3a'
-import { Fatigue } from './fatigue.js?v=45434b3a'
+import { clamp } from './util.js?v=eef1304c'
+import { Fatigue } from './fatigue.js?v=eef1304c'
 
 export const SURV = {
   thirst: 1 / 16,       // a full water meter lasts 16 game hours
@@ -33,6 +33,8 @@ export class Survival {
     this.cabF = s.cabF ?? null
     this.wet = s.wet ?? 0
     this.warmth = s.warmth ?? 0   // a hot drink: fades over about an hour and a half
+    this.sick = s.sick ?? 0       // untreated water (spring, creek): 0..1, thirst runs faster; it passes over ~8 game hours
+    this.chill = 0                // a long drink of cold water: a few degrees colder for a while
     this.airF = 55; this.feelsF = 55; this.warming = false; this.mph = 0
     this.warned = { ...(s.warned || {}) }
     this.fatigue = new Fatigue(s.fatigue || {})   // how long you've been awake (the save carries it)
@@ -56,11 +58,12 @@ export class Survival {
     else this.wet = Math.max(0, this.wet - dtH * (inCab ? (ctx.heater ? 1.2 : 0.4) : 0.2))
     this.airF = inCab ? this.cabF : out
     this.warmth = Math.max(0, this.warmth - dtH * 0.7)
-    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet + 7 * this.warmth
+    this.chill = Math.max(0, this.chill - dtH * 1.5); this.sick = Math.max(0, this.sick - dtH / 8)
+    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet + 7 * this.warmth - 5 * this.chill
     this.warming = inCab && ctx.heater && this.cabF > out + 3
     // thirst + hunger (worse jogging, or sweating in a hot cab)
     const hot = this.feelsF > 74 ? 1.4 : 1
-    this.water = clamp(this.water - SURV.thirst * dtH * (ctx.jog ? 1.6 : 1) * hot)
+    this.water = clamp(this.water - SURV.thirst * dtH * (ctx.jog ? 1.6 : 1) * hot * (1 + 1.4 * this.sick))   // sick: it goes through you
     this.food = clamp(this.food - SURV.hunger * dtH * (ctx.jog ? 1.3 : 1))
     const once = (k, cond, reset) => { if (cond && !this.warned[k]) { this.warned[k] = true; ev.push(k) } else if (reset) this.warned[k] = false }
     once('thirsty', this.water < SURV.lowWater, this.water > SURV.lowWater + 0.1)
@@ -74,7 +77,11 @@ export class Survival {
   /** 1 = fine, lower = you're running on empty (slower, no jogging at 0). */
   get vigor() { return clamp(Math.min(this.water / SURV.lowWater, this.food / SURV.lowFood, 1) * 0.3 + 0.7) * this.fatigue.speedMul }   // (wrecked / the pill: slower)
   drink(amount) { this.water = clamp(this.water + amount) }
+  /** Untreated water: k 0..1 (the spring ~0.3, the creek ~0.55). */
+  drinkRaw(k) { this.sick = clamp(this.sick + k) }
+  /** It was cold: you feel it. */
+  drinkCold() { this.chill = clamp(this.chill + 0.35) }
   eat(amount) { this.food = clamp(this.food + amount) }
   get icon() { return this.warming || this.warmth > 0.3 || this.feelsF >= 66 ? 'fire' : this.feelsF < 40 ? 'snow' : 'therm' }
-  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warmth: this.warmth, warned: { ...this.warned }, fatigue: this.fatigue.toJSON() } }
+  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warmth: this.warmth, sick: this.sick, warned: { ...this.warned }, fatigue: this.fatigue.toJSON() } }
 }

@@ -13,7 +13,7 @@
 //   level       0 rested … 1 wrecked: what you FEEL (debt − coffee + sedation + woozy). Symptoms, speed, the HUD.
 //   halluLevel  what your head does with it: level, pressed down hard by the pill. The director's hallucinations run on it.
 //   rest        1 − level: the HUD's sleep ring (1 = rested, like water / food).
-import { clamp, smooth } from './util.js?v=45434b3a'
+import { clamp, smooth } from './util.js?v=eef1304c'
 
 export const FAT = {
   wreck: 18,          // game hours awake: rested (0) → wrecked (1)
@@ -26,8 +26,8 @@ export const FAT = {
   poorSleep: 0.8,     // the floor / the ground (sleep(h))
   // coffee: masks the debt, then the crash
   cafIn: 4,           // per game hour: it kicks in over ~15 min
-  cafFade: 0.45,      // per game hour: a cup lasts about two hours
-  cafLift: 0.28,      // how much of `level` a fresh cup hides (less for each cup inside ~6 h)
+  cafFade: 0.38,      // per game hour: a cup lasts about two and a half hours
+  cafLift: 0.45,      // how much of `level` a fresh cup hides (less for each cup inside ~6 h): enough to clear 'tired' and quiet the head for a while
   crash: 1.4,         // hours of debt that come due as it wears off (scaled by how much it lifted)
   crashRate: 2.2,     // …landing at this many hours per hour (~40 min)
   // the pill
@@ -64,6 +64,7 @@ export class Fatigue {
     // the pill: gut → blood, cleared slowly
     const pin = this.gut * (1 - Math.exp(-FAT.onset * dtH)); this.gut -= pin; this.drug += pin; this.drug = Math.max(0, this.drug * Math.exp(-FAT.clear * dtH))
     this.woozy = Math.max(0, this.woozy - dtH)
+    this.fresh = Math.max(0, (this.fresh || 0) - dtH * 3)
     if (ctx.resting) {   // the bed pays it off (worse with coffee in you, or a freezing / sweltering cab)
       this.asleep += dtH
       const bad = (ctx.feelsF != null && (ctx.feelsF < 45 || ctx.feelsF > 80)) ? 0.6 : 1
@@ -94,7 +95,7 @@ export class Fatigue {
   /** What you feel: 0 rested … 1 wrecked. */
   get level() {
     const lift = FAT.cafLift * smooth(this.caf / 0.6) / (1 + 0.6 * Math.max(0, this.cups - 1))   // tolerance: cups inside ~6 h
-    return clamp(this.tired - lift + FAT.sedate * clamp(this.drug) + (this.woozy > 0 ? 0.12 : 0))
+    return clamp(this.tired - lift - 0.07 * (this.fresh || 0) + FAT.sedate * clamp(this.drug) + (this.woozy > 0 ? 0.12 : 0))   // (fresh: a cold drink, for a few minutes)
   }
   /** 0..1: how hard the pill is holding the hallucinations down right now. */
   get suppress() { return clamp(this.drug / FAT.suppressAt) }
@@ -110,6 +111,8 @@ export class Fatigue {
   get speedMul() { return (1 - 0.2 * smooth((this.level - 0.55) / 0.45)) * (1 - 0.1 * clamp(this.drug)) * (this.woozy > 0 ? 0.88 : 1) }
   get rest() { return 1 - this.level }
   get label() { const L = this.level; return L < 0.25 ? 'Rested' : L < 0.5 ? 'Awake' : L < 0.72 ? 'Tired' : L < 0.9 ? 'Exhausted' : 'Wrecked' }
+  /** A long drink of cold water: a small, short lift. */
+  water() { this.fresh = Math.min(1, (this.fresh || 0) + 0.7) }
   /** A cup of the stove coffee. Returns how much it lifted (0..cafLift). */
   coffee() {
     this.cups += 1; this.cafGut = Math.min(1.2, this.cafGut + 1)

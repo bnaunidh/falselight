@@ -1,35 +1,35 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=45434b3a';
-import { Objectives } from './objectives.js?v=45434b3a';
-import { Radio } from './radio.js?v=45434b3a';
-import { Fuel, FUEL } from './fuel.js?v=45434b3a';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=45434b3a';
-import { Survival, SURV } from './survival.js?v=45434b3a';
-import { createItemsView } from './itemsView.js?v=45434b3a';
-import { createChill } from './chill.js?v=45434b3a';
-import { createPlume } from './smokePlume.js?v=45434b3a';
-import { FireFinder, spokenBearing } from './firefinder.js?v=45434b3a';
-import { Photos, classifyShot } from './photos.js?v=45434b3a';
-import { CO } from './co.js?v=45434b3a';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=45434b3a';
-import { OtherLookout } from './otherLookout.js?v=45434b3a';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=45434b3a';
-import { GuidedHiker } from './hikers.js?v=45434b3a';
-import { MorseKeyer, isSOS } from './morse.js?v=45434b3a';
-import { normalizeLayout } from './layout.js?v=45434b3a';
-import { createSaves } from './saves.js?v=45434b3a';
-import { createRng } from './rng.js?v=45434b3a';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=45434b3a';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=45434b3a';
-import * as S from './content/story.js?v=45434b3a';
-import { createDog, setDogName } from './dog.js?v=45434b3a';
-import { createWildlife } from './wildlife.js?v=45434b3a';
-import { Fear, registerFearSounds } from './fear.js?v=45434b3a';
-import { epilogue } from './content/ending.js?v=45434b3a';
-import { Director, sosLamp } from './director.js?v=45434b3a';
-import { createPhotoBoard } from './photoBoard.js?v=45434b3a';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=eef1304c';
+import { Objectives } from './objectives.js?v=eef1304c';
+import { Radio } from './radio.js?v=eef1304c';
+import { Fuel, FUEL } from './fuel.js?v=eef1304c';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=eef1304c';
+import { Survival, SURV } from './survival.js?v=eef1304c';
+import { createItemsView } from './itemsView.js?v=eef1304c';
+import { createChill } from './chill.js?v=eef1304c';
+import { createPlume } from './smokePlume.js?v=eef1304c';
+import { FireFinder, spokenBearing } from './firefinder.js?v=eef1304c';
+import { Photos, classifyShot } from './photos.js?v=eef1304c';
+import { CO } from './co.js?v=eef1304c';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=eef1304c';
+import { OtherLookout } from './otherLookout.js?v=eef1304c';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=eef1304c';
+import { GuidedHiker } from './hikers.js?v=eef1304c';
+import { MorseKeyer, isSOS } from './morse.js?v=eef1304c';
+import { normalizeLayout } from './layout.js?v=eef1304c';
+import { createSaves } from './saves.js?v=eef1304c';
+import { createRng } from './rng.js?v=eef1304c';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=eef1304c';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=eef1304c';
+import * as S from './content/story.js?v=eef1304c';
+import { createDog, setDogName } from './dog.js?v=eef1304c';
+import { createWildlife } from './wildlife.js?v=eef1304c';
+import { Fear, registerFearSounds } from './fear.js?v=eef1304c';
+import { epilogue } from './content/ending.js?v=eef1304c';
+import { Director, sosLamp } from './director.js?v=eef1304c';
+import { createPhotoBoard } from './photoBoard.js?v=eef1304c';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -109,7 +109,7 @@ export class Game {
     this.dog = null;
     this.dogReady = createDog(e, {
       foodInHands: () => (this.inv ? this.inv.inHands('food') : null),
-      eatFood: (it) => { this.inv.remove(it.id); this.syncItems(); e.audio.sfx('metal', { volume: 0.25 }); },
+      eatFood: (it) => { this.inv.useOne(it); this.syncItems(); this.refreshHotbar(); e.audio.sfx('metal', { volume: 0.25 }); },   // one tin off the stack, not the stack
       toast: (text, secs) => this.ui.toast(text, secs),
       say: (text) => this.say([{ who: S.WHO.NOTE, text, note: true }]),
       onTamed: () => {   // you name her
@@ -331,7 +331,7 @@ export class Game {
     if (!restored) this.health = Math.max(this.health ?? 1, 0.85);   // a night's sleep (or a day's) mends most of it
     if (!restored && !isNight(phase) && phase !== 'day1' && this.surv) this.surv.fatigue.sleep(2, 1);   // the 05:30 -> 07:30 you got in bed
     if (this.weeper.state === 'caught' || (this.weeper.state === 'gone' && !isNight(phase))) this.weeper.state = this.weeper.state === 'gone' ? 'gone' : 'sitting';
-    if (['coming', 'stairs', 'door', 'hunting'].includes(this.weeper.state)) { this.weeper.state = 'screaming'; this.weeper.timer = 0; this.weeper.progress = 0; }
+    if (['coming', 'stairs', 'door', 'hunting', 'screaming'].includes(this.weeper.state)) { this.weeper.state = isNight(phase) ? 'screaming' : 'seen_day'; this.weeper.timer = 0; this.weeper.progress = 0; }   // by day he waits for dark
     const sky = e.sky;
     sky.setWeather(phase === 'night2' ? { rain: 0.15, wind: 0.55, fog: 0.35, lightning: 0.012 } : phase === 'night1' ? { rain: 0, wind: 0.35, fog: 0.3, lightning: 0 } : phase === 'day2' ? { rain: 0.25, wind: 0.4, fog: 0.5, lightning: 0 } : { rain: 0, wind: 0.3, fog: 0.3, lightning: 0 });
     e.lights.cabLamp.on = isNight(phase) && !this.flags.lampOff;
@@ -409,6 +409,10 @@ export class Game {
       const can = this.inv.inHands('fuel', (i) => i.fill > 0.01), id = v.current.id;
       if (id === 'd1_fuel' || id === 'd2_fuel') v.current.hint = can ? 'You have a can. Carry it up the stairs to the cab, then set it down anywhere up there with G (or keep holding it).'
         : 'The fuel cans stand outside the shed door, at the foot of the tower. Walk up to one and press E to pick it up.';
+      if (id === 'n1_guide') { const H = (this.hikers || []).find((k) => k.which === 'night1' && !k.rules.done), st = H && H.rules.status;
+        if (st === 'straying') v.current.hint = 'He\'s following your beam OFF the trail. Put it back on the path just in front of him, now.';
+        else if (st === 'waiting') v.current.hint = 'He\'s stopped in the dark. Find his light again with the beam and lead him on.'; }
+      if (id === 'weeper_photo' && !this.photos.hasCamera) v.current.hint = 'Tillman\'s camera is on the shelf by the south window in the cab (E to pick it up, C to raise it).';
       if (id === 'n1_refuel' || id === 'n2_refuel') v.current.hint = can ? 'Take the can down to the shed and press E at the generator to pour it.'
         : 'Pick up a full can (one you brought up, or the ones outside the shed), carry it to the generator in the shed, and press E.';
       if (id === 'd1_generator' || id === 'd2_generator') v.current.hint = this.fuel.tank <= 0.05 ? 'The generator in the shed at the base is dry: pour a can into it (E with the can in hand), then start it (E).' : 'The generator is in the shed at the foot of the tower. Walk in and press E to start it.';
@@ -417,7 +421,7 @@ export class Game {
       : { text: 'Keep watch — Silver Fork will call', hint: 'Scan the horizon from the catwalk, or rest on the bed to let the hours pass.' };
     this.ui.tracker(v, { date: PHASES[this.clock.phase].short + ' · ' + this.hourText() });
   }
-  complete(id, note) { if (this.obj.complete(id, note)) { this.e.audio.play('paper', { volume: 0.4 }); if (!this.night && !NO_STING.has(id)) this.e.audio.music.sting('task'); this.refreshTracker(); setTimeout(() => this.checkpoint('task:' + id), 1500); } }
+  complete(id, note) { if (!this.obj.has(id)) return; if (this.obj.complete(id, note)) { this.e.audio.play('paper', { volume: 0.4 }); if (!this.night && !NO_STING.has(id)) this.e.audio.music.sting('task'); this.refreshTracker(); setTimeout(() => this.checkpoint('task:' + id), 1500); } }
   add(id, extra) { if (!this.obj.has(id)) { this.obj.add(id, extra); this.refreshTracker(); } }
   inCab() { return this.player().zone === 'cab'; }
   /** Night falls: never start it with no way to get power (a spare can in the shed), and say so if the light is dead. */
@@ -461,7 +465,12 @@ export class Game {
         { const cam = this.inv.items.find((i) => i.kind === 'camera'); if (cam && cam.where === 'world') { const r = this.inv.take(cam.id); if (!r.ok) Object.assign(cam, { where: 'pack', slot: this.inv.freePack() >= 0 ? this.inv.freePack() : 4, pos: null }); } else if (!cam) this.inv.create('camera', { where: 'pack', slot: this.inv.freePack() >= 0 ? this.inv.freePack() : 4 }); }
         const full = this.inv.items.filter((i) => i.kind === 'fuel' && i.fill > 0.01).length, fa = this.anchor('IA_fuel_cans') || new THREE.Vector3(7.05, 0.4, 7.9);
         for (let k = full; k < 3; k++) this.inv.create('fuel', { pos: [fa.x - 0.5 + k * 0.4, fa.y, fa.z + 0.6], rotY: k, settle: true });
-        if (full < 3) setTimeout(() => this.ui.toast('Walt left fresh cans of fuel by the shed door.', 4), 6000);
+        // Walt's drop also brings a film pack and a couple of tins (the camera can't run dry before the night that matters)
+        const film = this.photos.packLeft < 10; if (film) this.photos.packLeft += 10;
+        const tins = this.inv.items.filter((i) => i.kind === 'food').reduce((a, i) => a + (i.n || 1), 0);
+        if (tins < 3) this.inv.create('food', { pos: [fa.x + 0.7, fa.y, fa.z + 0.5], rotY: 0.4, settle: true, n: 3 - tins });
+        const what = [full < 3 ? 'fuel cans' : '', tins < 3 ? 'tins of beans' : ''].filter(Boolean);
+        if (what.length || film) setTimeout(() => this.ui.toast(`${what.length ? `Walt left ${what.join(' and ')} by the shed door.` : 'Walt came by.'}${film ? ' And a fresh film pack: 10 more shots.' : ''}`, 4.5), 6000);
         this.syncItems(); }
       if (ph === 'night2') { this.say(S.LINES.night2Start); this.add('n2_dawn', { optional: true }); this.nightFuelCheck(); }
     }
@@ -478,7 +487,7 @@ export class Game {
       if (this.obj.has('d1_fuel') && this.fuelUpTop()) this.complete('d1_fuel');
       if (done('d1_walk') && !done('d1_climb') && z === 'cab') { this.complete('d1_climb'); this.addLog(S.AUTO_LOG.arrived(this.hourText())); this.add('d1_radio'); }
       if (h >= 13.0 && done('d1_rules')) this.once('smokeCall', () => { this.say(S.LINES.smokeCall); this.add('d1_smoke'); this.showFire('Cold Creek Basin', true); });
-      if (done('d1_smoke') || h >= 16) this.once('genTask', () => this.add('d1_generator'));
+      if (h >= 17.5) this.once('genTask', () => this.add('d1_generator'));   // at dusk: started at noon, a tank idles dry before dark
       if (h >= 18.9 && done('d1_smoke')) this.once('camera', () => { this.flags.cameraOut = true; this.add('d1_camera', { optional: true }); });
       if (h >= 19.6) this.once('sob', () => { this.say(S.LINES.duskSob); });
       if (h >= 19.9) this.once('dusktask', () => this.add('d1_dusk'));
@@ -586,13 +595,14 @@ export class Game {
         if (ev === 'ready') { this.complete('n1_answer'); this.add('n1_guide'); }
         if (ev === 'stopped' && !H.announced.stopped) { H.announced.stopped = true; this.say(S.LINES.hikerStopped); }
         if (ev === 'straying' && !H.announced.stray) { H.announced.stray = true; this.say(S.LINES.hikerStraying); }
+        if (ev === 'straying' || ev === 'stopped' || ev === 'walking') this.refreshTracker();
         if (ev === 'saved') { e.audio.music.sting('found'); setTimeout(() => this.checkpoint('saved'), 2000); this.say(S.LINES.savedN1); this.complete('n1_guide'); this.addLog(S.AUTO_LOG.saved()); this.flags.savedN1 = true; }
         if (ev === 'fell') { setTimeout(() => this.checkpoint('fell'), 2000); this.say(S.LINES.fellN1); this.obj.complete('n1_guide', null, true); this.refreshTracker(); this.addLog(S.AUTO_LOG.lost()); this.flags.lostN1 = true; e.audio.play('breath', { volume: 0.6 }); }
       }
     }
     function route_dir(r) { return r.route.dir ? r.route.dir(r.s) : null; }
     // the false light goes out if left alone too long
-    for (const H of this.hikers) if (H.which === 'false' && H.rules.status === 'signalling' && this.clock.hour > 25.5 && !H.rules.done) { H.rules.status = 'out'; this.say(S.LINES.falseOut); this.addLog(S.AUTO_LOG.falseIgnored()); this.complete('n2_light'); }
+    for (const H of this.hikers) if (H.which === 'false' && !['walking', 'straying'].includes(H.rules.status) && this.clock.hour > 25.5 && !H.rules.done) { H.rules.status = 'out'; this.say(S.LINES.falseOut); this.addLog(S.AUTO_LOG.falseIgnored()); this.complete('n2_light'); }
   }
   /** The shutter (Space or the mouse button while you're on the lamp): each press is a flash; nine presses shaped like
    *  S O S (three short, three clearly longer, three short, against your own tempo) answer whoever you're aimed at. */
@@ -665,22 +675,31 @@ export class Game {
       if (creep && rock && !this._rock2) { this._rock2 = rock.clone(true); this._rock2.name = 'weeper_rock_2'; e.scene.add(this._rock2); }
       if (this._rock2) { this._rock2.visible = !!creep; if (creep) { this._rock2.position.set(x, this._creepRock[1] - 0.25, z); this._rock2.rotation.y = rock.rotation.y + 1.1 + creep * 3; } }
     }
-    const ctx = { check: c, binoculars: this.binocular, night: this.night, rock: this._creepRock, gate: this.L.gate || [0, 0, 6], cab: [0, 30, 0],
+    const cam = e.camera, chest = h.root.position.clone().add(new THREE.Vector3(0, 1.0, 0)), fwd = cam.getWorldDirection(new THREE.Vector3());
+    const centered = chest.sub(cam.position).angleTo(fwd) < THREE.MathUtils.degToRad(this.binocular ? 6 : 12);
+    const paused = this.ui.modalOpen() || !!e.uiBlocking;   // a menu over the screen isn't looking at him
+    const ctx = { check: paused ? {} : c, centered, canLook: this.clock.phase !== 'day1' || this.obj.isDone('d1_rules'), doorShut: !!this.flags.doorShut,
+      binoculars: this.binocular && !paused, night: this.night, rock: this._creepRock, gate: this.L.gate || [0, 0, 6], cab: [0, 30, 0],
       trapdoor: this.anchor('IA_cab_door') ? A3(this.anchor('IA_cab_door')) : this.anchor('IA_trapdoor') ? A3(this.anchor('IA_trapdoor')) : [-1.5, 30, 0], player: this.pos(), playerInCab: this.inCab() };
     const evs = W.update(dt, ctx);
     for (const ev of evs) {
       if (ev === 'hush') { this.say(S.LINES.weeperHush); }
       if (ev === 'resume') this.say(S.LINES.weeperResume);
       if (ev === 'lookup') { /* pose shows it */ }
-      if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); }
+      if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); this.afterSeen(); }
       if (ev === 'scream') this.say(S.LINES.weeperScream);
       if (ev === 'coming') { this.say(S.LINES.weeperComing); this.add(this.weeperTask()); }
       if (ev === 'stairs') { this.say(S.LINES.weeperStairs); }
       if (ev === 'door') { e.audio.play('knock', { position: V3(ctx.trapdoor), volume: 1.5 }); }
+      if (ev === 'pound') {   // the shut door, hit from outside: it won't hold long
+        e.audio.play('knock', { position: V3(ctx.trapdoor), volume: 1.9 }); this.scare({ shake: 0.35, seconds: 0.4 }); this.fear.spike(0.9, 'door');
+        const L = e.lights.cabLamp; if (L.on) { L.on = false; this._blinkT = 0.15; }
+      }
       if (ev === 'caught') this.die('weeper');
     }
     // body
-    const pose = (W.pose || 'POSE_sit_sob').replace('POSE_', '');
+    let pose = (W.pose || 'POSE_sit_sob').replace('POSE_', '');
+    if (h.poses && h.poses.size && !h.poses.has(pose)) pose = pose === 'sit_hush' ? 'sit_sob' : pose;   // (a model without the hush pose)
     if (h.pose !== pose) h.setPose(pose);
     if (W.pos) {
       const p = V3(W.pos);
@@ -711,8 +730,8 @@ export class Game {
     // sound
     const snd = W.state === 'gone' ? 'silent' : W.sound;
     this.sobT = (this.sobT || 0) - dt;
-    if (this.sobT <= 0 && (this.fired.has('sob') || this.clock.phase !== 'day1')) {
-      if (snd === 'sob') { e.audio.play('sob', { position: h.position.clone().add(new THREE.Vector3(0, 1.2, 0)), volume: 1.4 }); this.sobT = 4.5 + Math.random() * 3; }
+    if (this.sobT <= 0 && (this.fired.has('sob') || this.clock.phase !== 'day1' || this.obj.isDone('d1_rules'))) {
+      if (snd === 'sob') { e.audio.play('sob', { position: h.position.clone().add(new THREE.Vector3(0, 1.2, 0)), volume: 1.4 }); this.sobT = 2.0 + Math.random() * 1.2; }   // steady: when it stops, you'll notice
       else if (snd === 'scream') { e.audio.play('scream', { position: h.position.clone().add(new THREE.Vector3(0, 1.5, 0)), volume: 1.8 }); this.sobT = 2.4 + Math.random(); }
       else this.sobT = 1;
     }
@@ -747,14 +766,14 @@ export class Game {
     e.audio.play('camera_eject', { volume: 0.9 });
     this.addLog(S.AUTO_LOG.photo(this.hourText(), subject === 'nothing' ? 'Nothing much.' : subject === 'weeper' ? 'The man at the creek.' : subject.replace('_', ' ') + '.'));
     if (subject === 'weeper') this.complete('d2_photo');
-    if (this.weeper.triggered) { if (this.weeper.offerCarrier(p.id)) { this.complete('weeper_photo'); this.add('weeper_send'); } }
+    if (this.weeper.triggered && subject === 'weeper') { if (this.weeper.offerCarrier(p.id)) { this.complete('weeper_photo'); this.add('weeper_send'); this.ui.toast('That one. That\'s the picture he\'ll follow.', 3); } }
     this.lowerCamera(); this.holding = p.id; this.photos.open(p.id);
     // a photo taken while he's looking up is also "seeing" him if the print is looked at later — handled by Photos
   }
   lowerCamera() { this.camRaised = false; this.ui.cameraFrame(null); this.fovTarget = 68; }
   sendFlow(channel) {
     const ph = this.clock.phase, h = this.clock.hour;
-    const items = this.photos.sendable().map((p) => ({ p, label: `${p.id} · ${p.subject === 'nothing' ? 'nothing much' : p.subject === 'weeper' ? 'the man at the creek' : p.subject.replace('_', ' ')}${p.faceDown ? ' · face-down' : ''}`, img: p.faceDown ? null : p.dataURL }));
+    const items = this.photos.sendable().map((p) => ({ p, label: `${p.id} · ${p.subject === 'nothing' ? 'nothing much' : p.subject === 'weeper' ? 'the man at the creek' : p.subject.replace('_', ' ')}${p.faceDown ? ' · face-down' : ''}${this.weeper.triggered && (this.weeper.carrier === p.id || (this.weeper.carrier === 'next' && p.subject === 'weeper')) ? ' · the one he follows' : ''}`, img: p.faceDown ? null : p.dataURL }));
     this.openModal(() => this.ui.choose('Send which print?', items, (it) => {
       const r = sendPrint(it.p, channel, { phase: ph, hour: h, day: PHASES[ph].day });
       if (!r.ok) { this.ui.toast(r.why); return; }
@@ -764,7 +783,10 @@ export class Game {
       if (channel === 'fax') { this.say(S.LINES.faxSent); this.flags.faxUsed = true; }
       if (channel === 'mailbox') this.say(S.LINES.mailSent);
       if (channel === 'driver') this.say(it.p.faceDown ? S.LINES.driverFaceDown : it.p.forbidden ? S.LINES.driverFace : S.LINES.driverNormal);
+      if (this.holding === it.p.id) { this.holding = null; this.photos.close(); this.ui.print(null); }   // it's gone: out of your hand
+      if (this.weeper.carrier === 'next' && it.p.subject === 'weeper') this.weeper.carrier = it.p.id;   // any picture of him will do while nothing carries him yet
       if (this.weeper.sendAway(it.p.id)) { this.e.audio.music.sting('dawn'); this.say(S.LINES.weeperGone); this.complete('weeper_send'); this.obj.remove('weeper_photo'); this.refreshTracker(); }
+      else if (this.weeper.triggered) this.ui.toast('The screaming doesn\'t stop. That wasn\'t the one.', 3);
     }, () => this.closedModal()));
   }
 
@@ -773,7 +795,8 @@ export class Game {
     const e = this.e, I = e.interact;
     const reg = (id, anchor, label, onUse, enabled = () => true, radius = 0.5) => I.register({ id, anchor: typeof anchor === 'string' ? (this.anchor(anchor) || anchor) : anchor, label, onUse, enabled: () => this.state === 'play' && this.mode === 'walk' && enabled(), radius, reach: 2.6 });
     reg('radio', 'IA_radio', () => this.obj.has('d1_radio') && !this.obj.isDone('d1_radio') ? 'E — Call Silver Fork' : 'E — Radio (nothing to report)', () => {
-      if (this.obj.has('d1_radio') && !this.obj.isDone('d1_radio')) { e.audio.play('radio_squelch'); this.say(S.LINES.briefing, { onDone: () => { this.complete('d1_radio'); this.add('d1_rules'); } }); }
+      if (this.radio.busy) return;   // someone's already talking
+      if (this.obj.has('d1_radio') && !this.obj.isDone('d1_radio')) { e.audio.play('radio_squelch'); this.say(S.LINES.briefing, { tag: 'briefing', onDone: () => { this.complete('d1_radio'); this.add('d1_rules'); } }); }
       else { e.audio.play('radio_squelch'); this.ui.toast('Static. Silver Fork is quiet.'); }
     });
     reg('finder', 'IA_firefinder', () => this.obj.has('d1_rules') && !this.obj.isDone('d1_rules') ? 'E — Read the card taped to the fire finder' : 'E — Use the fire finder', () => {
@@ -816,7 +839,7 @@ export class Game {
       else startGen();
     }, () => true, 0.7);
     reg('mailbox', 'IA_mailbox', 'E — Mail a photograph', () => this.sendFlow('mailbox'), () => this.photos.sendable().length > 0);
-    reg('fax', 'IA_fax', 'E — Fax a photograph to the district', () => this.sendFlow('fax'), () => this.photos.sendable().length > 0);
+    reg('fax', 'IA_fax', 'E — The fax machine (send or copy a photograph)', () => this.faxMenu(), () => this.photos.sendable().length > 0);
     reg('truck', 'IA_truck', () => this.photos.sendable().length ? 'E — Give Walt a photograph' : 'E — Talk to Walt', () => { if (this.photos.sendable().length) this.sendFlow('driver'); else this.say(S.LINES.driverHello); }, () => this.truckVisible);
     reg('pack', 'IA_camp_backpack', 'E — Search the pack', () => {
       e.audio.music.sting('found');
@@ -848,24 +871,38 @@ export class Game {
     reg('lamp', 'IA_lamp', () => e.lights.cabLamp.on ? 'E — Pull the chain (lamp off)' : 'E — Pull the chain (lamp on)', () => {
       e.lights.cabLamp.on = !e.lights.cabLamp.on; this.flags.lampOff = !e.lights.cabLamp.on; e.audio.play('lamp_chain', { volume: 0.6 });
     }, () => true, 0.6);
-    reg('stove', 'IA_stove', () => this.coffee == null ? 'E — Light the stove and put the coffee on' : this.coffee < 1 ? 'The coffee pot is ticking on the burner…' : 'E — Pour a cup of coffee', () => {
+    const rawCanteen = () => this.inv.inHands('canteen', (c) => c.raw && c.fill > 0);
+    reg('stove', 'IA_stove', () => this.boil != null ? 'The water is coming to a boil…' : rawCanteen() && this.coffee == null ? 'E — Boil the canteen water in the pot' : this.coffee == null ? 'E — Light the stove and put the coffee on' : this.coffee < 1 ? 'The coffee pot is ticking on the burner…' : 'E — Pour a cup of coffee', () => {
+      if (this.boil != null) return;
       if (this.coffee == null && !this.potOnStove()) { this.ui.toast('Put the coffee pot on the burner first (it\'s an item: E picks it up, G sets it down).', 3.5); return; }
+      if (this.coffee == null && rawCanteen()) { this.boil = 0; this.boilCan = rawCanteen().id; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); return; }
       if (this.coffee == null) { this.coffee = 0; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); }
       else if (this.coffee >= 1) { this.coffee = null; this.surv.drink(0.3); this.surv.warmth = 1; this.surv.fatigue.coffee(); this.co.blood = Math.max(0, this.co.blood - 0.02); this.refreshHotbar(); }
-    }, () => this.coffee == null || this.coffee >= 1, 0.6);
+    }, () => this.boil == null && (this.coffee == null || this.coffee >= 1), 0.6);
     reg('books', 'IA_books', 'E — Take a book off the shelf', () => {
       const b = S.BOOKS[(this.bookI = ((this.bookI ?? -1) + 1) % S.BOOKS.length)];
       this.openModal(() => this.ui.note(b.title, b.text, () => this.closedModal()));
     }, () => true, 0.5);
 
+    // the creek: anywhere along it, if you're down at the water (untreated, and worse than the spring)
+    this._creekIA = new THREE.Object3D(); this._creekIA.name = 'IA_creek_dyn'; e.scene.add(this._creekIA); this._creekNear = false;
+    reg('creek', this._creekIA, () => { const c = this.inv.find('canteen'); return c && c.fill < 1 ? 'E — Drink from the creek, and fill the canteen' : 'E — Drink from the creek'; }, () => {
+      const c = this.inv.find('canteen'); this.surv.drink(1); this.surv.drinkRaw(0.55); this.surv.drinkCold(); this.surv.fatigue.water(); if (c) { c.fill = 1; c.raw = true; }
+      this.e.audio.play('drink', { volume: 0.8 });
+      if (!this.flags.toldCreek) { this.flags.toldCreek = true; this.ui.toast('Creek water. It tastes of stone and something else. Boil the rest before you drink it.', 4); }
+      this.refreshHotbar();
+    }, () => this._creekNear, 0.9);
     reg('spring', 'IA_spring', () => { const c = this.inv.find('canteen'); return c && c.fill < 1 ? 'E — Drink, and fill the canteen' : 'E — Drink from the spring'; }, () => {
-      const c = this.inv.find('canteen'); this.surv.drink(1); if (c) c.fill = 1;
-      this.ui.toast(c ? 'Cold enough to hurt your teeth. The canteen is full.' : 'Cold enough to hurt your teeth.'); this.refreshHotbar();
+      const c = this.inv.find('canteen'); this.surv.drink(1); this.surv.drinkRaw(0.3); this.surv.drinkCold(); this.surv.fatigue.water(); if (c) { c.fill = 1; c.raw = true; }
+      this.e.audio.play('drink', { volume: 0.8 });
+      if (!this.flags.toldRaw) { this.flags.toldRaw = true; this.ui.toast('Spring water. Nobody\'s boiled it: boil the canteen on the cab stove (in the coffee pot) before you drink more.', 5); }
+      this.refreshHotbar();
     });
   }
 
   // ------------------------------------------------------------------ modes
   enterFinder() {
+    this.binocular = false; if (this.placing) this.cancelPlace(); if (this.camRaised) this.lowerCamera();
     this.mode = 'finder'; const p = this.player(); p.setEnabled(false); p.lookLocked = true; this.fovTarget = 32;
     this.finderPos = (this.anchor('IA_firefinder') || new THREE.Vector3(0.3, 31, -0.15)).clone().add(new THREE.Vector3(0, 0.55, 0));
   }
@@ -873,12 +910,14 @@ export class Game {
     const p = this.player(); this.slReturn = { pos: p.position.clone(), yaw: p.yaw };
     this.mode = 'searchlight'; p.setEnabled(false); p.lookLocked = true;
     if (!this.fuel.power) this.ui.toast(this.fuel.tank <= 0 ? 'No power: the generator tank is dry. Bring fuel to the shed.' : 'No power: start the generator in the shed at the base.', 4);
-    const SL = this.e.lights.searchlight; SL.operating = true; this.slLit = true; this.fovTarget = 58;
-    if (this.fuel.power && this.e.sky.dayFactor > 0.45) this.ui.toast('The lamp is lit, but in daylight the beam barely shows. It comes alive after dusk.', 4);
+    this.binocular = false; if (this.placing) this.cancelPlace(); if (this.camRaised) this.lowerCamera();
+    const SL = this.e.lights.searchlight; SL.operating = true; if (this.night && this.fuel.power) this.slLit = true; this.fovTarget = 58;   // by day it stays as you left it (it burns fuel)
+    if (this.fuel.power && this.e.sky.dayFactor > 0.45) this.ui.toast(this.slLit ? 'The lamp is lit, but in daylight the beam barely shows. It burns fuel: E switches it off.' : 'The lamp is off. By day the beam barely shows (E switches it on).', 4);
   }
   exitMode() {
     const p = this.player && this.e.player ? this.e.player : null; if (!p) return;
-    if (this.mode === 'searchlight') { this.e.lights.searchlight.operating = false; if (this.keyer && this.keyer.isDown) this.keyer.up(this.e.time.value); this.signal.mode = false; this.signal.down = false; }
+    if (this.mode === 'searchlight') { this.e.lights.searchlight.operating = false; if (this.e.sky.dayFactor > 0.45) this.slLit = false;   // stepping back by day: switched off, don't burn the tank
+      if (this.keyer && this.keyer.isDown) this.keyer.up(this.e.time.value); this.signal.mode = false; this.signal.down = false; }
     if (this.mode === 'finder' || this.mode === 'searchlight') {
       const a = this.mode === 'finder' ? (this.anchor('IA_firefinder') || new THREE.Vector3(0.3, 30, -0.15)) : (this.anchor('IA_searchlight') || new THREE.Vector3(2, 30, 2));
       p.position.set(a.x + (this.mode === 'finder' ? -0.6 : 0), 30.0, a.z + (this.mode === 'finder' ? 0.3 : 0));
@@ -889,8 +928,8 @@ export class Game {
     this.mode = 'walk'; p.setEnabled(true); p.lookLocked = false; this.fovTarget = 68;
     this.ui.finder(null); this.ui.searchlight(null);
   }
-  openModal(fn) { this.e.uiBlocking = true; this.e.input.unlock(); this.player().setEnabled(false); fn(); }
-  closedModal() { this.e.uiBlocking = false; this.player().setEnabled(this.mode === 'walk' && !this.sitting); if (this.state === 'play') this.e.input.lock(); }
+  openModal(fn) { this.binocular = false; if (this.holding) this.photos.close(); this.e.uiBlocking = true; this.e.input.unlock(); this.player().setEnabled(false); fn(); }
+  closedModal() { this.e.uiBlocking = false; this.player().setEnabled(this.mode === 'walk' && !this.sitting); if (this.holding && !this.photos.open(this.holding)) this.holding = null; if (this.state === 'play') this.e.input.lock(); }
   openLogbook(page = 'tasks') {
     const o = this.obj;
     const data = {
@@ -901,7 +940,7 @@ export class Game {
       mine: this.log.map((en) => ({ ...en, text: S.coDistort(en.text, this.co.blood) })),
       photos: this.photos.prints.map((p) => ({ id: p.id, dataURL: p.dataURL, develop: p.develop, faceDown: p.faceDown, sent: !!p.sent })),
       proofs: this.proofs, proofGoal: S.PROOF_GOAL,
-      onPhoto: (id) => { this.ui.closeModal(); const p = this.photos.get(id); if (p) p.pin = null; this.holding = id; this.photos.open(id); },
+      onPhoto: (id) => { const p = this.photos.get(id); if (!p || p.sent) { this.ui.toast('You sent that one away.', 2); return; } this.ui.closeModal(); p.pin = null; this.holding = id; this.photos.open(id); },
       onPage: (pg) => { if (pg === 'rules' && this.obj.has('rules_more')) this.complete('rules_more'); },   // opened on (or turned to) the card
     };
     this.openModal(() => this.ui.logbook(data, () => this.closedModal(), page));
@@ -1116,11 +1155,14 @@ export class Game {
     if (it.kind === 'binoculars') { if (down) { this.binocular = !this.binocular; this.binocAt = this.e.time.value; } return; }
     if (!down) return;
     if (it.kind === 'canteen') {
-      if (this.inv.sip(it)) { this.surv.drink(SURV.sip); if (!(it.fill > 0)) this.ui.toast('That\'s the last of it. The spring will fill it.', 2.2); this.e.audio.play('drink', { volume: 0.9 }); }
+      if (this.surv.water > 0.95 && it.fill > 0) { this.ui.toast('You\'re not thirsty.', 1.6); return; }
+      const raw = !!it.raw;
+      if (this.inv.sip(it)) { this.surv.drink(SURV.sip); if (raw) this.surv.drinkRaw(0.18); this.surv.drinkCold(); this.surv.fatigue.water(); if (!(it.fill > 0)) { it.raw = false; this.ui.toast('That\'s the last of it. The spring will fill it.', 2.2); } this.e.audio.play('drink', { volume: 0.9 }); }
       else this.ui.toast('The canteen is empty. Fill it at the spring.', 2.5);
       this.refreshHotbar();
     } else if (it.kind === 'food') {
-      this.surv.eat(SURV.meal); this.inv.useOne(it); this.e.audio.play('eat', { volume: 0.9 });
+      if (this.surv.food > 0.85 && (this.health ?? 1) > 0.95) { this.ui.toast('You\'re not hungry.', 1.6); return; }   // (hurt, you'll eat anyway: it heals)
+      this.surv.eat(SURV.meal); this.inv.useOne(it); this.e.audio.play('eat', { volume: 0.9 }); this.health = Math.min(1, (this.health ?? 1) + 0.15); this.limp = Math.max(0, (this.limp || 0) - 0.2);   // food heals: a tin puts some of you back
       if (this.surv.food > 0.9) this.ui.toast('You\'re full.', 2); this.syncItems();
     } else if (it.kind === 'flashlight') this.toggleFlashlight();
     else if (it.kind === 'camera') this.toggleCamera();
@@ -1130,6 +1172,10 @@ export class Game {
     else if (it.kind === 'pot') this.ui.toast(this.potOnStove() ? 'It\'s on the burner.' : 'The enamel coffee pot. Set it on the stove\'s burner (G) to make coffee.', 3);
     else if (it.kind === 'oldcan') this.ui.toast(['Bent nails and a single brass washer.', 'Empty. It smells of kerosene.', 'Buttons, a fishing fly, a 1978 penny.'][((+it.id.slice(1)) || 0) % 3], 3);
     else if (it.kind === 'pills') {
+      if (!(it.n > 0)) { this.ui.toast('The bottle is empty.', 2.5); return; }
+      const F = this.surv.fatigue, now = this.e.time.value;
+      if ((F.drug || 0) + (F.gut || 0) > 0.3 && now - (this._pillAsk || -9) > 2.5) { this._pillAsk = now; this.ui.toast('You took one not long ago. Click again to take another anyway.', 2.5); return; }
+      this._pillAsk = -9;
       if (!this.inv.takePill(it)) { this.ui.toast('The bottle is empty.', 2.5); return; }
       const r = this.surv.fatigue.pill(); this.e.audio.play('morse_click', { volume: 0.12 });
       this.ui.toast(r.woozy ? 'Another one, dry. It sticks halfway down.' : `You swallow one dry. ${it.n} left. It'll take a while to work.`, 3);
@@ -1195,6 +1241,7 @@ export class Game {
     return false;
   }
   reportFinder() {
+    if (this.radio.busy) return;   // wait for the line to clear
     const fires = this.activeFires();
     const r = this.finder.report(fires.length ? fires : this.L.fireSites.filter((f) => this.flags['fire_' + f.name]));
     const spoken = spokenBearing(r.bearing);
@@ -1235,17 +1282,18 @@ export class Game {
     // fuel + generator + searchlight power
     const SL = e.lights.searchlight;
     const beamOn = this.mode === 'searchlight' ? this.slLit : this.slLit && !this.leftOff;
-    for (const ev of this.fuel.tick(dt, SL.on)) {
+    for (const ev of this.fuel.tick(this.clock.held ? 0 : dt, SL.on)) {
       if (ev === 'low') { this.say(S.LINES.fuelLow); if (this.night) { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true });
         // once a night the sputtering draws the bear up to the shed (~15 s out; moved near if it's far and unseen): you come
         // down with the can to something huffing round the walls. The dog's barking and the torch back-off still apply.
         if (this.wildlife && this.wildlife.callToShed) this.once('bearRefuel', () => this.wildlife.callToShed({ delay: 15 })); } }
-      if (ev === 'empty') { this.say(S.LINES.fuelEmpty); e.audio.play('generator_stop'); }
+      if (ev === 'empty') { this.say(S.LINES.fuelEmpty); e.audio.play('generator_stop'); if (this.night) { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true }); } }
     }
     const sigMode = this.signal.mode && t - this.signal.last < 2.4;
     if (!sigMode) this.signal.mode = false;
     SL.on = this.fuel.power && !!this.slLit && (sigMode ? !!this.signal.down : true);   // keying: lit while the shutter's held (Space or the mouse)
     SL.power = this.fuel.power ? 1 - this.fuel.sputter * 0.7 : 0;
+    e.lights.cabLamp.power = this.fuel.power ? 1 - this.fuel.sputter * (0.5 + 0.5 * Math.max(0, Math.sin(this.e.time.value * 23))) : 0.04;   // the cab lamp runs off the generator too: it browns out as the tank sputters, and dies with it
     e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, genSputter: this.fuel.sputter, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1),
       forest: (this.wildlife && this.wildlife.silent) || e.time.value < (this._duckUntil || 0) ? 0 : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0,
       heater: this.co.heater ? 1 : 0, stove: this.coffee != null ? 1 : 0, coffee: this.coffee ?? 0, lamp: e.lights.cabLamp.on ? 1 : 0, clockTick: 1,
@@ -1310,9 +1358,10 @@ export class Game {
     if (this._doorCol) this._doorCol.enabled = !!this.flags.doorShut && this._doorA < 0.15;
     this.updateGate(dt);
     // coffee on the stove
+    if (this.boil != null) { this.boil += dt / 20; if (this.boil >= 1) { const c = this.inv.get(this.boilCan); if (c) c.raw = false; this.boil = null; this.boilCan = null; this.ui.toast('Boiled, cooled, back in the canteen. Safe to drink.', 3); this.refreshHotbar(); } }
     if (this.coffee != null && this.coffee < 1) { this.coffee = Math.min(1, this.coffee + dt / 25); if (this.coffee >= 1) e.audio.sfx('knock_one', { position: this.anchor('IA_stove') || undefined, volume: 0.15 }); }
     // the camera on the south shelf appears at dusk on day 1 (a real item: E picks it up)
-    if (this.flags.cameraOut && !this.photos.hasCamera && this.iv.templates.camera && !this.inv.items.some((i) => i.kind === 'camera')) {
+    if ((this.flags.cameraOut || this.weeper.triggered) && !this.photos.hasCamera && this.iv.templates.camera && !this.inv.items.some((i) => i.kind === 'camera')) {
       const a = this.anchor('IA_camera_shelf') || new THREE.Vector3(-0.62, 30.9, 1.865);
       this.inv.create('camera', { where: 'world', pos: this.iv.settle([a.x, a.y, a.z]), rotY: Math.PI * 0.9 }); this.syncItems();
     }
@@ -1323,6 +1372,12 @@ export class Game {
         const p = this.photos.get(ev.id);
         if (p && p.forbidden) this.printSeen(p);
       }
+    }
+    if ((this._creekT = (this._creekT || 0) - dt) <= 0) {
+      this._creekT = 0.5; const pts = (this.e.world.layout && this.e.world.layout.creek && this.e.world.layout.creek.points) || [], P = this.player().position; let best = null, bd = 9;
+      for (const q of pts) { const d = (q[0] - P.x) ** 2 + (q[2] - P.z) ** 2; if (d < bd) { bd = d; best = q; } }
+      this._creekNear = !!best && Math.abs(best[1] - P.y) < 1.6 && this.mode === 'walk';
+      if (best) this._creekIA.position.set(best[0], best[1] + 0.15, best[2]);
     }
     // the board: keep what's pinned in step (a second is plenty), and a face-up print of HIS face, developed, looked at up close, is seeing it
     if ((this._boardT = (this._boardT || 0) - dt) <= 0) {
@@ -1350,7 +1405,7 @@ export class Game {
     this.limp = Math.max(0, this.limp - dt / 45);
     Pl.speedMul = this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1);
     this.survT = (this.survT || 0) - dt;
-    if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph, health: this.health, bpm: this.fear.bpm, sleep: this.fatigueHUD ? this.fatigueHUD() : null }); this.refreshHotbar(); }
+    if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph, health: this.health, bpm: this.fear.bpm, sick: this.surv.sick, sleep: this.fatigueHUD ? this.fatigueHUD() : null }); this.refreshHotbar(); }
     // items: the thing in your hand, the placing ghost, wheel = switch hands (or turn what you're placing)
     const wh = e.input.consumeWheel();
     if (wh && this.mode === 'walk' && !this.ui.modalOpen()) { if (this.placing) this.placing.rot += wh * Math.PI / 12; else this.selectSlot((this.inv.active + (wh > 0 ? 1 : HAND_SLOTS - 1)) % HAND_SLOTS); }
@@ -1530,9 +1585,44 @@ export class Game {
         e.audio.play(kind === 'growl' ? 'dog_growl' : 'dog_whine', { position: d.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.9 }); return true; },
     };
   }
-  /** Seeing HIS face in a print (in your hand, or up on the board). */
+  /** The ranger station's fax: send a print to the district, or run one through as a copy (grainy, grey, face-down in the tray). */
+  faxMenu() {
+    this.openModal(() => this.ui.choose('The fax machine', [{ label: 'Fax a photograph to the district', k: 'send' }, { label: 'Copy a photograph (it prints a copy)', k: 'copy' }], (it) => {
+      this.closedModal();
+      if (it.k === 'send') { this.sendFlow('fax'); return; }
+      const items = this.photos.sendable().map((p) => ({ p, label: `${p.id} · ${p.subject === 'weeper' ? 'the man at the creek' : p.subject === 'nothing' ? 'nothing much' : p.subject.replace('_', ' ')}${p.copyOf ? ' (a copy)' : ''}${p.faceDown ? ' · face-down' : ''}`, img: null }));
+      this.openModal(() => this.ui.choose('Copy which print?', items, (c) => { this.closedModal(); this.copyPrint(c.p); }, () => this.closedModal()));
+    }, () => this.closedModal()));
+  }
+  async copyPrint(src) {
+    let url = src.dataURL;
+    if (url) url = await new Promise((res) => {   // a fax copy: grey, harsh, speckled, a little skewed
+      const im = new Image(); im.onload = () => { const W = 384, H = 384, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+        g.fillStyle = '#eee'; g.fillRect(0, 0, W, H); g.save(); g.translate(W / 2, H / 2); g.rotate(0.012); g.filter = 'grayscale(1) contrast(1.8) brightness(1.08)'; g.drawImage(im, -W / 2, -H / 2, W, H); g.restore();
+        const d = g.getImageData(0, 0, W, H); for (let i = 0; i < d.data.length; i += 4) { const n = (Math.random() - 0.5) * 38 + ((i / 4 / W) % 3 < 1 ? -10 : 0); d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } g.putImageData(d, 0, 0);
+        res(c.toDataURL('image/jpeg', 0.7)); }; im.onerror = () => res(src.dataURL); im.src = src.dataURL; });
+    const p = this.photos.copy(src, url);
+    this.e.audio.play('radio_squelch', { volume: 0.2, position: this.anchor('IA_fax') || undefined });
+    this.addLog(`${this.hourText()} — copied ${src.id} on the station fax (${p.id}).`);
+    this.ui.toast(`The fax chatters and pushes out a copy, face-down: ${p.id}. It's in your photos (Tab → Photos).`, 3.5);
+  }
+  /** Seeing HIS face in a print (in your hand, or up on the board). Only a live Weeper can be triggered by it. */
   printSeen(p) {
-    const e = this.e; e.audio.music.sting('seen'); this.weeper.trigger('print', { night: this.night, carrier: p.id }); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); this.add('weeper_send');
+    const e = this.e; if (p.sent) return;
+    let ok = this.weeper.trigger('print', { night: this.night, carrier: p.id });
+    if (!ok && this.weeper.carrier === 'next') ok = this.weeper.offerCarrier(p.id);
+    if (!ok) { e.audio.play('paper', { volume: 0.3 }); return; }   // already coming for someone else / already gone: it's just a picture now
+    e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); this.add('weeper_send'); this.afterSeen();
+  }
+  /** Once he's coming: there's always a way to end it. The camera shows up if you haven't got it; with no film left, the newest
+   *  unsent picture of him becomes the one he follows. */
+  afterSeen() {
+    this.flags.cameraOut = true;
+    const W = this.weeper;
+    if (W.carrier === 'next' && this.photos.hasCamera && !this.photos.canShoot()) {
+      const p = this.photos.prints.filter((q) => q.subject === 'weeper' && !q.sent).pop();
+      if (p) { W.carrier = p.id; this.complete('weeper_photo'); this.add('weeper_send'); this.ui.toast('No film left. The picture of him you already have will have to do: send it away.', 4.5); }
+    }
   }
   /** E on the cork board: pin the print you're holding, or take the last one you pinned back down into your hand. */
   useBoard() {

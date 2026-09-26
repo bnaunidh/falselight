@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=45434b3a'
+import { clamp } from './util.js?v=eef1304c'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -57,7 +57,7 @@ export class Inventory {
     for (const p of where.fuel || []) inv.create('fuel', { where: 'world', pos: p, rotY: Math.random() * 6.28, fill: 1 })
     for (const p of where.food || []) inv.create('food', { where: 'world', pos: p, rotY: Math.random() * 6.28 })
     inv.addCabItems()
-    inv.active = bp.slot
+    inv.active = [0, 1, 2].find((i) => !inv.hand(i)) ?? bp.slot   // an empty hand is active at the start: a first click doesn't open the pack
     return inv
   }
   create(kind, o = {}) { const it = { id: 'i' + this.nextId++, kind, where: 'world', slot: null, pos: null, rotY: 0, fill: 1, ...o }; this.items.push(it); return it }

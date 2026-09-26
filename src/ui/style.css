@@ -246,3 +246,5 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .fl-sl .lampst.on{color:#f7e2a6;background:rgba(240,200,110,.14);box-shadow:0 0 12px rgba(255,215,130,.18)}.fl-sl .lampst.off{color:rgba(233,224,201,.55);background:rgba(10,10,8,.4)}
 
 .fl-hot .slot em{position:absolute;right:4px;bottom:3px;font:600 12px/1 var(--type);font-style:normal;color:#f1e6c8;text-shadow:0 1px 2px #000}
+
+.fl-surv .ring.w.sick{color:#8fcf5a}.fl-surv .ring.w.sick .ic svg{filter:drop-shadow(0 0 3px rgba(140,210,90,.6))}

@@ -2,7 +2,7 @@
 // A print develops over 60 s (grey-blue → the image blooms in). Shaking it (Q) speeds it up.
 // A forbidden print — the Weeper looking up — gives you one second, once the face starts to
 // resolve, to turn it face-down. Only a print you are looking at can be seen.
-import { clamp } from './util.js?v=45434b3a'
+import { clamp } from './util.js?v=eef1304c'
 
 export const PHOTO = { develop: 60, shakeBoost: 3.2, shakeWindow: 1.2, resolveAt: 0.55, flipWindow: 1.0, pack: 10 }
 
@@ -30,8 +30,13 @@ export class Photos {
     return p
   }
   get(id) { return this.prints.find((p) => p.id === id) }
+  /** A copy of a print (the ranger station's fax prints one): no film used, face-down in the tray, developed. */
+  copy(src, dataURL) {
+    const p = { ...src, id: 'P' + this.nextId++, entities: [...(src.entities || [])], develop: 1, faceDown: true, seen: false, sent: null, window: null, pin: null, pinnedAt: null, dataURL: dataURL || src.dataURL, copyOf: src.id }
+    this.prints.push(p); return p
+  }
   open(id) {
-    const p = this.get(id); if (!p) return null
+    const p = this.get(id); if (!p || p.sent) return null   // a print you've sent is gone
     this.viewing = id
     if (p.forbidden && !p.faceDown && !p.seen && p.develop >= PHOTO.resolveAt) p.window = 0
     return p

@@ -94,7 +94,15 @@ export function createInput(canvas) {
   });
   canvas.addEventListener('mouseup', (e) => { if (e.button === 0) api.emit('primary', false); if (e.button === 2) api.emit('secondary', false); });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  canvas.addEventListener('wheel', (e) => { wheel += Math.sign(e.deltaY); }, { passive: true });
+  // a mouse wheel click is one step; a trackpad swipe (and its momentum tail) is dozens of events: count one step per ~70 px,
+  // and after a step ignore the rest of that gesture for a moment, so the hands don't spin 1-2-3-1-2-3
+  let wAcc = 0, wLast = 0, wStep = 0;
+  canvas.addEventListener('wheel', (e) => {
+    const now = performance.now(), dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+    if (now - wLast > 250) wAcc = 0; wLast = now;
+    if (now - wStep < 220) return;
+    wAcc += dy; if (Math.abs(wAcc) >= 70 || Math.abs(dy) >= 60) { wheel += Math.sign(wAcc || dy); wAcc = 0; wStep = now; }
+  }, { passive: true });
   document.addEventListener('pointerlockchange', () => api.emit('lockchange', api.locked));
   return api;
 }

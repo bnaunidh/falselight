@@ -3,13 +3,14 @@
 //   Watch him too long and the sobbing stops; a moment later he lifts his head. Look away.
 //   Seen: the sob becomes a scream and he comes (in daylight he waits for dark). Nothing stops him.
 //   The only way out: send the photograph away. Whoever looks at it next is the one he wants.
-import { dist, lerp3, clamp } from './util.js?v=45434b3a'
+import { dist, lerp3, clamp } from './util.js?v=eef1304c'
 
 export const WEEPER = {
   watchToHush: 5.0,      // seconds of continuous watching before the sobbing stops
-  hush: 1.6,             // seconds of silence before he lifts his head
+  hush: 3.0,             // seconds of silence (and stillness) before he lifts his head: long enough to notice and look away
   lookup: 2.4,           // seconds his head stays up
-  faceSeen: 0.25,        // seconds of faceVisible that count as "seen"
+  faceSeen: 0.6,         // seconds of faceVisible (once his head is up) that count as "seen"
+  headUp: 0.5,           // seconds for his head to come up in 'lookup' before the face can be seen
   cooldown: 22,          // after a lookup, seconds before it can happen again
   scream: 14,            // seconds screaming before he moves
   approach: 330,         // seconds from his rock to the tower gate at night
@@ -31,7 +32,7 @@ export class Weeper {
   }
   get triggered() { return ['seen_day', 'screaming', 'coming', 'stairs', 'door', 'hunting'].includes(this.state) }
   get pose() {
-    return { sitting: 'POSE_sit_sob', hush: 'POSE_sit_sob', lookup: 'POSE_sit_lookup', seen_day: 'POSE_stand', screaming: 'POSE_stand',
+    return { sitting: 'POSE_sit_sob', hush: 'POSE_sit_hush', lookup: 'POSE_sit_lookup', seen_day: 'POSE_stand', screaming: 'POSE_stand',
       coming: Math.floor(this.timer * 2.6) % 2 ? 'POSE_run_a' : 'POSE_run_b', stairs: 'POSE_run_a', door: 'POSE_crouch_door',
       hunting: 'POSE_lunge', gone: 'POSE_sit_sob', caught: 'POSE_lunge' }[this.state]
   }
@@ -67,7 +68,8 @@ export class Weeper {
     this.timer += dt
     const c = ctx.check || {}
     const range = WEEPER.watchRange * (ctx.binoculars ? 2 : 1)
-    const watching = !!(c.inFrustum && !c.occluded && (c.onScreen ?? 0) > 0.0005 && (c.distance ?? 0) < range)
+    // watching = actually looking at him (his chest near the middle of your view), not just having him somewhere in frame
+    const watching = !!(c.inFrustum && !c.occluded && (c.onScreen ?? 0) > 0.0005 && (c.distance ?? 0) < range && (ctx.centered ?? true))
     this.cool = Math.max(0, this.cool - dt)
     switch (this.state) {
       case 'gone':   // sent away: back on his rock, silent, looking at nothing (somebody else is looking at the picture now)
@@ -80,10 +82,13 @@ export class Weeper {
         break
       case 'hush':
         if (!watching) { this.state = 'sitting'; this.watch = 0; this.cool = 6; ev.push('resume') }
-        else if (this.timer >= WEEPER.hush) { this.state = 'lookup'; this.timer = 0; this.faceT = 0; ev.push('lookup') }
+        else if (this.timer >= WEEPER.hush) {
+          if (ctx.canLook === false) { this.state = 'sitting'; this.watch = 0; this.cool = WEEPER.cooldown; ev.push('resume') }   // day 1, before you've read the rules: he stays down
+          else { this.state = 'lookup'; this.timer = 0; this.faceT = 0; ev.push('lookup') }
+        }
         break
       case 'lookup':
-        if (c.faceVisible) this.faceT += dt
+        if (c.faceVisible && this.timer >= WEEPER.headUp) this.faceT += dt
         if (this.faceT >= WEEPER.faceSeen) { this.trigger(ctx.binoculars ? 'binoculars' : 'eye', { night: ctx.night }); ev.push('seen'); break }
         if (this.timer >= WEEPER.lookup) { this.state = 'sitting'; this.watch = 0; this.cool = WEEPER.cooldown; ev.push('resume') }
         break
@@ -93,6 +98,7 @@ export class Weeper {
         break
       case 'screaming':
         this.pos = ctx.rock
+        if (!ctx.night) { this.state = 'seen_day'; break }   // by day he waits for dark
         if (this.timer >= WEEPER.scream) { this.state = 'coming'; this.timer = 0; this.progress = 0; ev.push('coming') }
         break
       case 'coming': {
@@ -106,8 +112,12 @@ export class Weeper {
         if (this.timer >= WEEPER.stairs) { this.state = 'door'; this.timer = 0; this.pos = ctx.trapdoor || ctx.cab; ev.push('door') }
         break
       case 'door':
-        if (ctx.playerInCab) { this.state = 'caught'; ev.push('caught') }
-        else if (this.timer > 3) { this.state = 'hunting'; this.timer = 0; this.huntPos = (ctx.gate || this.pos).slice(); ev.push('hunting') }
+        if (ctx.playerInCab) {
+          if (ctx.doorShut && this.timer < 10) {   // the shut door holds him a few seconds: pounding, the lamp jumping (a last chance for the hatch)
+            this.poundT = (this.poundT ?? 0) - dt; if (this.poundT <= 0) { this.poundT = 1.1 + Math.random() * 0.5; ev.push('pound') }
+          } else { this.state = 'caught'; ev.push('caught') }
+        }
+        else if (this.timer > 3) { this.state = 'hunting'; this.timer = 0; this.huntPos = (this.pos || ctx.gate).slice(); ev.push('hunting') }   // from the door, not the gate
         break
       case 'hunting': {
         const p = this.huntPos, q = ctx.player

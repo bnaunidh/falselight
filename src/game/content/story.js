@@ -268,7 +268,7 @@ export const OBJECTIVES = {
   d1_fuel:      { text: 'Carry a can of fuel up to the cab', hint: 'The cans are by the shed door at the base. E picks one up; carry it up and set it down anywhere up top with G. (Rule 2)' },
   d1_smoke:     { text: 'Get an azimuth on the smoke to the east', hint: 'From the catwalk look east-northeast, around 070°: a grey-brown column over the far ridges (B raises the binoculars from your pack and shows the bearing; B again lowers them). Then the fire finder: A / D turns the ring, put the hair on the smoke, E to radio it.' },
   d1_camera:    { text: 'Check the shelf by the south window', hint: 'Something is there that wasn\'t this morning.' },
-  d1_generator: { text: 'Start the generator before dark', hint: 'In the shed at the base. The searchlight runs off it.' },
+  d1_generator: { text: 'Start the generator before dark', hint: 'In the shed at the base (E on it). The searchlight and the cab lamp run off it, and a tank lasts about one night of idling.' },
   d1_dusk:      { text: 'Wait for dark in the cab', hint: 'The searchlight is on the roof. F takes it from anywhere in the cab or on the catwalk.' },
   n1_fire:      { text: 'A glow to the northwest. Get an azimuth.', hint: 'Fire finder, then E to radio the bearing.' },
   n1_answer:    { text: 'A light is flashing SOS on the burn, due west (about 260°). Answer it.', hint: 'Go out on the west side of the catwalk and look down and west: a small white light, flashing in threes, about 160 m out (B: the binoculars show your bearing). F takes the searchlight; put the beam near their light (it settles onto it), then send SOS back with Space or the mouse: tap-tap-tap, hold-hold-hold, tap-tap-tap.' },
