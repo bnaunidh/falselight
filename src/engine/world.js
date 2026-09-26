@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=8c08f3c9';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=37301ca4';
 
 const loader = new GLTFLoader();
 // Glass you can see: at a glancing angle a pane goes silver with reflection (Fresnel), so a shut window reads as glass and
@@ -520,7 +520,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
     const img = cx2.createImageData(NS, NS); const hgt = new Float32Array(NS * NS);
     for (let y = 0; y < NS; y++) for (let x = 0; x < NS; x++) {
       const u = (x / NS) * Math.PI * 2, v = (y / NS) * Math.PI * 2;
-      hgt[y * NS + x] = Math.sin(u * 3 + Math.sin(v * 2) * 1.3) * 0.5 + Math.sin(v * 5 + u * 2) * 0.3 + Math.sin(u * 9 - v * 7) * 0.12 + Math.sin(u * 17 + v * 13) * 0.05;
+      hgt[y * NS + x] = Math.sin(u * 3 + Math.sin(v * 2) * 1.3) * 0.5 + Math.sin(v * 5 + u * 2 + Math.sin(u * 4) * 0.9) * 0.3 + Math.sin(u * 9 - v * 7 + Math.cos(v * 3) * 1.4) * 0.12 + Math.sin(u * 17 + v * 13) * 0.05 + Math.sin(u * 23 - v * 29 + Math.sin(u * 7 + v * 5) * 2) * 0.04;   // warped: no repeating diamonds
     }
     for (let y = 0; y < NS; y++) for (let x = 0; x < NS; x++) {
       const hL = hgt[y * NS + ((x + NS - 1) % NS)], hR = hgt[y * NS + ((x + 1) % NS)], hD = hgt[((y + NS - 1) % NS) * NS + x], hU = hgt[((y + 1) % NS) * NS + x];
@@ -528,9 +528,14 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
       const o = (y * NS + x) * 4; img.data[o] = (nx * 0.5 + 0.5) * 255; img.data[o + 1] = (ny * 0.5 + 0.5) * 255; img.data[o + 2] = (nz * 0.5 + 0.5) * 255; img.data[o + 3] = 255;
     }
     cx2.putImageData(img, 0, 0);
-    const wn = new THREE.CanvasTexture(cvs); wn.wrapS = wn.wrapT = THREE.RepeatWrapping; wn.colorSpace = THREE.NoColorSpace; wn.repeat.set(1.5, 1);
-    const wm = new THREE.MeshStandardMaterial({ color: 0x1a211c, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.8,
-      normalMap: wn, normalScale: new THREE.Vector2(0.45, 0.45), envMapIntensity: 1.4, depthWrite: false });
+    const wn = new THREE.CanvasTexture(cvs); wn.wrapS = wn.wrapT = THREE.RepeatWrapping; wn.colorSpace = THREE.NoColorSpace; wn.repeat.set(1.1, 0.7);
+    const wm = new THREE.MeshStandardMaterial({ color: 0x141a15, roughness: 0.16, metalness: 0.0, transparent: true, opacity: 0.86,
+      normalMap: wn, normalScale: new THREE.Vector2(0.3, 0.3), envMapIntensity: 0.38, depthWrite: false });   // under the trees it reflects the dark wood, not the white sky
+    { // shallow at the banks: the water thins out to the stones at the edges (an across-the-channel alpha ramp)
+      const ac = document.createElement('canvas'); ac.width = 64; ac.height = 1; const ag = ac.getContext('2d'), gr = ag.createLinearGradient(0, 0, 64, 0);
+      gr.addColorStop(0, '#222'); gr.addColorStop(0.08, '#999'); gr.addColorStop(0.16, '#fff'); gr.addColorStop(0.84, '#fff'); gr.addColorStop(0.92, '#999'); gr.addColorStop(1, '#222');
+      ag.fillStyle = gr; ag.fillRect(0, 0, 64, 1); const at = new THREE.CanvasTexture(ac); at.colorSpace = THREE.NoColorSpace; at.wrapS = at.wrapT = THREE.ClampToEdgeWrapping;
+      wm.alphaMap = at; wm.opacity = 0.95; }
     W.waterNormal = wn;
     const water = new THREE.Mesh(g, wm); water.name = 'FL_creek_water'; water.renderOrder = 2;
     W.creek = new TrailIndex([{ name: 'creek', points: P }], 8); W.creek.halfWidth = hw;
@@ -645,6 +650,18 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
           }
         }
       }
+    }
+  }
+  if (scatter && layout.creek && layout.creek.points && layout.creek.points.length > 1) {
+    const CP = layout.creek.points, hw = layout.creek.halfWidth || 1.6, cell = 10, grid = new Map();
+    for (let i = 0; i < CP.length - 1; i++) { const a = CP[i], b = CP[i + 1];
+      for (let gx = Math.floor((Math.min(a[0], b[0]) - 6) / cell); gx <= Math.floor((Math.max(a[0], b[0]) + 6) / cell); gx++)
+        for (let gz = Math.floor((Math.min(a[2], b[2]) - 6) / cell); gz <= Math.floor((Math.max(a[2], b[2]) + 6) / cell); gz++) { const k = gx + ',' + gz; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); } }
+    const dCreek = (x, z) => { let best = 1e9; for (const i of grid.get(Math.floor(x / cell) + ',' + Math.floor(z / cell)) || []) { const a = CP[i], b = CP[i + 1], dx = b[0] - a[0], dz = b[2] - a[2], L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[2]) * dz) / L2)); best = Math.min(best, Math.hypot(x - a[0] - dx * t, z - a[2] - dz * t)); } return best; };
+    for (const k of Object.keys(scatter)) {
+      if (!/fir|hemlock|snag|sapling|log|stump/.test(k)) continue;
+      const clear = hw + (/log/.test(k) ? 2.2 : /sapling|stump/.test(k) ? 0.9 : 1.8);   // trunks + roots off the water; a log needs its length clear
+      scatter[k] = scatter[k].filter((p) => dCreek(p[0], p[2]) > clear);
     }
   }
   if (scatter) {
