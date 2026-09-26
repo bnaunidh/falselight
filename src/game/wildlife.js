@@ -13,8 +13,8 @@
 //   wild.animals: [{ id, kind: 'deer'|'bear', role, root, position: Vector3, act, state }] · wild.nearestDeer(pos, maxDist)
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { loadGLB } from '../engine/world.js?v=08bd4859';
-import { WildlifeBrain, WILD, resolvePlaces } from './wildlifeBrain.js?v=08bd4859';
+import { loadGLB } from '../engine/world.js?v=9d7eb897';
+import { WildlifeBrain, WILD, resolvePlaces } from './wildlifeBrain.js?v=9d7eb897';
 
 const CLIPS = { deer: ['idle', 'walk', 'run', 'graze', 'alert'], bear: ['idle', 'walk', 'run', 'rear', 'huff', 'forage'] };
 const POSE = { deer: { graze: 1, alert: 1 }, bear: { rear: 1, huff: 1, forage: 1 } };   // clips the brain's `act` picks when standing
@@ -442,6 +442,13 @@ export async function createWildlife(engine, hooks = {}) {
       let best = null, bd = maxDist;
       for (let i = 0; i < handles.length; i++) { const h = handles[i]; if (h.kind !== 'deer') continue; const q = h.rules.pos, dd = Math.hypot(q[0] - pos.x, q[1] - pos.y, q[2] - pos.z); if (dd < bd) { bd = dd; best = h; } }
       return best;
+    },
+    /** The generator sputtering at the shed draws the bear up tonight (brain.callToShed, e.g. { delay: 15 }); the view says
+     *  whether you can see it now (in frustum, not behind terrain or trees), since only an unseen bear may be moved closer. */
+    callToShed(o = {}) {
+      let hidden = true;
+      try { if (bearView && engine.view && engine.view.check) hidden = !engine.view.check({ root: bearView.root, faceAnchor: () => null }).visible; } catch (err) { hidden = true; }
+      return brain.callToShed({ ...o, hidden });
     },
     toJSON: () => brain.toJSON(),
     restore(json) { brain.restore(json); snapViews(); },

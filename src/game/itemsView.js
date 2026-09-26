@@ -3,8 +3,8 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=08bd4859';
-import { createSurfaces } from './surfaces.js?v=08bd4859';
+import { KINDS } from './items.js?v=9d7eb897';
+import { createSurfaces } from './surfaces.js?v=9d7eb897';
 
 export function createItemsView(engine) {
   const { scene, camera } = engine;
@@ -56,8 +56,13 @@ export function createItemsView(engine) {
 
   // ---------------------------------------------------------------- the thing in your hand
   let vm = null, vmKind = null;
-  V.setTorchGlow = () => {};   // (the beam shows it's on; a lens glow read as a halo from behind)
-  const HOLD = { fuel: [0.17, -0.17, -0.3], flashlight: [0.125, -0.12, -0.25], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
+  V.setTorchGlow = () => {};
+  /** A lantern's flame shows only while it's lit (the world copy, or the one in your hand). */
+  V.setFlame = (item, on) => {
+    const set = (o) => o && o.traverse((m) => { if (/flame/i.test(m.name || '')) m.visible = on; });
+    set(meshes.get(item.id)); if (vm && vmKind === 'lantern' && item.where === 'hand') set(vm);
+  };   // (the beam shows it's on; a lens glow read as a halo from behind)
+  const HOLD = { lantern: [0.19, -0.3, -0.38], clock: [0.12, -0.12, -0.24], pot: [0.15, -0.2, -0.3], oldcan: [0.12, -0.13, -0.24], fuel: [0.17, -0.17, -0.3], flashlight: [0.125, -0.12, -0.25], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
     canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23] };
   V.hold = (kind, t = 0, moving = 0) => {
     if (kind !== vmKind || (!vm && kind && T[kind] && HOLD[kind])) {
@@ -127,7 +132,7 @@ export function createItemsView(engine) {
   }
   const DOWN = new THREE.Vector3(0, -1, 0);
   // pegs: IA_hook_<name>_<px|nx|pz|nz> anchors (the outward direction in three axes)
-  const HANG = { backpack: 0.93, canteen: 0.9, binoculars: 0.85, camera: 0.85, flashlight: 0.95 };
+  const HANG = { backpack: 0.93, canteen: 0.9, binoculars: 0.85, camera: 0.85, flashlight: 0.95, lantern: 0.97 };
   let hooks = null;
   function hookList() {
     if (hooks) return hooks;

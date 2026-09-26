@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=08bd4859';
+import { clamp, damp } from './util.js?v=9d7eb897';
 
 // The searchlight beam: light scattered by haze inside the cone. Each pixel the cone covers gets ONE fragment (front faces
 // from outside, back faces from inside) and works out analytically how much beam its view ray crosses: the ray's closest
@@ -115,6 +115,8 @@ export function createLights(engine) {
   let cfT = 1;
   const api = {
     searchlight: SL, flashlight: FL, cabLamp: LAMP,
+    dread: 0,   // 0..1, set by the game when something wrong is near: every light stutters (dipsAt)
+    dipsAt(t, k = 0) { const d = api.dread; if (d < 0.04) return 1; const n = Math.sin(t * 23.1 + k) + 0.6 * Math.sin(t * 7.7 + k * 3.1) + 0.4 * Math.sin(t * 51 + k); return n > 1.9 - d * 1.5 ? 0.12 + 0.2 * (1 - d) : 1; },
     cameraFlash() { cfT = 0; engine.audio && engine.audio.play('flash_whine', { volume: 0.4 }); },
     flashAge() { return cfT; },
     update(dt, t) {
@@ -128,7 +130,7 @@ export function createLights(engine) {
       const o = SL.worldOrigin(), d = SL.worldDir();
       spot.position.copy(o); spot.target.position.copy(o).addScaledVector(d, 50);
       const flick = SL.power < 0.35 ? (0.75 + 0.25 * Math.sin(t * 43) * Math.sin(t * 17)) : 1;
-      const I = SL.on ? SL.power * flick : 0;
+      const I = SL.on ? SL.power * flick * api.dipsAt(t, 5) : 0;
       spot.intensity = damp(spot.intensity, I * 6.5e4, 18, dt);
       spot.visible = true; spot.shadow.autoUpdate = spot.intensity > 1;   // never toggle visibility: a light-count change recompiles every material (multi-second freeze)
       beam.visible = I > 0.02; bm.uniforms.uPow.value = damp(bm.uniforms.uPow.value, I, 18, dt); bm.uniforms.uT.value = t;
@@ -141,9 +143,9 @@ export function createLights(engine) {
       const inside = tcc > 0 && _cp.addScaledVector(d, -tcc).length() < 0.34 + (22 - 0.34) * Math.min(1, tcc / beamLen) + 0.2;
       const side = inside ? THREE.BackSide : THREE.FrontSide; if (bm.side !== side) { bm.side = side; bm.needsUpdate = true; }
       glow.visible = I > 0.02; glow.material.opacity = Math.min(1, I * 1.2);
-      flash.intensity = FL.on ? 130 * (0.5 + 0.5 * FL.battery) : 0; flash.shadow.autoUpdate = FL.on;
+      flash.intensity = FL.on ? 130 * (0.5 + 0.5 * FL.battery) * api.dipsAt(t, 2) : 0; flash.shadow.autoUpdate = FL.on;
       LAMP.flicker = damp(LAMP.flicker, 0, 3, dt);
-      lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) : 0;
+      lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) * api.dipsAt(t, 0) : 0;
       // the bulb itself glows only while the lamp is on (it stayed lit, 'a different on', when you pulled the chain)
       if (!LAMP.bulbs) { LAMP.bulbs = []; scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && /cab_bulb/i.test(m.name || '') && !LAMP.bulbs.includes(m)) { m.userData.emis = m.emissiveIntensity ?? 1; LAMP.bulbs.push(m); } }); }
       const bk = lamp.intensity / 3.2;

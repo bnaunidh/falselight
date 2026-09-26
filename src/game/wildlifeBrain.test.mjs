@@ -293,7 +293,7 @@ const bearBrain = (o = {}) => makeBrain({ deer: [], bear: true, bearSpots: [[0, 
   const bt = mk(), ct = cab(); bt.update(DT, ct); bt.bear.visitRoll = true; bt.bear.visitAt = 0
   sim(bt, ct, 400, { stopAt: () => bt.bear.task === 'return' && Math.hypot(bt.bear.pos[0], bt.bear.pos[2]) > 50 })
   const rt = bt.callToShed({ delay: 15, hidden: true }); let back = null; const tt = bt.time0
-  sim(bt, ct, 20, { onStep: () => { if (back == null && bt.bear.task === 'visit') back = bt.time0 - tt } })
+  sim(bt, ct, 20, { onStep: () => { if (back == null && (bt.bear.task === 'visit' || bt.bear.task === 'sniff')) back = bt.time0 - tt } })   // (close by, the walk up can turn straight into sniffing)
   ok('...already visited and heading home: called again, it turns round after the delay', rt === 'called' && back != null && Math.abs(back - 15) < 0.5, rt + ', back up at ' + f1(back) + ' s')
   // sniffing round the shed already: it stays a while
   const bn = mk(), cn = cab(); bn.update(DT, cn); bn.bear.visitRoll = true; bn.bear.visitAt = 0

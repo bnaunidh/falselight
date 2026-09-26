@@ -1099,7 +1099,8 @@ export class WildlifeBrain {
     if (ctx.night) {
       if (!b.nightOn) { b.nightOn = true; b.visited = false; b.nightT = 0; b.visitAt = this.U(B.visitDelay); b.visitRoll = this.rng() < B.visitChance; b.stalkRoll = this.rng() < B.stalkChance }
       b.nightT += dt
-      if (b.task === 'forage' && !b.visited && b.visitRoll && this.route && b.nightT >= b.visitAt) { b.visited = true; this.bearTask0('visit') }
+      // ('return' too: a callToShed after tonight's visit turns it round on its way back down)
+      if ((b.task === 'forage' || b.task === 'return') && !b.visited && b.visitRoll && this.route && b.nightT >= b.visitAt) { b.visited = true; this.bearTask0('visit') }
     } else if (b.nightOn) { b.nightOn = false; b.stalkRoll = false; b.scent = 0; if (b.task === 'visit' || b.task === 'sniff') this.bearTask0('return') }
     switch (b.task) {
       case 'visit': {
@@ -1120,6 +1121,32 @@ export class WildlifeBrain {
     }
     b.snuffT -= dt
     if (b.snuffT <= 0) { b.snuffT = this.U(B.snuffle); if (d3(b.pos, ctx.player) < B.snuffleRange) this.animalSfx(b, 'bear_huff', B.snuffleVol, B.head) }
+  }
+  /**
+   * Something draws it up to the tower tonight (the generator sputtering while you go down to refuel): the night visit, in
+   * `delay` s, whether it has been up already tonight or not (an earlier visit already due stays earlier). If it's further
+   * than `far` m from the tower and `hidden` (the view says you can't see it), and calm, it's moved onto its route `near` m
+   * out, nosing about there till it's time, so it gets there while you're still at the shed. Already coming, or sniffing
+   * round the shed: it stays a while longer. Returns 'moved' | 'called' | 'coming', or false (no bear, no route).
+   */
+  callToShed({ delay = 15, near = 60, far = 150, hidden = false } = {}) {
+    const B = WILD.bear, b = this.bear, R = this.route
+    if (!b || !R) return false
+    if (!b.nightOn) { b.nightOn = true; b.nightT = 0; b.stalkRoll = this.rng() < B.stalkChance }   // (called before its first night update)
+    if (b.task === 'visit' || b.task === 'sniff') { if (b.task === 'sniff') b.sniffT = Math.max(b.sniffT, B.sniff[0]); return 'coming' }
+    b.visitAt = !b.visited && b.visitRoll ? Math.min(b.visitAt, b.nightT + delay) : b.nightT + delay
+    b.visited = false; b.visitRoll = true
+    const tx = this.tower[0], tz = this.tower[1]
+    if (!hidden || b.state !== 'calm' || Math.hypot(b.pos[0] - tx, b.pos[2] - tz) <= far) return 'called'
+    const q = this._q
+    for (let s = R.length; s >= 0; s -= 2) {   // back down the route from the tower end to the first good ground `near` m out
+      R.at(s, q)
+      if (Math.hypot(q[0] - tx, q[2] - tz) < near || !this.ok(q[0], q[2], B)) continue
+      this.place(b, q[0], q[2], Math.atan2(tx - q[0], tz - q[2]))
+      b.task = 'forage'; b.sub = 'nose'; b.subT = b.visitAt - b.nightT + 5; b.act = 'forage'; b.rearIdleT = 0; b.routeS = s
+      return 'moved'
+    }
+    return 'called'
   }
   followRoute(dt, dir) {
     const B = WILD.bear, b = this.bear, R = this.route

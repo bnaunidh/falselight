@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=08bd4859'
+import { clamp } from './util.js?v=9d7eb897'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -13,7 +13,18 @@ export const KINDS = {
   binoculars: { name: 'Binoculars', model: 'prop_binoculars', pack: true },
   canteen:    { name: 'Canteen', model: 'prop_canteen', pack: true },
   food:       { name: 'Tin of beans', model: 'prop_food_tin', pack: true },
+  // the cab's own things: move them, shelve them, take them with you
+  clock:      { name: 'Alarm clock', model: 'prop_alarm_clock', pack: true, scale: 0.72 },
+  pot:        { name: 'Coffee pot', model: 'prop_pot_enamel', pack: false, scale: 0.78 },
+  oldcan:     { name: 'Rusted can', model: 'prop_can_rusted', pack: true, scale: 0.8 },
+  lantern:    { name: 'Hurricane lantern', model: 'prop_lantern', pack: false, light: true },
 }
+/** Where the cab's movable things start (three coords; settled onto whatever is under them). */
+export const CAB_ITEMS = [
+  ['clock', [1.78, 31.0, -1.875], 0], ['pot', [1.74, 31.05, 1.62], 0.4],
+  ['oldcan', [0.45, 30.4, -1.875], 0.3], ['oldcan', [0.59, 30.4, -1.875], 1.9], ['oldcan', [-1.73, 30.55, 1.865], 0.8],
+  ['lantern', [-1.15, 31.0, 1.865], 2.9], ['lantern', [8.3, 1.62, 5.72], 1.2],   // one on the cab's south shelf, one on the shed shelf
+]
 export const CANTEEN_SIPS = 4
 
 export class Inventory {
@@ -21,7 +32,10 @@ export class Inventory {
     this.items = (s.items || []).map((i) => ({ ...i, pos: i.pos ? [...i.pos] : undefined }))
     this.active = s.active ?? 0
     this.nextId = s.nextId ?? 1
+    this.cabV = s.cabV ?? 0
+    if (this.cabV < 1 && s.items) this.addCabItems()   // a save from before the cab's things were movable
   }
+  addCabItems() { for (const [kind, pos, rotY] of CAB_ITEMS) this.create(kind, { where: 'world', pos: [...pos], rotY, settle: true, on: false }); this.cabV = 1 }
   /** The kit you walk up with + what's already at the lookout. where: { fuel: [[x,y,z],...], cab: {...} } */
   static start(where = {}) {
     const inv = new Inventory()
@@ -32,6 +46,7 @@ export class Inventory {
     inv.create('food', { where: 'pack', slot: 3 })
     for (const p of where.fuel || []) inv.create('fuel', { where: 'world', pos: p, rotY: Math.random() * 6.28, fill: 1 })
     for (const p of where.food || []) inv.create('food', { where: 'world', pos: p, rotY: Math.random() * 6.28 })
+    inv.addCabItems()
     inv.active = bp.slot
     return inv
   }
@@ -92,7 +107,8 @@ export class Inventory {
     const k = KINDS[it.kind]; if (!k) return it.kind
     if (it.kind === 'fuel') return k.name + (it.fill > 0.99 ? ' (full, 5 L)' : it.fill > 0.01 ? ` (${Math.round(it.fill * 50) / 10} L)` : ' (empty)')
     if (it.kind === 'canteen') return k.name + (it.fill > 0 ? ` (${Math.round(it.fill * CANTEEN_SIPS)}/${CANTEEN_SIPS})` : ' (empty)')
+    if (it.kind === 'lantern') return k.name + (it.on ? ' (lit)' : '')
     return k.name
   }
-  toJSON() { return { items: this.items.map((i) => ({ ...i })), active: this.active, nextId: this.nextId } }
+  toJSON() { return { items: this.items.map((i) => ({ ...i })), active: this.active, nextId: this.nextId, cabV: this.cabV } }
 }

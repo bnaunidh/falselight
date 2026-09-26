@@ -20,6 +20,7 @@ export const LINES = {
     W('I\'m back tomorrow with the mail and whatever you want from town. Write it down. I forget.'),
     W('Tillman left in kind of a hurry. Don\'t mind the mess.'),
     W('And stay on the trail. I mean it. That ravine doesn\'t give anybody back.'),
+    W('That\'s the Everly kid on the board. Last August. Stay on the trail.'),   // the MISSING poster in the station (E on it)
   ],
   briefing: [
     Y('Silver Fork, Tamarack.'),
@@ -49,6 +50,8 @@ export const LINES = {
   duskSob: [N('Somebody is crying. Far down the hill, by the creek.')],
   cameraFound: [N('A camera, on the shelf by the south window. A note under it in pencil: "10 shots. Make them count. — R.T."')],
   bootsCatwalk: [N('Boots on the catwalk. Slow. All the way around the cab, and then nothing.')],
+  bootsTwo: [N('Boots on the catwalk. Two pairs. One of them stops outside the door.')],   // night 2: rule 11 pays off
+  glimpse: [N('Far below, across the creek, someone is sitting on a rock with his face in his hands.')],   // day 1, from the catwalk
   night1Start: [
     D('Tamarack, Silver Fork. Evening check.'),
     Y('Silver Fork, Tamarack. Go ahead.'),
@@ -230,6 +233,7 @@ export const OBJECTIVES = {
   n1_answer:    { text: 'Someone is flashing SOS over the burn. Answer.', hint: 'F takes the searchlight (from the cab or the catwalk). Put the beam on their light, let them finish, then send SOS back with Space: tap-tap-tap, hold-hold-hold, tap-tap-tap.' },
   n1_guide:     { text: 'Walk them out to the trailhead', hint: 'Keep the beam on the trail just ahead of them. If they stop, find them again.' },
   n1_refuel:    { text: 'Fuel is low. Refuel the generator.', hint: 'Carry the can you left up top down to the shed. E at the generator pours it.', urgent: true },
+  n1_gate:      { text: 'The gate rattled. Write down the time.', hint: 'Tillman would have. The logbook is on the desk in the cab: E writes the entry.', optional: true },
   n1_dawn:      { text: 'Keep the light until first light', hint: 'Stay in the cab. Watch the horizon.' },
   d2_camp:      { text: 'Find the hikers\' camp', hint: 'Take the Camp Loop west off Trail No. 1411, below the tower (M for the map).' },
   d2_overlook:  { text: 'Look over the ravine rail', hint: 'The short spur east of the tower.' },
@@ -243,6 +247,7 @@ export const OBJECTIVES = {
   n2_treeline:  { text: 'Someone at the tree line. Keep the light on him.', hint: 'He only moves when nothing is looking.', optional: true },
   n2_refuel:    { text: 'Fuel is low. Refuel the generator.', hint: 'Carry a can down to the shed. E at the generator pours it.', urgent: true },
   n2_dawn:      { text: 'Keep the light until first light', hint: 'Stay in the cab.' },
+  rules_more:   { text: 'Read the card again', hint: 'Tab opens the logbook. Turn to Rules: some of it is in your handwriting.', optional: true },
   weeper_photo: { text: 'He is coming. Photograph him.', hint: 'A picture of him is the only thing he follows. Then send it away.', urgent: true },
   weeper_send:  { text: 'He is coming. Send the picture away.', hint: 'Mailbox at the trailhead — at night it is the only way. By day, the fax.', urgent: true },
   end:          { text: 'The truck comes Thursday.', hint: 'End of the first two nights.' },

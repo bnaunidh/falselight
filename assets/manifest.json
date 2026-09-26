@@ -4,77 +4,87 @@
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
-   "bytes": 16357428,
-   "mtime": 1790359453
+   "bytes": 5749216,
+   "mtime": 1790441177
   },
   "char_bear": {
    "path": "models/char_bear.glb",
-   "bytes": 1354772,
+   "bytes": 1305240,
    "mtime": 1790396913
   },
   "char_deer": {
    "path": "models/char_deer.glb",
-   "bytes": 1375580,
+   "bytes": 1303028,
    "mtime": 1790397040
   },
   "char_dog": {
    "path": "models/char_dog.glb",
-   "bytes": 1551456,
+   "bytes": 1461516,
    "mtime": 1790363265
   },
   "char_lost_hiker": {
    "path": "models/char_lost_hiker.glb",
-   "bytes": 6359692,
+   "bytes": 5761604,
    "mtime": 1790404531
   },
   "char_lost_hiker_body": {
    "path": "models/char_lost_hiker_body.glb",
-   "bytes": 4629316,
+   "bytes": 4031224,
    "mtime": 1790404542
   },
   "char_other_lookout": {
    "path": "models/char_other_lookout.glb",
-   "bytes": 4664308,
+   "bytes": 4093892,
    "mtime": 1790402336
   },
   "char_weeper": {
    "path": "models/char_weeper.glb",
-   "bytes": 6400836,
+   "bytes": 5714048,
    "mtime": 1790377402
+  },
+  "prop_alarm_clock": {
+   "path": "models/prop_alarm_clock.glb",
+   "bytes": 412212,
+   "mtime": 1790225202
   },
   "prop_backpack": {
    "path": "models/prop_backpack.glb",
-   "bytes": 3393620,
+   "bytes": 571832,
    "mtime": 1790303187
   },
   "prop_binoculars": {
    "path": "models/prop_binoculars.glb",
-   "bytes": 2532576,
+   "bytes": 651744,
    "mtime": 1790225200
   },
   "prop_camp_chair": {
    "path": "models/prop_camp_chair.glb",
-   "bytes": 2067056,
+   "bytes": 1748272,
    "mtime": 1790360674
   },
   "prop_camp_stove": {
    "path": "models/prop_camp_stove.glb",
-   "bytes": 661624,
+   "bytes": 140952,
    "mtime": 1790303203
+  },
+  "prop_can_rusted": {
+   "path": "models/prop_can_rusted.glb",
+   "bytes": 262908,
+   "mtime": 1790225199
   },
   "prop_canteen": {
    "path": "models/prop_canteen.glb",
-   "bytes": 1250160,
+   "bytes": 317468,
    "mtime": 1790356321
   },
   "prop_fire_pit": {
    "path": "models/prop_fire_pit.glb",
-   "bytes": 2535072,
+   "bytes": 851848,
    "mtime": 1790225196
   },
   "prop_flashlight": {
    "path": "models/prop_flashlight.glb",
-   "bytes": 2112368,
+   "bytes": 622932,
    "mtime": 1790225195
   },
   "prop_food_tin": {
@@ -84,117 +94,127 @@
   },
   "prop_footbridge": {
    "path": "models/prop_footbridge.glb",
-   "bytes": 3023052,
+   "bytes": 2640544,
    "mtime": 1790302976
   },
   "prop_instant_camera": {
    "path": "models/prop_instant_camera.glb",
-   "bytes": 292608,
+   "bytes": 230192,
    "mtime": 1790303220
   },
   "prop_jerrycan": {
    "path": "models/prop_jerrycan.glb",
-   "bytes": 2652308,
+   "bytes": 476196,
    "mtime": 1790225193
+  },
+  "prop_lantern": {
+   "path": "models/prop_lantern.glb",
+   "bytes": 57924,
+   "mtime": 1790441170
   },
   "prop_log_bench": {
    "path": "models/prop_log_bench.glb",
-   "bytes": 1918844,
+   "bytes": 1658656,
    "mtime": 1790360511
   },
   "prop_mailbox": {
    "path": "models/prop_mailbox.glb",
-   "bytes": 1164380,
+   "bytes": 252360,
    "mtime": 1790303126
   },
   "prop_overlook_railing": {
    "path": "models/prop_overlook_railing.glb",
-   "bytes": 1174152,
+   "bytes": 964492,
    "mtime": 1790303058
   },
   "prop_picnic_table": {
    "path": "models/prop_picnic_table.glb",
-   "bytes": 4307512,
+   "bytes": 1206056,
    "mtime": 1790225197
+  },
+  "prop_pot_enamel": {
+   "path": "models/prop_pot_enamel.glb",
+   "bytes": 294820,
+   "mtime": 1790225202
   },
   "prop_ranger_station": {
    "path": "models/prop_ranger_station.glb",
-   "bytes": 4402352,
+   "bytes": 3651280,
    "mtime": 1790303147
   },
   "prop_rubber_boot_fallen": {
    "path": "models/prop_rubber_boot_fallen.glb",
-   "bytes": 1132004,
+   "bytes": 293616,
    "mtime": 1790225199
   },
   "prop_sign_camp": {
    "path": "models/prop_sign_camp.glb",
-   "bytes": 1484252,
+   "bytes": 429928,
    "mtime": 1790355244
   },
   "prop_sign_cliff": {
    "path": "models/prop_sign_cliff.glb",
-   "bytes": 572080,
+   "bytes": 180728,
    "mtime": 1790355246
   },
   "prop_sign_creek": {
    "path": "models/prop_sign_creek.glb",
-   "bytes": 1559648,
+   "bytes": 505320,
    "mtime": 1790355243
   },
   "prop_sign_firedanger": {
    "path": "models/prop_sign_firedanger.glb",
-   "bytes": 1549492,
+   "bytes": 495152,
    "mtime": 1790355245
   },
   "prop_sign_gate": {
    "path": "models/prop_sign_gate.glb",
-   "bytes": 1053276,
+   "bytes": 532600,
    "mtime": 1790355247
   },
   "prop_sign_j1": {
    "path": "models/prop_sign_j1.glb",
-   "bytes": 1678956,
+   "bytes": 624620,
    "mtime": 1790355242
   },
   "prop_sign_j2": {
    "path": "models/prop_sign_j2.glb",
-   "bytes": 1620536,
+   "bytes": 566200,
    "mtime": 1790355243
   },
   "prop_sign_spring": {
    "path": "models/prop_sign_spring.glb",
-   "bytes": 1442028,
+   "bytes": 387700,
    "mtime": 1790355246
   },
   "prop_sign_trailhead": {
    "path": "models/prop_sign_trailhead.glb",
-   "bytes": 2551680,
+   "bytes": 923856,
    "mtime": 1790355244
   },
   "prop_sleeping_bag": {
    "path": "models/prop_sleeping_bag.glb",
-   "bytes": 2103436,
+   "bytes": 275008,
    "mtime": 1790303194
   },
   "prop_spring": {
    "path": "models/prop_spring.glb",
-   "bytes": 2292700,
+   "bytes": 1876588,
    "mtime": 1790303090
   },
   "prop_supply_truck": {
    "path": "models/prop_supply_truck.glb",
-   "bytes": 4037556,
+   "bytes": 3451644,
    "mtime": 1790309195
   },
   "prop_tent_collapsed": {
    "path": "models/prop_tent_collapsed.glb",
-   "bytes": 1087032,
+   "bytes": 878972,
    "mtime": 1790303178
   },
   "tower": {
    "path": "models/tower.glb",
-   "bytes": 17004968,
+   "bytes": 12831664,
    "mtime": 1790359427
   },
   "veg_branches": {
@@ -204,97 +224,97 @@
   },
   "veg_fern": {
    "path": "models/veg_fern.glb",
-   "bytes": 1692080,
+   "bytes": 402868,
    "mtime": 1790296633
   },
   "veg_fir_a": {
    "path": "models/veg_fir_a.glb",
-   "bytes": 5058964,
+   "bytes": 2343344,
    "mtime": 1790352840
   },
   "veg_fir_b": {
    "path": "models/veg_fir_b.glb",
-   "bytes": 5102668,
+   "bytes": 2486040,
    "mtime": 1790352841
   },
   "veg_fir_c": {
    "path": "models/veg_fir_c.glb",
-   "bytes": 5379148,
+   "bytes": 2804684,
    "mtime": 1790352841
   },
   "veg_grass": {
    "path": "models/veg_grass.glb",
-   "bytes": 542536,
+   "bytes": 319960,
    "mtime": 1790296634
   },
   "veg_hemlock_a": {
    "path": "models/veg_hemlock_a.glb",
-   "bytes": 5862764,
+   "bytes": 2949112,
    "mtime": 1790352841
   },
   "veg_log_a": {
    "path": "models/veg_log_a.glb",
-   "bytes": 2627460,
+   "bytes": 913136,
    "mtime": 1790296642
   },
   "veg_log_b": {
    "path": "models/veg_log_b.glb",
-   "bytes": 3087900,
+   "bytes": 1090212,
    "mtime": 1790296644
   },
   "veg_moss": {
    "path": "models/veg_moss.glb",
-   "bytes": 146800,
+   "bytes": 68868,
    "mtime": 1790296635
   },
   "veg_rocks_a": {
    "path": "models/veg_rocks_a.glb",
-   "bytes": 559552,
+   "bytes": 531576,
    "mtime": 1790296636
   },
   "veg_rocks_b": {
    "path": "models/veg_rocks_b.glb",
-   "bytes": 703120,
+   "bytes": 674032,
    "mtime": 1790296637
   },
   "veg_rocks_boulder": {
    "path": "models/veg_rocks_boulder.glb",
-   "bytes": 4814072,
+   "bytes": 2886808,
    "mtime": 1790296639
   },
   "veg_roots": {
    "path": "models/veg_roots.glb",
-   "bytes": 6059976,
+   "bytes": 2100328,
    "mtime": 1790296647
   },
   "veg_salal": {
    "path": "models/veg_salal.glb",
-   "bytes": 531312,
+   "bytes": 308928,
    "mtime": 1790296635
   },
   "veg_sapling": {
    "path": "models/veg_sapling.glb",
-   "bytes": 4651820,
+   "bytes": 1927800,
    "mtime": 1790352841
   },
   "veg_snag_a": {
    "path": "models/veg_snag_a.glb",
-   "bytes": 2158092,
+   "bytes": 1377136,
    "mtime": 1790352841
   },
   "veg_snag_b": {
    "path": "models/veg_snag_b.glb",
-   "bytes": 1791820,
+   "bytes": 1128444,
    "mtime": 1790352841
   },
   "veg_stump_a": {
    "path": "models/veg_stump_a.glb",
-   "bytes": 3077980,
+   "bytes": 1099280,
    "mtime": 1790296639
   },
   "veg_stump_b": {
    "path": "models/veg_stump_b.glb",
-   "bytes": 3136212,
+   "bytes": 1115640,
    "mtime": 1790296641
   }
  },

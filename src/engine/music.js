@@ -407,8 +407,9 @@ export const MUSIC_KEYS = allKeys();
 /**
  * pickMood(s): the mood for a game state. s = { state, phase: 'day1'|'night1'|..., hour, inCab, sitting,
  * weeper: weeper.state ('sitting'|'hush'|'lookup'|'seen_day'|'screaming'|'coming'|'stairs'|'door'|'hunting'|'gone'|'caught'),
- * weeperDist (m), current (the mood playing now: the chase radius has hysteresis) }. Returns a mood name, or null to keep
- * whatever is playing (paused, menus). Note bridge.update() only runs in 'play': the other states are set explicitly.
+ * weeperDist (m), current (the mood playing now: the chase radius has hysteresis), quiet (a scripted beat is due: the SOS,
+ * the gate, the boots...), bear (0..1, the bear's sustained fear) }. Returns a mood name, or null to keep whatever is playing
+ * (paused, menus). Note bridge.update() only runs in 'play': the other states are set explicitly.
  */
 export function pickMood(s = {}) {
   const st = s.state || 'play';
@@ -419,6 +420,8 @@ export function pickMood(s = {}) {
   if (w === 'hunting' || w === 'stairs' || (w === 'coming' && d < chaseR)) return 'chase';
   if (['coming', 'screaming', 'door', 'lookup', 'seen_day'].includes(w)) return 'dread';
   if (w === 'hush') return 'silent';   // the crying stops: so does everything else
+  if (s.quiet) return 'silent';        // a scare is due: the score gets out of its way first (the game asks with a fade: prompt)
+  if ((s.bear || 0) > (s.current === 'dread' ? 0.35 : 0.5)) return 'dread';   // the bear close (hysteresis: its fear decays through 0.5)
   const night = /night/.test(s.phase || '');
   if (s.sitting && !night) return 'chill';   // a warm lydian guitar would undo the night: sitting out at night stays night
   if (night) return s.inCab ? 'cab' : 'night';
