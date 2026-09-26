@@ -1,5 +1,5 @@
-// FALSE LIGHT — wildlife voices: procedural WebAudio recipes for the birds, the night callers, the deer, the bear and
-// the dog. registerAnimalSounds(audio) adds each with audio.addSynth(name, fn); the game plays them with
+// FALSE LIGHT — wildlife voices: procedural WebAudio recipes for the birds, the night callers, the deer, the bear (its
+// huff, woof, jaw-pop, growl, bawl, breathing, footfalls, and the sticks that break under it) and the dog. registerAnimalSounds(audio) adds each with audio.addSynth(name, fn); the game plays them with
 // engine.audio.play(name, { position, volume }). fn(dest, volume, H), H = { ctx, noise, ... } from src/engine/audio.js.
 //
 // Each recipe is built from the real call's acoustics (the note above it): layered oscillators with pitch and amplitude
@@ -8,7 +8,7 @@
 // and stopped on a schedule, and when the last one has ended every node the call made is disconnected.
 // Pure module (no three.js, no DOM): tests/animalSounds.test.mjs runs it on a strict WebAudio mock + renderer.
 //
-//   import { registerAnimalSounds } from './engine/animalSounds.js?v=f6619665';
+//   import { registerAnimalSounds } from './engine/animalSounds.js?v=d0e3d680';
 //   registerAnimalSounds(engine.audio);                  // once, after createAudio()
 //   engine.audio.play('owl', { position: new THREE.Vector3(x, y, z), volume: 1 });
 // volume: 1 = a close call (see LEVEL for the peaks); clamped to 16, 0 / negative / NaN = silent (nothing is made).
@@ -390,21 +390,125 @@ function bearJawPop(d, v, H) {
   return K.done();
 }
 
-// Black bear growl (rare — bears mostly huff and pop): a low, rough rumble — a ~55-72 Hz voice with a subharmonic,
-// fast pitch roughness (a square flutter ~20-28 Hz) and slower pulsing (~6-9 Hz amplitude beats), dark formants.
+// Black bear growl (rare — bears mostly huff and pop), a big boar's, close: a deep, rough rumble you feel in your chest —
+// a ~40-52 Hz voice doubled by a second a few % sharp (the thick, beating rasp) and period-doubled (a square sub-voice at
+// half the pitch, heard through the formants as creak, never as sub-bass); the pitch jittered by low-passed noise and
+// rattled by a ~19-25 Hz square flutter; chesty breath noise in it; pulsing at ~6-9 Hz with a slow surge; dark formants
+// (~210 / 480 / 950 Hz). Two high-passes at 38 Hz keep the energy out of the sub-30 Hz rumble a speaker can't play.
 function bearGrowl(d, v, H) {
   const K = kit(d, v, H); if (!K) return 0;
-  const T = K.t0, l = R(1.3, 2.1), f0 = R(55, 72), tEnd = T + l + 0.05;
-  const env = K.gain(0, K.out), lp = K.filt('lowpass', 1400, 0, env);
-  const src = K.gain(1), am = K.gain(0.55); src.connect(am);
-  K.bank(am, [[250, 3, 1], [600, 4, 0.7], [1250, 6, 0.25]], lp);
-  const saw = K.osc('sawtooth', f0, T, tEnd, src), sub = K.osc('sine', f0 / 2, T, tEnd, K.gain(0.35, src));
-  K.lfo('square', R(20, 28), f0 * 0.1, T, tEnd, saw.frequency);
-  K.noise(true, T, tEnd, K.gain(0.8, src)); K.noise(false, T, tEnd, K.filt('bandpass', 500, 0.8, K.gain(0.2, src)));
-  K.lfo('sine', R(6, 9), 0.4, T, tEnd, am.gain); K.lfo('sine', R(2, 3), 0.12, T, tEnd, am.gain);
-  path(saw.frequency, [[T, f0 * 0.9], [T + l * 0.4, f0 * 1.08], [T + l, f0 * 0.85]], true);
-  path(sub.frequency, [[T, f0 * 0.45], [T + l * 0.4, f0 * 0.54], [T + l, f0 * 0.425]], true);
-  swell(env.gain, [[T, 0], [T + 0.18, 0.8], [T + l * 0.5, 1], [T + l * 0.85, 0.85]], T + l);
+  const T = K.t0, l = R(1.6, 2.3), f0 = R(40, 52), tEnd = T + l + 0.05, dt2 = R(1.02, 1.03);
+  const env = K.gain(0, K.out), lp = K.filt('lowpass', 1100, 0, K.filt('highpass', 38, 0, K.filt('highpass', 38, 0, env)));
+  const src = K.gain(1), am = K.gain(0.5); src.connect(am);
+  K.bank(am, [[210, 2.5, 1.1], [480, 3.5, 0.8], [950, 5, 0.3], [2100, 7, 0.07]], lp);
+  const saw = K.osc('sawtooth', f0, T, tEnd, src), saw2 = K.osc('sawtooth', f0 * dt2, T, tEnd, K.gain(0.65, src));
+  const sub = K.osc('square', f0 / 2, T, tEnd, K.gain(0.3, src));
+  K.lfo('square', R(19, 25), f0 * 0.12, T, tEnd, saw.frequency, saw2.frequency);   // the rattle
+  const jit = K.gain(f0 * 0.3); jit.connect(saw.frequency); jit.connect(saw2.frequency); jit.connect(sub.frequency);
+  K.noise(true, T, tEnd, K.filt('lowpass', 30, 0, jit));                              // the wandering, unsteady pitch
+  K.noise(true, T, tEnd, K.filt('highpass', 60, 0, K.gain(0.9, src))); K.noise(false, T, tEnd, K.filt('bandpass', 420, 0.8, K.gain(0.25, src)));
+  K.lfo('sine', R(6, 9), 0.4, T, tEnd, am.gain); K.lfo('sine', R(1.8, 2.8), 0.12, T, tEnd, am.gain);
+  const pts = [[T, f0 * 0.88], [T + l * 0.4, f0 * 1.1], [T + l * 0.62, f0 * 1.02], [T + l, f0 * 0.82]];
+  path(saw.frequency, pts, true); path(saw2.frequency, pts.map(([t, f]) => [t, f * dt2]), true); path(sub.frequency, pts.map(([t, f]) => [t, f / 2]), true);
+  swell(env.gain, [[T, 0], [T + 0.22, 0.75], [T + l * 0.45, 1], [T + l * 0.6, 0.88], [T + l * 0.8, 0.95]], T + l);
+  return K.done();
+}
+
+// Bear breathing, close by: heavy, wet, huffing breaths — two or three in 1-2 s. Each a loud low exhale (chesty turbulence
+// ~300-900 Hz with a rough roar and a faint voiced groan in it, 0.3-0.45 s) and a shorter, softer, higher intake (~1.3-1.6
+// kHz through the throat, 0.2-0.3 s); saliva crackle over both (sparse, tiny clicks of 2.6 kHz noise).
+function bearBreath(d, v, H) {
+  const K = kit(d, v, H); if (!K) return 0;
+  const T = K.t0, rate = R(0.85, 1.05), cyc = [];
+  let t = T;
+  for (let i = 0; i < 3; i++) {
+    const le = R(0.3, 0.45) * rate, gap = R(0.04, 0.1), li = R(0.2, 0.3) * rate;
+    if (i >= 2 && t + le + gap + li > T + 1.9) break;
+    cyc.push([t, le, t + le + gap, li, [1, 0.85, 0.72][i]]); t += le + gap + li + R(0.05, 0.14);
+  }
+  const lc = cyc[cyc.length - 1], tEnd = lc[2] + lc[3] + 0.05;
+  const ex = K.gain(0, K.out), inh = K.gain(0, K.out), wet = K.gain(0, K.out), chest = K.filt('peaking', 280, 1, ex, 6);
+  const nz = K.noise(false, T, tEnd);
+  nz.connect(K.filt('lowpass', 900, 0, K.gain(0.7, chest))); nz.connect(K.filt('bandpass', 520, 0.9, K.gain(0.6, chest)));
+  K.noise(true, T, tEnd, K.filt('highpass', 70, 0, K.gain(0.6, chest)));                                    // the rough roar in it
+  const gf = R(62, 80), groan = K.osc('sawtooth', gf, T, tEnd, K.filt('bandpass', 330, 3, K.gain(0.3, chest)));   // a faint voice
+  nz.connect(K.filt('bandpass', R(1300, 1600), 1.1, inh)); nz.connect(K.filt('bandpass', 650, 2, K.gain(0.35, inh)));
+  nz.connect(K.filt('bandpass', 2600, 1.2, wet));
+  let tc = T;
+  for (const [te, le, ti, li, a] of cyc) {
+    path(ex.gain, [[te, 0], [te + 0.04, a], [te + le * 0.35, a * 0.8]]); ex.gain.exponentialRampToValueAtTime(a * 0.004, te + le); ex.gain.linearRampToValueAtTime(0, te + le + 0.004);
+    path(inh.gain, [[ti, 0], [ti + li * 0.45, 0.32 * a]]); inh.gain.exponentialRampToValueAtTime(0.32 * a * 0.004, ti + li); inh.gain.linearRampToValueAtTime(0, ti + li + 0.004);
+    path(groan.frequency, [[te, gf * 1.08], [te + le, gf * 0.85]], true);
+    // crackle: through the back of the exhale and the intake
+    tc = Math.max(tc, te + le * 0.4);
+    for (let k = 0, m = RI(3, 6); k < m && tc < ti + li - 0.02; k++) { tc = hit(wet.gain, tc, 0.0008, R(0.12, 0.35) * a, 0, R(0.005, 0.012)) + R(0.02, 0.09); }
+  }
+  return K.done();
+}
+
+// A heavy footfall — a big bear at a run: a padded thud (a low body thump sweeping ~95 -> 50 Hz in 60 ms, and the soft slap
+// of the pad: low-passed noise) and the crunch of the forest floor under it (a handful of tiny cracks of needles and
+// twigs over ~0.1-0.2 s, and a brief rustle).
+function bearStep(d, v, H) {
+  const K = kit(d, v, H); if (!K) return 0;
+  const T = K.t0, f = R(85, 105), tEnd = T + 0.32;
+  const hp = K.filt('highpass', 36, 0, K.out);
+  const th = K.gain(0, hp), o = K.osc('sine', f, T, tEnd, th);
+  path(o.frequency, [[T, f], [T + 0.06, f * 0.55], [T + 0.2, f * 0.5]], true);
+  hit(th.gain, T, 0.003, 1, 0.01, R(0.1, 0.14));
+  const pad = K.gain(0, hp), cr = K.gain(0, hp), ru = K.gain(0, hp), nz = K.noise(false, T, tEnd);
+  nz.connect(K.filt('lowpass', R(260, 380), 0, K.filt('highpass', 60, 0, pad)));
+  nz.connect(K.filt('highpass', 1500, 0, K.filt('bandpass', R(2400, 3400), 0.7, cr)));
+  nz.connect(K.filt('bandpass', 4000, 0.6, ru));
+  hit(pad.gain, T + 0.002, 0.004, 0.9, 0.012, R(0.06, 0.09));
+  let tc = T + R(0.004, 0.012);
+  for (let i = 0, m = RI(5, 9); i < m && tc < T + 0.2; i++) tc = hit(cr.gain, tc, 0.0006, R(0.45, 0.9) * (1 - i / (m + 2)), 0, R(0.004, 0.01)) + R(0.004, 0.025);
+  hit(ru.gain, T + 0.005, 0.01, 0.1, 0.02, 0.12);
+  return K.done();
+}
+
+// A dry stick breaking in the undergrowth, somewhere off the trail: a sharp crack — the wood ringing (a ~1.6-2.4 kHz mode and
+// one about twice that, struck: sine bursts with a 0.4 ms attack and a few ms of ring, so every crack is as sharp as the
+// last), a click of noise through the same resonances for grain, a bright splinter and a little body — then within
+// 20-90 ms one to three smaller splintering cracks, and the brush settling (a short 3.5-5 kHz rustle).
+function branchSnap(d, v, H) {
+  const K = kit(d, v, H); if (!K) return 0;
+  const T = K.t0, tEnd = T + 0.42, f1 = R(1600, 2400), r2 = R(1.9, 2.3);
+  const cracks = [[T, 1]]; let t = T + R(0.02, 0.045);
+  for (let i = 0, m = RI(1, 3); i < m; i++) { cracks.push([t, R(0.25, 0.6)]); t += R(0.018, 0.04); }
+  const ring = K.gain(0, K.out);
+  K.osc('sine', f1, T, tEnd, ring); K.osc('sine', f1 * r2, T, tEnd, K.gain(0.5, ring));
+  const exc = K.gain(0), nz = K.noise(false, T, tEnd, exc);
+  exc.connect(K.filt('bandpass', f1, 8, K.gain(3, K.out))); exc.connect(K.filt('bandpass', f1 * r2, 6, K.gain(2, K.out)));
+  exc.connect(K.filt('highpass', 5000, 0, K.gain(0.6, K.out)));              // the splinter
+  exc.connect(K.filt('bandpass', R(500, 800), 3, K.gain(1, K.out)));         // the stick's body
+  for (const [tc, a] of cracks) {
+    hit(ring.gain, tc, 0.0004, a, 0, R(0.006, 0.012));
+    exc.gain.setValueAtTime(0, tc); exc.gain.linearRampToValueAtTime(a, tc + 0.0005); exc.gain.exponentialRampToValueAtTime(a * 0.01, tc + R(0.003, 0.006)); exc.gain.linearRampToValueAtTime(0, tc + 0.0065);
+  }
+  const ru = K.gain(0, K.out); nz.connect(K.filt('bandpass', R(3500, 5000), 0.6, ru));
+  hit(ru.gain, T + 0.01, 0.015, 0.1, 0.03, R(0.14, 0.22));
+  return K.done();
+}
+
+// Black bear bawl, the moan at the start of a charge: a drawn-out, rough "mmwaaAAHH-uhh" (0.8-1.35 s) — two saws a little
+// apart and a period-doubled sub-voice, the pitch wandering and wavering, rising from ~100-125 Hz to ~1.6-1.9x that and
+// sinking away; through an "aw" mouth that opens then closes (the low-pass sweeps up, then down), breath under it.
+function bearBawl(d, v, H) {
+  const K = kit(d, v, H); if (!K) return 0;
+  const T = K.t0, l = R(0.8, 1.35), f0 = R(100, 125), pk = f0 * R(1.6, 1.9), tEnd = T + l + 0.05;
+  const env = K.gain(0, K.out), mouth = K.filt('lowpass', 700, 0.5, K.filt('highpass', 60, 0, env));
+  const src = K.gain(1);
+  K.bank(src, [[320, 3, 0.5], [650, 5, 1], [1080, 6, 0.75], [2500, 8, 0.22]], mouth);
+  const saw = K.osc('sawtooth', f0, T, tEnd, src), saw2 = K.osc('sawtooth', f0 * 1.015, T, tEnd, K.gain(0.6, src)), sub = K.osc('square', f0 / 2, T, tEnd, K.gain(0.22, src));
+  const jit = K.gain(f0 * 0.05); jit.connect(saw.frequency); jit.connect(saw2.frequency);
+  K.noise(true, T, tEnd, K.filt('lowpass', 25, 0, jit));
+  K.lfo('sine', R(5, 6.5), R(15, 25), T, tEnd, saw.detune, saw2.detune);
+  K.noise(false, T, tEnd, K.filt('bandpass', 1300, 0.7, K.gain(0.22, src)));
+  const pts = [[T, f0], [T + l * 0.3, pk], [T + l * 0.55, pk * R(0.93, 1.0)], [T + l, f0 * R(0.75, 0.85)]];
+  path(saw.frequency, pts, true); path(saw2.frequency, pts.map(([t, f]) => [t, f * 1.015]), true); path(sub.frequency, pts.map(([t, f]) => [t, f / 2]), true);
+  path(mouth.frequency, [[T, 500], [T + l * 0.3, 3200], [T + l * 0.7, 2200], [T + l, 800]], true);
+  swell(env.gain, [[T, 0], [T + 0.07, 0.6], [T + l * 0.3, 1], [T + l * 0.65, 0.85]], T + l);
   return K.done();
 }
 
@@ -499,17 +603,20 @@ const RECIPE = {
   deer_snort: deerSnort, deer_bleat: deerBleat,
   bear_huff: bearHuff, bear_woof: bearWoof, bear_jawpop: bearJawPop, bear_growl: bearGrowl,
   dog_bark: dogBark, dog_whine: dogWhine, dog_growl: dogGrowl, dog_pant: dogPant,
+  bear_breath: bearBreath, bear_step: bearStep, branch_snap: branchSnap, bear_bawl: bearBawl,
 };
 // output trim so that at volume 1 each call's MEDIAN peak (before the panner) is: bark 0.7; jay, raven, elk, snort, huff,
-// jaw pop, woodpecker 0.6; woof 0.65; growl 0.5-0.55; coyote 0.5; thrush, chickadee, owl, bleat 0.45; whine 0.4;
-// pant 0.25. Calibrated on 40 random plays each in the test renderer; the loudest play stays under ~0.92 (the clicks,
-// woof and bleat vary most: their level depends on where a random pitch or noise burst lands on a resonance).
+// jaw pop, woodpecker, bawl, bear step 0.6; woof 0.65; growl 0.5-0.55; branch snap 0.55; coyote 0.5; thrush, chickadee,
+// owl, bleat, bear breath 0.45; whine 0.4; pant 0.25. Calibrated on 40 random plays each in the test renderer; the
+// loudest play stays under ~0.92 (the clicks, the snap, woof and bleat vary most: their level depends on where a random
+// pitch or noise burst lands on a resonance).
 const LEVEL = {
   jay: 0.504, raven: 0.929, thrush: 0.473, chickadee: 0.643, woodpecker: 0.9,
   owl: 0.429, coyote: 0.23, elk_bugle: 0.316,
   deer_snort: 1.0, deer_bleat: 1.19,
-  bear_huff: 0.925, bear_woof: 0.8, bear_jawpop: 1.036, bear_growl: 0.765,
+  bear_huff: 0.925, bear_woof: 0.8, bear_jawpop: 1.036, bear_growl: 0.56,
   dog_bark: 1.09, dog_whine: 0.319, dog_growl: 0.976, dog_pant: 0.395,
+  bear_breath: 0.574, bear_step: 0.485, branch_snap: 0.366, bear_bawl: 0.587,
 };
 
 /** Every name registerAnimalSounds() adds. */

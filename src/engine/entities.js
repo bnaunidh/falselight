@@ -1,8 +1,8 @@
 // FALSE LIGHT — entities (posed static meshes, instant pose swaps), what-can-be-seen tests (engine.view),
 // line of sight (terrain + tower + tree trunks), and the crosshair interaction registry.
 import * as THREE from 'three';
-import { loadGLB } from './world.js?v=f6619665';
-import { clamp } from './util.js?v=f6619665';
+import { loadGLB } from './world.js?v=d0e3d680';
+import { clamp } from './util.js?v=d0e3d680';
 
 // ------------------------------------------------------------------ placeholder people (until the Blender characters land)
 function placeholderFigure(kind) {
@@ -34,7 +34,7 @@ function placeholderFigure(kind) {
   return g;
 }
 
-const MODEL = { lost_hiker: 'char_lost_hiker', lost_hiker_body: 'char_lost_hiker_body', weeper: 'char_weeper', other_lookout: 'char_other_lookout' };
+const MODEL = { hiker: 'char_lost_hiker', lost_hiker: 'char_lost_hiker', lost_hiker_body: 'char_lost_hiker_body', weeper: 'char_weeper', other_lookout: 'char_other_lookout' };
 
 export function createEntities(engine) {
   const { scene } = engine;
@@ -61,7 +61,9 @@ export function createEntities(engine) {
       };
       const attach = (model) => {
         model.traverse((o) => {
-          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true;
+            // skin and cloth are never metal (the exporter's JPEG'd ORM maps leak into the metal channel); a badge or buckle may be
+            for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && 'metalness' in m && !/badge|buckle|brass|metal|button/i.test(m.name || '')) m.metalness = 0; }
           if (o.name && o.name.startsWith('POSE_')) h.poses.set(o.name.slice(5), o);
         });
         for (const [n, o] of h.poses) { let fa = null; o.traverse((c) => { if (c.name && c.name.startsWith('FACE_anchor')) fa = c; }); if (fa) h.faceAnchors.set(n, fa); }

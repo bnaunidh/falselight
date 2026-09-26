@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated": "2026-09-25T21:18:20",
+ "generated": "2026-09-25T23:39:42",
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
@@ -10,12 +10,12 @@
   "char_bear": {
    "path": "models/char_bear.glb",
    "bytes": 1354772,
-   "mtime": 1790396159
+   "mtime": 1790396913
   },
   "char_deer": {
    "path": "models/char_deer.glb",
-   "bytes": 1375576,
-   "mtime": 1790395561
+   "bytes": 1375580,
+   "mtime": 1790397040
   },
   "char_dog": {
    "path": "models/char_dog.glb",
@@ -24,13 +24,18 @@
   },
   "char_lost_hiker": {
    "path": "models/char_lost_hiker.glb",
-   "bytes": 6583856,
-   "mtime": 1790393953
+   "bytes": 6359692,
+   "mtime": 1790404531
   },
   "char_lost_hiker_body": {
    "path": "models/char_lost_hiker_body.glb",
-   "bytes": 4878836,
-   "mtime": 1790393977
+   "bytes": 4629316,
+   "mtime": 1790404542
+  },
+  "char_other_lookout": {
+   "path": "models/char_other_lookout.glb",
+   "bytes": 4664308,
+   "mtime": 1790402336
   },
   "char_weeper": {
    "path": "models/char_weeper.glb",

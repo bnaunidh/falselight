@@ -636,6 +636,121 @@ const offLook = (br, ctx) => Math.abs(((Math.atan2(br.pos[0] - ctx.player[0], br
   ok('saved mid-stalk: restored calm, with a moment\'s grace (and its night roll)', j.bear.state === 'stalk' && r.bear.state === 'calm' && r.bear.ignoreT >= B.restoreGrace - 1e-9 && r.bear.stalkRoll === true, j.bear.state + ' -> ' + r.bear.state)
 }
 
+console.log('— the bear: review regressions —')
+/** sim() at another frame rate (a slow machine, or one long frame) */
+function simDt(b, ctx, secs, dt, { to = null, speed = 0, jog = false, onStep = null, stopAt = null } = {}) {
+  const evs = []
+  for (let t = 0; t < secs; t += dt) {
+    const p = ctx.player
+    if (to) { const dx = to[0] - p[0], dz = to[2] - p[2], L = Math.hypot(dx, dz); if (L > 1e-3) { const s = Math.min(L, speed * dt); p[0] += dx / L * s; p[2] += dz / L * s; ctx.vel[0] = dx / L * speed; ctx.vel[1] = dz / L * speed } else ctx.vel[0] = ctx.vel[1] = 0 } else ctx.vel[0] = ctx.vel[1] = 0
+    ctx.jog = jog
+    for (const e of b.update(dt, ctx)) evs.push(rec(e, t))
+    if (onStep) onStep(t)
+    if (stopAt && stopAt()) break
+  }
+  ctx.vel[0] = ctx.vel[1] = 0
+  return evs
+}
+// ------------------------------------------------------------------ 36. a bluff on a still player never becomes a swat, at any frame rate
+{
+  let runs = 0, hurts = 0, minD = Infinity
+  for (const fps of [60, 20, 15, 12, 10]) for (let seed = 1; seed <= 12; seed++) {
+    const b = bearBrain({ seed }), br = b.bear, ctx = makeCtx({ player: [0, 0, 150] })
+    simDt(b, ctx, 60, 1 / fps, { to: [0, 0, 100], speed: 1.4, stopAt: () => br.state === 'huff' })
+    simDt(b, ctx, 20, 1 / fps, { to: [br.pos[0], 0, br.pos[2]], speed: 1.0, stopAt: () => br.state === 'bluff' })
+    if (br.state !== 'bluff') continue
+    runs++
+    const evs = simDt(b, ctx, 20, 1 / fps, { onStep: () => { minD = Math.min(minD, d2(br.pos, ctx.player)) } })
+    hurts += typed(evs, 'hurt').length
+  }
+  // and one long frame (a 0.1 s hitch) just as it arrives
+  for (let seed = 1; seed <= 12; seed++) {
+    const b = bearBrain({ seed }), br = b.bear, ctx = makeCtx({ player: [0, 0, 150] })
+    sim(b, ctx, 60, { to: [0, 0, 100], speed: 1.4, stopAt: () => br.state === 'huff' })
+    sim(b, ctx, 20, { to: [br.pos[0], 0, br.pos[2]], speed: 1.0, stopAt: () => br.state === 'bluff' })
+    if (br.state !== 'bluff') continue
+    runs++
+    sim(b, ctx, 5, { stopAt: () => br.state !== 'bluff' || d2(br.pos, ctx.player) < B.bluffStop + 0.6 })
+    const evs = simDt(b, ctx, 0.1, 0.1).concat(sim(b, ctx, 20, { onStep: () => { minD = Math.min(minD, d2(br.pos, ctx.player)) } }))
+    hurts += typed(evs, 'hurt').length
+  }
+  ok('a bluff on a player standing still stops ~2 m short and never swats — at 10-60 fps, or through a long frame', runs >= 60 && hurts === 0 && minD > B.swatHard + 0.3, runs + ' bluffs, ' + hurts + ' hurts, closest ' + f2(minD) + ' m')
+}
+// ------------------------------------------------------------------ 37. it's on you, and you get somewhere it can't follow: it lets you go
+{
+  const b = bearBrain({ seed: 5, ground: bank, bearSpots: [[20, 100]] }), br = b.bear, ctx = makeCtx({ player: [58, 0, 100] })
+  b.place(br, 55.5, 100, Math.PI / 2); b.bearEnter('chase')
+  sim(b, ctx, 1, { to: [59, 0, 100], speed: 3.2, jog: true, stopAt: () => br.state === 'maul' })
+  const was = br.state
+  let farT = 0, gone = null
+  const evs = sim(b, ctx, 30, { to: [140, 0, 100], speed: 3.2, jog: true, onStep: (t) => { if (br.state === 'maul' && d2(br.pos, ctx.player) > B.maulReach + B.maulLose) farT += DT; if (gone == null && br.state === 'leave') gone = t } })
+  ok('mauled, you get up a bank it can\'t climb and keep going: it lets you go (no maul from any distance)', was === 'maul' && gone != null && farT < B.maulLost + 0.3 && br.pos[0] < 61 && typed(evs, 'hurt').length <= 1, was + ' -> ' + br.state + (gone != null ? ' after ' + f1(gone) + ' s' : '') + ', ' + f1(farT) + ' s out of reach in maul')
+}
+// ------------------------------------------------------------------ 38. already jogging when you first hear the stalker: a moment to stop
+{
+  let fair = 0, chased = 0, runs = 0
+  for (let seed = 30; seed < 42; seed++) {
+    const { b, br, ctx } = stalked(seed)
+    if (br.state !== 'stalk') continue
+    runs++
+    let heardAt = null, chaseAt = null
+    sim(b, ctx, 40, { to: [0, 0, 900], speed: 3.2, jog: true, onStep: (t) => { if (heardAt == null && br.heard) heardAt = t; if (chaseAt == null && br.state === 'chase') chaseAt = t }, stopAt: () => chaseAt != null })
+    if (chaseAt != null) { chased++; if (chaseAt - heardAt >= B.heardGrace - 0.05) fair++ }
+  }
+  ok('jogging on the trail when the first stick breaks: ' + B.heardGrace + ' s to take it in and stop; jog on after that and it runs you down', runs >= 8 && chased === runs && fair === runs, fair + ' of ' + chased + ' charges came ' + B.heardGrace + '+ s after you first heard it (' + runs + ' stalks)')
+}
+// ------------------------------------------------------------------ 39. a slow jog (hungry, limping: ~1.9 m/s) is still running
+{
+  const { b, br, ctx } = noticed(4)
+  let chased = false
+  sim(b, ctx, 4, { to: [0, 0, 400], speed: 1.9, jog: true, onStep: () => { if (br.state === 'chase') chased = true }, stopAt: () => chased })
+  const n = noticed(4)
+  let chased2 = false
+  sim(n.b, n.ctx, 6, { to: [0, 0, 400], speed: 1.4, onStep: () => { if (n.br.state === 'chase') chased2 = true } })
+  ok('a limping jog away (1.9 m/s, the jog key down) still sets it after you; a walk away (1.4 m/s) does not', chased && !chased2, 'jog ' + chased + ', walk ' + chased2)
+}
+// ------------------------------------------------------------------ 40. its eyes in your torch as it charges you: no second jolt, no "then they're gone"
+{
+  const { b, br, ctx } = noticed(4)
+  ctx.night = true
+  sim(b, ctx, 3, { to: [0, 0, 400], speed: 3.2, jog: true, stopAt: () => br.state === 'chase' })
+  ctx.lit = true
+  let eyes = 0
+  const evs = sim(b, ctx, 8, { to: [0, 0, 400], speed: 3.2, jog: true, onStep: () => { eyes = Math.max(eyes, br.eyes) }, stopAt: () => typed(b._out, 'hurt').length > 0 })
+  ok('lit at night as it charges you: its eyes shine (bear.eyes) but the eyes jolt and line wait (the charge has its own)', eyes > 0.9 && typed(evs, 'hurt').length === 1 && !typed(evs, 'scare').some((e) => e.why === 'eyes') && !typed(evs, 'say').some((e) => /Two eyes/.test(e.text)), 'eyes ' + f2(eyes) + '; jolts: ' + typed(evs, 'scare').map((e) => e.why).join(' '))
+}
+
+// ------------------------------------------------------------------ 41. run for the tower or the shed: it never comes in after you
+{
+  let runs = 0, minCheb = Infinity, hurtsSafe = 0, climbed = 0, shedRuns = 0, shedHurt = 0, minShed = Infinity, chases = 0, shedChases = 0
+  for (let seed = 1; seed <= 12; seed++) {
+    // you're just out of the clearing, between it and the tower; it notices you, and you make a run for the stairs
+    const b = bearBrain({ seed, tower: [0, 0], bearSpots: [[(seed % 3 - 1) * 8, 39]] }), br = b.bear, ctx = makeCtx({ player: [0, 0, 17] })
+    sim(b, ctx, 60, { to: [0, 0, 26], speed: 1.2, stopAt: () => br.state === 'rear' })
+    if (br.state !== 'huff' && br.state !== 'rear') continue
+    runs++
+    let chased = false
+    sim(b, ctx, 30, { to: [0, 0, 5], speed: 3.2, jog: true, onStep: () => {
+      const p = ctx.player; ctx.playerSafe = Math.abs(p[0]) < 7.5 && Math.abs(p[2]) < 7.5
+      if (ctx.playerSafe) hurtsSafe += typed(b._out, 'hurt').length
+      minCheb = Math.min(minCheb, Math.max(Math.abs(br.pos[0]), Math.abs(br.pos[2]))); if (br.pos[1] !== 0) climbed++
+      if (br.state === 'chase' && !chased) { chased = true; chases++ }
+    } })
+    ctx.playerSafe = false
+  }
+  for (let seed = 1; seed <= 8; seed++) {
+    const b = bearBrain({ seed, tower: [0, 0], shed: [9, 7], shedSpots: [[20, 4]], bearSpots: [[9, 40]] }), br = b.bear, ctx = makeCtx({ player: [9, 0, 25] })
+    sim(b, ctx, 30, { stopAt: () => br.state !== 'calm' })
+    sim(b, ctx, 20, { to: [9, 0, 30], speed: 1.2, stopAt: () => br.state === 'huff' || br.state === 'rear' })
+    if (!['huff', 'rear', 'notice'].includes(br.state)) continue
+    shedRuns++
+    let chased = false
+    sim(b, ctx, 20, { to: [9, 0, 7], speed: 3.2, jog: true, onStep: () => { if (br.state === 'chase' && !chased) { chased = true; shedChases++ } minShed = Math.min(minShed, Math.hypot(br.pos[0] - 9, br.pos[2] - 7)); if (Math.hypot(ctx.player[0] - 9, ctx.player[2] - 7) < WILD.shedShelter) shedHurt += typed(b._out, 'hurt').length } })
+  }
+  ok('run for the tower: it chases you to the fence and no further — never inside, never on the stairs, no blow once you\'re there', runs >= 8 && chases >= runs / 2 && minCheb >= WILD.fence - 1e-6 && !hurtsSafe && !climbed, chases + ' chases in ' + runs + ' runs, closest ' + f2(minCheb) + ' m from the tower\'s centre (fence ' + WILD.fence + ')')
+  ok('...or for the generator shed: no blow through its walls', shedRuns >= 4 && shedChases >= shedRuns / 2 && !shedHurt && minShed >= WILD.shedRadius - 1e-6, shedChases + ' chases in ' + shedRuns + ' runs, closest ' + f2(minShed) + ' m from the shed\'s centre')
+}
+
 console.log('— ambient —')
 const ambBrain = (seed) => makeBrain({ deer: [], bear: false, seed })
 function ambRun(b, ctx, secs) { return sim(b, ctx, secs).filter((e) => e.type === 'sfx') }
@@ -751,9 +866,10 @@ console.log('— cost —')
   const N = 60000
   const gc = globalThis.gc
   if (gc) gc()
-  const h0 = process.memoryUsage().heapUsed, t0 = performance.now()
-  for (let i = 0; i < N; i++) frame()
-  const ms = performance.now() - t0
+  // time: the best of three 20k-frame batches (a busy machine stalls one batch, not all three); garbage: over all 60k
+  const h0 = process.memoryUsage().heapUsed
+  let ms = Infinity
+  for (let r = 0; r < 3; r++) { const t0 = performance.now(); for (let i = 0; i < N / 3; i++) frame(); ms = Math.min(ms, (performance.now() - t0) * 3) }
   if (gc) gc()
   const per = (process.memoryUsage().heapUsed - h0) / N
   ok('update() is cheap', ms / N < 0.1, f2((ms / N) * 1000) + ' µs a frame (6 deer, the bear, the dog, the birds; ~30 µs typical, limit 100 µs for background-QoS runs)')

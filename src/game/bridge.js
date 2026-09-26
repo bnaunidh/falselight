@@ -1,31 +1,31 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f6619665';
-import { Objectives } from './objectives.js?v=f6619665';
-import { Radio } from './radio.js?v=f6619665';
-import { Fuel, FUEL } from './fuel.js?v=f6619665';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=f6619665';
-import { Survival, SURV } from './survival.js?v=f6619665';
-import { createItemsView } from './itemsView.js?v=f6619665';
-import { createChill } from './chill.js?v=f6619665';
-import { createPlume } from './smokePlume.js?v=f6619665';
-import { FireFinder, spokenBearing } from './firefinder.js?v=f6619665';
-import { Photos, classifyShot } from './photos.js?v=f6619665';
-import { CO } from './co.js?v=f6619665';
-import { Weeper, lookupChance } from './weeper.js?v=f6619665';
-import { OtherLookout } from './otherLookout.js?v=f6619665';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f6619665';
-import { GuidedHiker } from './hikers.js?v=f6619665';
-import { MorseKeyer, isSOS } from './morse.js?v=f6619665';
-import { normalizeLayout } from './layout.js?v=f6619665';
-import { createSaves } from './saves.js?v=f6619665';
-import { createRng } from './rng.js?v=f6619665';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=f6619665';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=f6619665';
-import * as S from './content/story.js?v=f6619665';
-import { createDog, setDogName } from './dog.js?v=f6619665';
-import { createWildlife } from './wildlife.js?v=f6619665';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=d0e3d680';
+import { Objectives } from './objectives.js?v=d0e3d680';
+import { Radio } from './radio.js?v=d0e3d680';
+import { Fuel, FUEL } from './fuel.js?v=d0e3d680';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=d0e3d680';
+import { Survival, SURV } from './survival.js?v=d0e3d680';
+import { createItemsView } from './itemsView.js?v=d0e3d680';
+import { createChill } from './chill.js?v=d0e3d680';
+import { createPlume } from './smokePlume.js?v=d0e3d680';
+import { FireFinder, spokenBearing } from './firefinder.js?v=d0e3d680';
+import { Photos, classifyShot } from './photos.js?v=d0e3d680';
+import { CO } from './co.js?v=d0e3d680';
+import { Weeper, lookupChance } from './weeper.js?v=d0e3d680';
+import { OtherLookout } from './otherLookout.js?v=d0e3d680';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=d0e3d680';
+import { GuidedHiker } from './hikers.js?v=d0e3d680';
+import { MorseKeyer, isSOS } from './morse.js?v=d0e3d680';
+import { normalizeLayout } from './layout.js?v=d0e3d680';
+import { createSaves } from './saves.js?v=d0e3d680';
+import { createRng } from './rng.js?v=d0e3d680';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=d0e3d680';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=d0e3d680';
+import * as S from './content/story.js?v=d0e3d680';
+import { createDog, setDogName } from './dog.js?v=d0e3d680';
+import { createWildlife } from './wildlife.js?v=d0e3d680';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -464,7 +464,7 @@ export class Game {
     } else if (id === 'fax_silhouette') {
       const st = this.anchor('IA_fax'); if (st) { this.otherEnt = e.entities.spawn('other_lookout', { position: st.clone().add(new THREE.Vector3(2.5, -1, 1.2)), pose: 'back_window' }); this.say(S.LINES.faxSilhouette); setTimeout(() => { this.otherEnt && this.otherEnt.remove(); this.otherEnt = null; }, 9000); }
     } else if (id === 'bed_sitter') {
-      this.otherEnt = e.entities.spawn('other_lookout', { position: new THREE.Vector3(-1.0, 30.0, -1.2), facing: new THREE.Vector3(-1, 30, -3), pose: 'sitting_bed' });
+      this.otherEnt = e.entities.spawn('other_lookout', { position: new THREE.Vector3(-1.0, 30.0, -1.2), facing: new THREE.Vector3(-1, 30, 1), pose: 'sitting_bed' });   // on the edge of the bed, facing into the cab
       this.say(S.LINES.bedSitter); this.bedSitterT = 0;
     } else if (S.OWN_LOG[id]) {
       const en = S.OWN_LOG[id]; this.addLog(en.text, true);
@@ -593,7 +593,7 @@ export class Game {
     const near = W.pos ? dist(W.pos, this.pos()) : 999;
     const fear = Math.max(W.triggered ? Math.max(0.25, 1 - near / 120) : 0, this.bearFear || 0);
     e.post.params.fear += (fear - e.post.params.fear) * Math.min(1, dt * 1.5);
-    if (W.triggered) { this.heartT = (this.heartT || 0) - dt; if (this.heartT <= 0) { e.audio.play('heart', { volume: 0.4 + fear }); this.heartT = 1.4 - fear * 0.8; } }
+    if (W.triggered || (this.bearFear || 0) > 0.5) { this.heartT = (this.heartT || 0) - dt; if (this.heartT <= 0) { e.audio.play('heart', { volume: 0.4 + fear }); this.heartT = 1.4 - fear * 0.8; } }
     if (W.triggered && !W.carrier) this.add('weeper_photo');
   }
 
@@ -1158,10 +1158,10 @@ export class Game {
     // world entities
     this.updateHikers(dt, t);
     this.updateLost(dt, t);
-    this.updateWeeper(dt, t);
-    if (this.dog) this.dog.update(dt, t);
     this.bearFear = Math.max(0, (this.bearFear || 0) - dt * 0.35);   // wildlife refreshes it every frame while the bear is close
     if (this.wildlife) this.wildlife.update(dt, t);
+    this.updateWeeper(dt, t);
+    if (this.dog) this.dog.update(dt, t);
     // sitting down turns you to face what the seat looks out on
     if (this.sitting && this.chill && this.chill.sitting && this.chill.sitting !== this._sitFaced) {
       const sp = this.chill.spots.find((x) => x.id === this.chill.sitting);

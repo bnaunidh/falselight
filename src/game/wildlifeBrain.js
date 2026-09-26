@@ -6,17 +6,33 @@
 //   const brain = new WildlifeBrain(opts, saved?)      // opts: see the constructor; resolvePlaces(layout) builds most of them
 //   const events = brain.update(dt, ctx)                // POOLED objects: handle them before the next update()
 //   ctx = { player:[x,y,z], vel:[vx,vz], jog, playerSafe, indoor, night, rain, weeper:[x,y,z]|null, weeperTriggered,
-//           dog:{ pos:[x,y,z], tamed }|null }
-//   events: { type:'sfx', name, pos:[x,y,z], volume } · { type:'hurt', amount, why } · { type:'fear', amount }
-//           { type:'say', text } · { type:'toast', text, s } · { type:'dogSwat', pos:[x,y,z] }
+//           dog:{ pos:[x,y,z], tamed }|null,
+//           look:[fx,fz]|null (your view, flat), torch (the flashlight is on), lit (a light is on the bear's eyes right now),
+//           litFrom:[x,y,z]|null (that light), offTrail: m from the trail | null }     (the last five are optional)
+//   events: { type:'sfx', name, pos:[x,y,z], volume } · { type:'hurt', amount, why } · { type:'fear', amount } (a one-off jolt)
+//           { type:'say', text } · { type:'toast', text, s } · { type:'dogSwat', pos:[x,y,z] } · { type:'dogWhine', pos:[x,y,z] }
+//           { type:'scare', shake 0..1, s (seconds), fov (-degrees), beat (heartbeat), why }
+//   brain.fearLevel: 0..1, the SUSTAINED fear of the bear this frame (hooks.fear(level) every frame; 0 when it's nowhere near)
+//   bear.eyes: 0..1 eyeshine this frame (eyeshine() below) · bear.agit: 0..1 how worked up it is (the view lowers its head)
 //
-// The bear, as a readable state machine (bear.state):
+// The bear, as a readable state machine (bear.state). It is a big boar (WILD.bear.scale: drawn, heard and reaching at 1.25x):
 //   calm ──(you within ~30 m; 18 m if you're still, 40 m if you jog)──> notice ──> rear (sniffs) ──> huff (huff / jaw-pop / woof)
 //   huff ──(you back off, stand still, or it runs out of patience)──> leave ──> calm (ignores you for a while)
-//   huff ──(you keep coming inside 10 m, or run at it; or you're within 5 m)──> bluff (charges, stops ~3 m short: fear 0.6) ──> standoff
+//   huff ──(you keep coming inside 10 m, or run at it; or you're within 5 m)──> bluff (charges at 10 m/s, stops ~2 m short:
+//     fear 0.6) ──> standoff (rears to full height over you, growling)
 //   standoff ──(you keep closing inside 4 m, or the dog keeps harassing it)──> swat (a lunge: hurt 0.35 + fear 1 if it reaches
 //     you, a miss if you got clear) ──> leave (retreats).   You up the tower, inside the fence or inside the shed's walls are
 //     'safe': it notices you at 16 m and huffs, but never charges or swats.
+//   DON'T RUN. notice / rear / huff / bluff / standoff within 25 m, or stalking you (once you've heard it, 2.5 s on), and you
+//     jog AWAY: chase (11 m/s: you can't outrun it) ──> maul (hurt 0.3 on contact, again every 1.2 s while you keep moving:
+//     running can kill you) ──(stand still, or back off slowly, for 1.5 s)──> loom (stands over you, breathing) ──> leave.
+//     Stop running before it reaches you and the chase ends as a bluff: it pulls up two metres short. Get somewhere it
+//     can't follow (and stay out of its reach 2 s) and it lets you go.
+//   NIGHT: out on the trail more than 40 m from the tower it may catch your scent: stalk. It keeps pace 25-42 m off, abreast
+//     or behind you, out of your torch's cone; you hear it (branch snaps, huffs, breathing inside 15 m), rarely see it. Now
+//     and then it rushes in and stops ~10 m off. A light held on it 2.5 s drives it back to 40+ m; it returns later, until
+//     you reach the tower clearing or the shed, dawn comes, or it tires of you (then it leaves).
+//   Any light on its eyes at night, while it faces the light, throws back eyeshine (bear.eyes; the first time: a jolt, a line).
 //   any ──(the Weeper within 80 m)──> flee.   A tamed dog within 25 m barks every 1-2 s; the bear may charge her (dogcharge).
 //   While calm the bear runs a task: forage (day range: burn-scar edge + hikers' camp) · visit (a night walk up the trail to the
 //   tower clearing) · sniff (round the generator shed) · return. It never enters the fenced tower base, so never the stairs.
@@ -51,7 +67,10 @@ export const WILD = {
   ],
   // ---------------------------------------------------------------- the bear
   bear: {
-    walkSpeed: 0.95, travelSpeed: 1.3, runSpeed: 6.5, chargeSpeed: 7.5, swatSpeed: 7, accel: 7, decel: 16, turn: 1.8, turnRun: 3.4, probe: 2.6,
+    // a big boar: the model drawn at 1.25x (the view scales the root, and with it the gait's metres per stride and the cull
+    // sphere); its sounds come from a head that high, and every distance below is centre to you, for a body that long
+    scale: 1.25,
+    walkSpeed: 0.95, travelSpeed: 1.3, runSpeed: 6.5, chargeSpeed: 10, swatSpeed: 7, accel: 7, rushAccel: 14, decel: 16, turn: 1.8, turnRun: 3.4, probe: 2.6,
     maxSlope: 0.65, hardSlope: 1.0, rockAvoid: 40, head: 0.8,
     forage: [10, 26], rearIdle: 0.03, rearIdleTime: 3,                 // rearIdle: chance per second, while nosing about, of standing to sniff
     noticeRange: 30, noticeStill: 18, noticeJog: 40, noticeSafe: 16, noticeTime: 1.3, loseRange: 40, jogSpeed: 2.2, stillSpeed: 0.25,
@@ -59,11 +78,21 @@ export const WILD = {
     huffTime: 10, huffEvery: [1.0, 1.9], backoff: 3, stillCalm: 5,
     // bluffClosing: inside bluffRange it charges only if you are still coming at it (m/s toward it) — a bear that wanders up to
     // someone standing still huffs and goes; surprise: this close it charges even a still player
-    bluffRange: 10, bluffClosing: 0.3, surprise: 5, runAtRange: 20, runAtClosing: 1.5, bluffStop: 3, bluffMax: 4, bluffFear: 0.6, maxBluffs: 2,
+    bluffRange: 10, bluffClosing: 0.3, surprise: 5, runAtRange: 20, runAtClosing: 1.5, bluffStop: 2.2, bluffMax: 4, bluffFear: 0.6, maxBluffs: 2,
     standoffTime: 7, standoffEvery: [0.7, 1.3],
+    closeRear: 3.5, rearClose: 1.8,   // a standoff that starts this close: it rears to full height over you for rearClose s, growling
     // the swat: a lunge that starts at swatLunge0 of swatSpeed and lands inside swatReach; if the lunge runs out (swatLunge s)
     // with you further than swatReach + swatMiss (you got away), it misses: no hurt, and it goes
-    swatRange: 4, swatClosing: 0.35, swatHard: 2, swatReach: 1.5, swatMiss: 0.8, swatLunge: 0.7, swatLunge0: 0.5, swatHurt: 0.35, swatFear: 1, swatMissFear: 0.6,
+    swatRange: 4, swatClosing: 0.35, swatHard: 1.6, swatReach: 1.8, swatMiss: 0.8, swatLunge: 0.7, swatLunge0: 0.5, swatHurt: 0.35, swatFear: 1, swatMissFear: 0.6,
+    // DON'T RUN: jogging AWAY (you at jogSpeed+, opening the gap faster than chaseAway m/s) for chaseDelay s from a bear that
+    // has noticed you within chaseRange (or stalks you, within stalkChase, once you've heard it) sets it after you
+    chaseRange: 25, chaseAway: 1.2, chaseDelay: 0.35, chaseSpeed: 11, chaseMax: 12, chaseYield: 0.6,   // chaseYield: you stop this long before it reaches you: a bluff
+    // heardGrace: a stalker only runs you down once you've known it's there this long (you may have been jogging already
+    // when the first stick broke: time to take in the line and stop)
+    heardGrace: 2.5,
+    // maulLost: it can't get back to you (a bank it can't climb, a wall) — beyond maulReach + maulLose m this long — and it
+    // gives up on you and goes, rather than hanging on to the maul from any distance
+    maulReach: 1.9, maulStand: 1.3, maulHurt: 0.3, maulEvery: 1.2, maulCalm: 1.5, backSlow: 1.6, loom: [3.5, 5.5], maulLose: 3, maulLost: 2,
     leave: [35, 55], retreatRun: 14, provoke: 5, ignore: 35, ignoreSwat: 60, restoreGrace: 10, leaveMax: 60,
     mood: { bluff: 0.3, swat: 0.5, dog: 0.15, decay: 0.004, range: 0.3, patience: 0.4 },   // mood 0..1: shorter fuse, longer reach
     dogChaseRange: 12, dogChargeChance: 0.35, dogChase: 2.5, dogChaseStop: 2.2, dogChargeCool: 10,
@@ -71,7 +100,24 @@ export const WILD = {
     spotClear: 25,         // after an encounter it picks its next spot so the walk there keeps at least this far from you
     weeperRange: 80, weeperFlee: [60, 90], fleeArrive: 1.5,
     visitChance: 0.85, visitDelay: [40, 160], lookahead: 4, towerStop: 16, sniff: [45, 90], sniffAt: [5, 10], sniffRear: 0.08,
-    snuffle: [14, 30], snuffleRange: 45, snuffleVol: 0.35, huffVol: 1.1, woofVol: 1.2, popVol: 1.0, growlVol: 1.3,
+    // NIGHT STALKING. stalkChance: the nights it will; scent builds at scentRate x (1 - d / scentRange) a second while you're on
+    // the trail (offTrail < stalkTrail) more than stalkStart m from the tower; at 1 it has you
+    stalkChance: 0.8, scentRange: 140, scentRate: 0.08, stalkStart: 40, stalkHome: 25, stalkTrail: 12,
+    stalkDist: [25, 42], stalkLeg: [8, 16], stalkSide: [1.4, 2.4], stalkTrot: 4.5, stalkSlip: 6.5, hideCone: 0.62,   // hideCone: rad off your look (the torch's 20 deg + a margin)
+    stalkMax: [150, 240], stalkCool: [240, 480], stalkLose: 150, stalkChase: 55,
+    rushFirst: [15, 30], rushEvery: [25, 50], rushSpeed: 9, rushStop: [10, 14], rushHold: [2.5, 4.5],
+    litBack: 2.5, litDecay: 0.8, backDist: [45, 60], backWait: [20, 40], backMax: 15,
+    snapFirst: [2, 5], snapEvery: [5, 12], snapRange: 55, snapVol: 3.5, stalkHuff: [9, 18], stalkHuffVol: 0.7,
+    breathRange: 15, breathEvery: [2.2, 3.4], breathVol: 1.1, whineDog: 25, whineEvery: [6, 11], eyesGap: 6,
+    fearNear: 6, fearFar: 45,   // sustained fear: nothing at fearFar, full at fearNear (scaled by what it's doing)
+    stepRange: 25, stepVol: 1.4,   // (view) its footfalls, 'bear_step', while it runs within stepRange of you
+    snuffle: [14, 30], snuffleRange: 45, snuffleVol: 0.35, huffVol: 1.1, woofVol: 1.2, popVol: 1.0, growlVol: 1.3, bawlVol: 1.5,
+  },
+  // hooks.scare({ shake 0..1, seconds, fov: -degrees punch, heartbeat }) for each jolt
+  scares: {
+    bluff: { shake: 0.45, s: 0.7, fov: -5, beat: true }, rear: { shake: 0.3, s: 0.6, fov: -4, beat: false },
+    chase: { shake: 0.6, s: 0.9, fov: -7, beat: true }, hit: { shake: 1, s: 0.8, fov: -9, beat: true }, miss: { shake: 0.45, s: 0.5, fov: -4, beat: true },
+    rush: { shake: 0.3, s: 0.8, fov: -4, beat: true }, eyes: { shake: 0.2, s: 0.5, fov: -5, beat: true },
   },
   bearStart: 0,            // index into bearSpots
   bearSpots: [             // day range: the burn-scar edge and round the hikers' camp (the camp -> burn trail runs between them)
@@ -81,7 +127,7 @@ export const WILD = {
   shedSpots: [['generator_shed', 6, -3], ['generator_shed', 5, 5], ['generator_shed', -0.5, 6]],
   nightRoute: [['loop_burn_to_spring', 1], ['loop_spring_to_J1', 1], ['tower_to_J1', -1]],   // trail segments, direction
   // ---------------------------------------------------------------- the dog
-  dogBark: [1, 2], dogBarkRange: 25, firstBark: 0.35, barkVol: 1,
+  dogBark: [1, 2], dogBarkRange: 25, dogStalkBark: 12, firstBark: 0.35, barkVol: 1,
   // ---------------------------------------------------------------- ambient life (sound only, positional, around the player)
   ambient: {
     weeperHush: 120, resume: [25, 45], indoor: 0.5, rainDay: 0.85, rainNight: 0.6, minActivity: 0.08, start: [3, 10],
@@ -102,11 +148,26 @@ export const WILD = {
   lines: {
     deerFirst: 'Deer. A doe has her head up and her ears on you, one forefoot lifted.',
     bearFirst: 'A black bear. Don\'t run. Stand still, or back away slowly.',
-    bearBluff: 'It comes at you in a rush of black and stops dead, three metres off, blowing and popping its jaw.',
+    bearBluff: 'It comes at you in a rush of black and stops dead, two metres off. Then it stands, taller than you, and the growl goes through your chest.',
     bearSwat: 'The paw catches you across the ribs and throws you sideways.',
     bearShed: 'Something big is moving around the generator shed. A bear, nosing along the wall.',
     dogSwat: 'The bear swats at {dog}. A yelp, and she bolts back to you.',
+    bearStalk: 'Something is keeping pace with you in the dark, off the trail. When you stop, it stops.',
+    bearEyes: 'Two eyes in the beam, low to the ground and burning gold-green. Then they\'re gone.',
+    bearChase: 'DON\'T RUN. That\'s what you remember thinking as it hits you from behind, far too late.',
   },
+}
+
+const EYE_COS0 = Math.cos(1.3), EYE_COS1 = Math.cos(0.7)
+/** Eyeshine, 0..1: a light on an animal's eyes comes straight back (the tapetum) — but only at night, only while a light is
+ *  actually on them (lit), and only while it faces that light: full within ~40 deg, gone past ~75 deg. yaw: the head's
+ *  heading; eye, src: [x, y, z] (the eyes, the light). Pure, for the brain and the tests. */
+export function eyeshine(night, lit, yaw, eye, src) {
+  if (!night || !lit || !eye || !src) return 0
+  const dx = src[0] - eye[0], dy = src[1] - eye[1], dz = src[2] - eye[2], L = Math.hypot(dx, dy, dz)
+  if (!(L > 1e-6)) return 1
+  const c = (Math.sin(yaw) * dx + Math.cos(yaw) * dz) / L, t = Math.min(1, Math.max(0, (c - EYE_COS0) / (EYE_COS1 - EYE_COS0)))
+  return t * t * (3 - 2 * t)
 }
 
 const TAU = Math.PI * 2
@@ -122,8 +183,13 @@ const segDist = (ax, az, bx, bz, px, pz) => {
 const OFFS = [0, 0.35, -0.35, 0.75, -0.75, 1.2, -1.2, 1.7, -1.7, 2.3, -2.3, Math.PI]
 const HUFFS = ['bear_huff', 'bear_jawpop', 'bear_woof']
 const NUDGE = [0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5]
-const ENGAGED = { notice: 1, rear: 1, huff: 1, bluff: 1, standoff: 1, swat: 1, dogcharge: 1 }
+const ENGAGED = { notice: 1, rear: 1, huff: 1, bluff: 1, standoff: 1, swat: 1, dogcharge: 1, stalk: 1, chase: 1, maul: 1, loom: 1 }
 const CHARGEABLE = { calm: 1, notice: 1, rear: 1, huff: 1 }
+const RUNFROM = { notice: 1, rear: 1, huff: 1, bluff: 1, standoff: 1 }   // it has noticed you: run from it now and it chases
+const STALKISH = { stalk: 1, chase: 1, maul: 1, loom: 1 }                 // a stalk that turns into a chase is still the same hunt
+const BUSY = { swat: 1, leave: 1, flee: 1, bluff: 1, chase: 1, maul: 1, loom: 1 }   // too busy (or mid-charge) to answer the dog in its face
+const ONYOU = { bluff: 1, standoff: 1, swat: 1, chase: 1, maul: 1, loom: 1 }        // coming at you, or on you
+const AGIT = { notice: 0.3, huff: 0.7, bluff: 1, standoff: 0.85, swat: 1, dogcharge: 1, chase: 1, maul: 1, loom: 0.9 }
 const FALLBACK = { tower: [0, 0], burn_scar: [-158, 22], hikers_camp: [-118, 150], creek_bridge: [34, 176], generator_shed: [9, 7], spring: [-58, 74] }
 
 /** A polyline (the bear's night route) with arc length. */
@@ -195,6 +261,10 @@ function makeAnimal(id, kind, role, scale) {
     lastD: -1, closing: 0, stillT: 0, idleT: 0, dMin: Infinity, bluffs: 0, swats: 0, mood: 0, ignoreT: 0, retreat: false, run: 0,
     huffT: 0, huffI: 0, snuffT: 0, barkT: 0, barks: 0, harassT: 0, dogCool: 0, prev: 'calm', engaged: false,
     nightOn: false, nightT: 0, visitAt: 0, visitRoll: false, visited: false,
+    // the stalk (sk: follow | rush | hold | back | wait), the chase and the maul, the light on it, how worked up it looks
+    stalkRoll: false, stalkCool: 0, scent: 0, stalking: false, sk: '', skT: 0, stalkT: 0, stalkMaxT: 0, stalkD: 30, legT: 0, tgtT: 0,
+    rushT: 0, rushStopD: 12, holdT: 0, waitT: 0, snapT: 0, breathT: 0, whineT: 0, bhuffT: 0, heard: false, heardT: 0,
+    runT: 0, calmT: 0, hitT: 0, lostT: 0, loomT: 0, rearT: 0, litT: 0, eyes: 0, eyesOff: 1e9, agit: 0,
   }
 }
 
@@ -219,8 +289,9 @@ export class WildlifeBrain {
     this.route = opts.route && opts.route.length > 1 ? new Path(opts.route) : null
     // pooled events + scratch (update() allocates nothing)
     this._out = []; this._pool = []; this._pi = 0
-    for (let i = 0; i < 32; i++) this._pool.push({ type: '', name: '', pos: [0, 0, 0], volume: 1, amount: 0, why: '', text: '', s: 0 })
-    this._t = [0, 0]; this._q = [0, 0, 0]
+    for (let i = 0; i < 32; i++) this._pool.push({ type: '', name: '', pos: [0, 0, 0], volume: 1, amount: 0, why: '', text: '', s: 0, shake: 0, fov: 0, beat: false })
+    this._t = [0, 0]; this._q = [0, 0, 0]; this._e = [0, 0, 0]; this._src = [0, 0, 0]
+    this.fearLevel = 0
     // the deer
     this.groups = []; this.deer = []
     for (const gd of opts.deerGroups || []) {
@@ -238,7 +309,7 @@ export class WildlifeBrain {
     this.bearSpots = (opts.bearSpots || []).map((p) => this.findSpot(p[0], p[1], 12, WILD.bear))
     if (!this.bearSpots.length) this.bearSpots.push(this.findSpot(-150, 40, 12, WILD.bear))
     this.shedSpots = (opts.shedSpots || []).map((p) => this.findSpot(p[0], p[1], 3, WILD.bear))
-    this.bear = opts.bear === false ? null : makeAnimal('bear', 'bear', 'bear', 1)
+    this.bear = opts.bear === false ? null : makeAnimal('bear', 'bear', 'bear', WILD.bear.scale || 1)
     this.animals = this.deer.concat(this.bear ? [this.bear] : [])
     // ambient: every species gets an index into one cooldown array
     this.ambNames = []
@@ -275,7 +346,10 @@ export class WildlifeBrain {
       b.lastD = -1; b.closing = 0; b.stillT = 0; b.bluffs = 0; b.swats = 0; b.mood = 0; b.ignoreT = 0; b.dogCool = 0; b.harassT = 0
       b.barkT = WILD.firstBark; b.barks = 0; b.snuffT = this.U(WILD.bear.snuffle); b.huffI = 0
       b.nightOn = false; b.nightT = 0; b.visited = false; b.visitRoll = false; b.routeS = 0; b.sniffT = 0
+      b.stalkRoll = false; b.stalkCool = 0; b.scent = 0; b.stalking = false; b.sk = ''; b.heard = false; b.heardT = 0
+      b.runT = 0; b.calmT = 0; b.hitT = 0; b.lostT = 0; b.rearT = 0; b.litT = 0; b.eyes = 0; b.eyesOff = 1e9; b.agit = 0
     }
+    this.fearLevel = 0
     const A = this.amb; A.t = this.U(WILD.ambient.start); A.hush = 0; A.left = 0; A.sp = null; A.silent = false; A.calls = 0
     A.cool.fill(0)
     this.flags = {}
@@ -341,8 +415,9 @@ export class WildlifeBrain {
     for (let i = 0; i < OFFS.length; i++) { const h = want + OFFS[i]; if (this.ok(px + Math.sin(h) * pr, pz + Math.cos(h) * pr, spec)) return h }
     return want
   }
-  /** Walk / run a toward (tx, tz) at up to v m/s, steering round bad ground. Returns the 2-D distance left. rush: no easing in. */
-  move(a, tx, tz, v, dt, spec, turn, rush = false) {
+  /** Walk / run a toward (tx, tz) at up to v m/s, steering round bad ground. Returns the 2-D distance left. rush: no easing in;
+   *  acc: its acceleration (m/s^2) instead of spec.accel (a charge explodes off the mark). */
+  move(a, tx, tz, v, dt, spec, turn, rush = false, acc = 0) {
     const px = a.pos[0], pz = a.pos[2], dx = tx - px, dz = tz - pz, dist = Math.hypot(dx, dz)
     const want = Math.atan2(dx, dz)
     a.steerT -= dt
@@ -351,7 +426,7 @@ export class WildlifeBrain {
     const off = Math.abs(angWrap(want - a.yaw))
     let vt = dist < 0.12 ? 0 : rush ? v : Math.min(v, Math.max(0.3, dist * 1.5))
     if (dist < 3 && off > 1.2) vt = Math.min(vt, 0.3)            // close and facing away: turn on the spot, don't orbit
-    a.speed += clamp(vt - a.speed, -spec.decel * dt, spec.accel * dt)
+    a.speed += clamp(vt - a.speed, -spec.decel * dt, (acc || spec.accel) * dt)
     const step = a.speed * dt
     if (step > 0) {
       const nx = px + Math.sin(a.yaw) * step, nz = pz + Math.cos(a.yaw) * step
@@ -370,6 +445,13 @@ export class WildlifeBrain {
     if (a.speed > 0) { const s = a.speed * dt, nx = a.pos[0] + Math.sin(a.yaw) * s, nz = a.pos[2] + Math.cos(a.yaw) * s; if (this.hardOk(nx, nz, spec)) { a.pos[0] = nx; a.pos[2] = nz } else a.speed = 0 }
     this.turnTo(a, Math.atan2(x - a.pos[0], z - a.pos[2]), turn, dt)
     this.settle(a)
+  }
+  /** Never nearer than r to (x, z): pulls a's last step back out onto that ring, along the line to it, where it can stand. */
+  stopShort(a, x, z, r, spec) {
+    const dx = a.pos[0] - x, dz = a.pos[2] - z, L = Math.hypot(dx, dz)
+    if (!(L < r) || L < 1e-6) return
+    const nx = x + (dx / L) * r, nz = z + (dz / L) * r
+    if (this.hardOk(nx, nz, spec)) { a.pos[0] = nx; a.pos[2] = nz; this.settle(a) }
   }
   /** A good spot dMin..dMax away from (fx, fz), heading away from it where the ground allows (writes out[0], out[1]). */
   awayFrom(x, z, fx, fz, dMin, dMax, spec, out) {
@@ -393,14 +475,23 @@ export class WildlifeBrain {
   // ------------------------------------------------------------------ events (pooled)
   ev(type) {
     const e = this._pool[this._pi]; this._pi = (this._pi + 1) % this._pool.length
-    e.type = type; e.name = ''; e.volume = 1; e.amount = 0; e.why = ''; e.text = ''; e.s = 0
+    e.type = type; e.name = ''; e.volume = 1; e.amount = 0; e.why = ''; e.text = ''; e.s = 0; e.shake = 0; e.fov = 0; e.beat = false
     this._out.push(e); return e
   }
   sfx(name, x, y, z, volume) { const e = this.ev('sfx'); e.name = name; e.pos[0] = x; e.pos[1] = y; e.pos[2] = z; e.volume = volume; return e }
   fear(amount) { this.ev('fear').amount = amount }
+  /** A jolt for hooks.scare: WILD.scares[key] = { shake, s, fov, beat }. */
+  scare(key) { const S = WILD.scares[key]; if (!S) return; const e = this.ev('scare'); e.shake = S.shake; e.s = S.s; e.fov = S.fov; e.beat = !!S.beat; e.why = key }
   say(key) { if (this.flags[key]) return; this.flags[key] = true; this.ev('say').text = WILD.lines[key] }
   toast(key, s) { if (this.flags[key]) return; this.flags[key] = true; const e = this.ev('toast'); e.text = WILD.lines[key]; e.s = s }
-  animalSfx(a, name, vol, head) { this.sfx(name, a.pos[0] + Math.sin(a.yaw) * head, a.pos[1] + head * a.scale, a.pos[2] + Math.cos(a.yaw) * head, vol) }
+  animalSfx(a, name, vol, head) { const h = head * a.scale; this.sfx(name, a.pos[0] + Math.sin(a.yaw) * h, a.pos[1] + h, a.pos[2] + Math.cos(a.yaw) * h, vol) }
+  /** Where an animal's eyes are (out = [x, y, z]): a black bear's sit ~0.78 m ahead of its middle, ~0.71 m up (x scale);
+   *  standing up, ~1.55 m up over its hips. The view checks its lights here; the eyeshine sprites ride the head bone. */
+  eyePos(a, out) {
+    const up = a.act === 'rear' && a.speed < 0.3, s = a.scale, f = (up ? 0.3 : 0.78) * s
+    out[0] = a.pos[0] + Math.sin(a.yaw) * f; out[1] = a.pos[1] + (up ? 1.55 : 0.71 - 0.12 * a.agit) * s; out[2] = a.pos[2] + Math.cos(a.yaw) * f
+    return out
+  }
 
   // ------------------------------------------------------------------ per frame
   update(dt, ctx) {
@@ -411,7 +502,7 @@ export class WildlifeBrain {
     this._pl = ctx.player
     const pSpeed = ctx.vel ? Math.hypot(ctx.vel[0], ctx.vel[1]) : 0
     for (let i = 0; i < this.groups.length; i++) this.deerGroup(this.groups[i], dt, ctx, pSpeed)
-    if (this.bear) this.bearUpdate(dt, ctx, pSpeed)
+    if (this.bear) this.bearUpdate(dt, ctx, pSpeed); else this.fearLevel = 0
     this.ambient(dt, ctx)
     return out
   }
@@ -554,16 +645,27 @@ export class WildlifeBrain {
     b.closing = vel && dxz > 1e-3 ? (vel[0] * (b.pos[0] - pl[0]) + vel[1] * (b.pos[2] - pl[2])) / dxz : 0
     b.lastD = d
     b.stillT = pSpeed < B.stillSpeed ? b.stillT + dt : 0
+    // running from it (jogging, opening the gap) vs keeping your head (standing still, or backing off at a walk)
+    // (the jog key down and going faster than a slow back-off: hungry and limping, your jog is ~2 m/s, and it is still running)
+    const jogging = !!ctx.jog && pSpeed > B.backSlow
+    b.runT = jogging && b.closing < -B.chaseAway ? b.runT + dt : 0
+    b.calmT = !jogging && (pSpeed < B.stillSpeed || (pSpeed < B.backSlow && b.closing <= 0.15)) ? b.calmT + dt : 0
     b.ignoreT = Math.max(0, b.ignoreT - dt); b.dogCool = Math.max(0, b.dogCool - dt); b.mood = Math.max(0, b.mood - B.mood.decay * dt)
+    b.stalkCool = Math.max(0, b.stalkCool - dt)
     b.timer += dt
+    this.bearLight(dt, ctx)
     this.bearDog(dt, ctx, dxz, safe)
     if (ctx.weeper && b.state !== 'flee' && d2(b.pos, ctx.weeper) < B.weeperRange) this.bearAway(ctx.weeper[0], ctx.weeper[2])
     const bluffR = B.bluffRange * (1 + B.mood.range * b.mood)
+    // DON'T RUN: it has noticed you (or it's hunting you, and you've heard it) and you jog away from it: it runs you down
+    if (!safe && b.runT >= B.chaseDelay && ((RUNFROM[b.state] && dxz < B.chaseRange) || (b.state === 'stalk' && b.heard && b.heardT >= B.heardGrace && b.sk !== 'back' && dxz < B.stalkChase))) this.bearEnter('chase')
     switch (b.state) {
       case 'calm': {
         this.bearTask(dt, ctx)
         const nr = safe ? B.noticeSafe : pSpeed < B.stillSpeed ? B.noticeStill : ctx.jog && pSpeed > B.jogSpeed ? B.noticeJog : B.noticeRange
         if (d < nr && (b.ignoreT <= 0 || (!safe && d < bluffR))) this.bearEnter('notice')
+        else if (ctx.night && b.litT >= B.litBack) { b.litT = 0; this.animalSfx(b, 'bear_huff', B.huffVol, B.head); this.bearCalm(B.ignore) }   // a light held on it: it takes itself off
+        else this.bearScent(dt, ctx, d, safe)
         break
       }
       case 'notice':
@@ -589,13 +691,17 @@ export class WildlifeBrain {
         break
       }
       case 'bluff':
-        if (safe || b.timer > B.bluffMax) { this.bearEnter('standoff'); break }
-        this.move(b, pl[0], pl[2], B.chargeSpeed, dt, B, B.turnRun, true)
-        if (d2(b.pos, pl) <= B.bluffStop) { b.speed = 0; this.bearEnter('standoff') }
+        if (safe || b.timer > B.bluffMax) { if (!safe) b.speed = 0; this.bearEnter('standoff'); break }   // it pulls up dead, as at bluffStop
+        this.move(b, pl[0], pl[2], B.chargeSpeed, dt, B, B.turnRun, true, B.rushAccel)
+        // stops dead bluffStop short — even after a long frame (10 m/s x a 1/12 s hitch would carry it inside swatHard of a
+        // player standing still, and the standoff would swat them)
+        if (d2(b.pos, pl) <= B.bluffStop) { this.stopShort(b, pl[0], pl[2], B.bluffStop, B); b.speed = 0; this.bearEnter('standoff') }
         break
       case 'standoff':
         this.hold(b, pl[0], pl[2], B, B.turn, dt)
-        this.bearHuffing(dt, B.standoffEvery)
+        if (b.rearT > 0) { b.rearT -= dt; if (b.rearT <= 0) b.act = 'huff' }   // up on its hind legs over you, then down again
+        else this.bearHuffing(dt, B.standoffEvery)
+        this.bearBreathing(dt, dxz)
         if (d < b.dMin) b.dMin = d
         if (!safe && (dxz < B.swatHard || (dxz < B.swatRange && b.closing > B.swatClosing && b.timer > 0.5))) this.bearEnter('swat')
         else if (!safe && b.bluffs < B.maxBluffs && b.timer > 1.5 && d < bluffR * 0.8 && d > B.swatRange && b.closing > 0.3) this.bearEnter('bluff')
@@ -608,7 +714,9 @@ export class WildlifeBrain {
         else if (b.timer > B.swatLunge) { if (d2(b.pos, pl) <= B.swatReach + B.swatMiss) this.bearHit(pl); else this.bearMiss(pl) }
         break
       case 'leave': {
-        const v = b.retreat && b.run < B.retreatRun ? B.runSpeed : B.walkSpeed
+        // right in front of you and facing you: it turns away where it stands first, rather than walking round through you
+        const turning = dxz < 3.5 && Math.abs(angWrap(Math.atan2(pl[0] - b.pos[0], pl[2] - b.pos[2]) - b.yaw)) < 1.4
+        const v = turning ? 0.25 : b.retreat && b.run < B.retreatRun ? B.runSpeed : B.walkSpeed
         const left = this.move(b, b.tx, b.tz, v, dt, B, v > 2 ? B.turnRun : B.turn)
         b.run += b.speed * dt; b.act = 'walk'
         if (!safe && dxz < B.provoke && b.closing > 0.3 && b.timer > 1) this.bearEnter('standoff')
@@ -632,11 +740,47 @@ export class WildlifeBrain {
         if (left < B.fleeArrive || b.stuckT > 4 || b.timer > 25) this.bearCalm(20)
         break
       }
+      case 'stalk': this.bearStalk(dt, ctx, dxz, pSpeed, safe, bluffR); break
+      case 'chase': {
+        if (safe) { this.bearEnter('standoff'); break }                  // you made the fence or the shed: it pulls up at the wall
+        if (b.calmT >= B.chaseYield) { this.bearEnter('bluff'); break }   // you stopped running in time: it ends as a bluff
+        this.move(b, pl[0], pl[2], B.chaseSpeed, dt, B, B.turnRun, true, B.rushAccel)
+        b.act = 'run'
+        if (d2(b.pos, pl) <= B.maulReach) { this.bearEnter('maul'); this.bearMaul() }
+        else if (b.timer > B.chaseMax) this.bearLeave(pl[0], pl[2], false)   // it couldn't get to you
+        break
+      }
+      case 'maul': {
+        if (safe) { this.bearLeave(pl[0], pl[2], true); break }
+        const dd = d2(b.pos, pl)
+        // on you: it keeps its weight on you (your pace, plus whatever it needs to close back in), never past you
+        if (dd > B.maulStand) this.move(b, pl[0], pl[2], Math.min(B.chaseSpeed, pSpeed + (dd - B.maulStand) * 4), dt, B, B.turnRun, true, B.rushAccel)
+        else this.hold(b, pl[0], pl[2], B, B.turnRun, dt)
+        b.act = b.speed > 1 ? 'run' : 'huff'
+        this.bearBreathing(dt, dd)
+        b.hitT -= dt
+        b.lostT = dd > B.maulReach + B.maulLose ? b.lostT + dt : 0
+        // it keeps at you while you keep moving; hold still (or back off at a walk) for maulCalm s and it stops
+        if (b.calmT >= B.maulCalm) this.bearEnter('loom')
+        else if (b.lostT > B.maulLost) this.bearLeave(pl[0], pl[2], false)   // you got somewhere it can't follow: it lets you go
+        else if (b.hitT <= 0 && b.calmT <= 0 && dd <= B.maulReach) this.bearMaul()
+        break
+      }
+      case 'loom':   // over you, blowing and breathing, deciding; run again and it's on you again
+        this.hold(b, pl[0], pl[2], B, B.turn, dt)
+        this.bearHuffing(dt, B.huffEvery)
+        this.bearBreathing(dt, dxz)
+        if (!safe && (jogging || (dxz < B.maulStand && b.closing > 0.3))) { this.bearEnter('maul'); b.hitT = 0.4 }
+        else if (b.timer > b.loomT) { this.bearLeave(pl[0], pl[2], false); b.ignoreT = Math.max(b.ignoreT, B.ignoreSwat) }
+        break
     }
+    b.agit = b.state === 'stalk' ? (b.sk === 'rush' ? 1 : b.sk === 'hold' ? 0.8 : 0.35) : AGIT[b.state] || 0
+    this.fearLevel = this.bearFearLevel(d3(b.pos, pl), safe)
   }
   bearEnter(state) {
     const B = WILD.bear, b = this.bear
     b.prev = b.state; b.state = state; b.timer = 0; b.steerT = 0; b.best = Infinity; b.stuckT = 0
+    if (b.stalking && !STALKISH[state]) { b.stalking = false; b.sk = ''; b.stalkCool = Math.max(b.stalkCool, this.U(B.stalkCool)) }   // the hunt is over
     switch (state) {
       case 'calm':
         if (this.route && (b.task === 'visit' || b.task === 'return')) b.routeS = this.route.project(b.pos[0], b.pos[2])
@@ -647,14 +791,26 @@ export class WildlifeBrain {
       case 'huff': b.act = 'huff'; b.huffT = 0; b.dMin = b.lastD; b.stillT = 0; b.idleT = 0; break
       case 'bluff':
         b.act = 'run'; b.bluffs++; b.mood = Math.min(1, b.mood + B.mood.bluff)
-        this.fear(B.bluffFear); this.animalSfx(b, 'bear_huff', B.huffVol * 1.15, B.head); this.say('bearBluff')
+        this.fear(B.bluffFear); this.scare('bluff')
+        this.animalSfx(b, 'bear_huff', B.huffVol * 1.15, B.head); this.animalSfx(b, 'bear_bawl', B.bawlVol * 0.8, B.head)
         break
       case 'standoff':
-        b.act = 'huff'; b.dMin = b.lastD; b.stillT = 0; b.huffT = 0.5
-        this.animalSfx(b, 'bear_jawpop', B.popVol, B.head); this.animalSfx(b, 'bear_woof', B.woofVol, B.head)
+        b.act = 'huff'; b.dMin = b.lastD; b.stillT = 0; b.huffT = 0.5; b.breathT = 1.2; b.rearT = 0
+        if (b.lastD < B.closeRear) {   // right in front of you: up to its full height, growling
+          b.act = 'rear'; b.rearT = B.rearClose; b.huffT = 0.4
+          this.animalSfx(b, 'bear_growl', B.growlVol, B.head); this.animalSfx(b, 'bear_jawpop', B.popVol, B.head); this.scare('rear')
+          if (b.prev === 'bluff') this.say('bearBluff')
+        } else { this.animalSfx(b, 'bear_jawpop', B.popVol, B.head); this.animalSfx(b, 'bear_woof', B.woofVol, B.head); if (b.prev === 'bluff') this.say('bearBluff') }
         break
       case 'swat': b.act = 'run'; b.speed = Math.max(b.speed, B.swatSpeed * B.swatLunge0); break   // a lunge, not a walk-up
       case 'dogcharge': b.act = 'run'; break
+      case 'stalk': b.act = 'walk'; break
+      case 'chase':
+        b.act = 'run'; b.mood = Math.min(1, b.mood + B.mood.bluff)
+        this.scare('chase'); this.animalSfx(b, 'bear_bawl', B.bawlVol, B.head)
+        break
+      case 'maul': b.act = 'huff'; b.hitT = B.maulEvery; b.lostT = 0; b.breathT = 0.6; b.speed = Math.min(b.speed, 4); break   // it hits you and stops there, it doesn't run on past
+      case 'loom': b.act = 'huff'; b.loomT = this.U(B.loom); b.huffT = 1.0; b.breathT = 0.2; break
       default: break
     }
   }
@@ -681,7 +837,7 @@ export class WildlifeBrain {
     const B = WILD.bear, b = this.bear
     b.speed = 0; b.act = 'huff'; b.swats++; b.mood = Math.min(1, b.mood + B.mood.swat)
     const e = this.ev('hurt'); e.amount = B.swatHurt; e.why = 'bear'
-    this.fear(B.swatFear)
+    this.fear(B.swatFear); this.scare('hit')
     this.animalSfx(b, 'bear_growl', B.growlVol, B.head)
     this.say('bearSwat')
     this.bearLeave(pl[0], pl[2], true)
@@ -691,10 +847,19 @@ export class WildlifeBrain {
   bearMiss(pl) {
     const B = WILD.bear, b = this.bear
     b.speed = 0; b.act = 'huff'; b.mood = Math.min(1, b.mood + B.mood.swat * 0.5)
-    this.fear(B.swatMissFear)
+    this.fear(B.swatMissFear); this.scare('miss')
     this.animalSfx(b, 'bear_huff', B.huffVol * 1.15, B.head); this.animalSfx(b, 'bear_jawpop', B.popVol, B.head)
     this.bearLeave(pl[0], pl[2], true)
     b.ignoreT = Math.max(b.ignoreT, B.ignoreSwat)
+  }
+  /** It's on you (you ran): a blow (hurt maulHurt), the growl, a jolt. Again every maulEvery s while you keep moving. */
+  bearMaul() {
+    const B = WILD.bear, b = this.bear
+    b.hitT = B.maulEvery; b.swats++; b.mood = Math.min(1, b.mood + B.mood.swat * 0.5)
+    const e = this.ev('hurt'); e.amount = B.maulHurt; e.why = 'bear'
+    this.fear(B.swatFear); this.scare('hit')
+    this.animalSfx(b, 'bear_growl', B.growlVol, B.head)
+    this.say('bearChase')
   }
   bearHuffing(dt, every) {
     const B = WILD.bear, b = this.bear
@@ -704,12 +869,180 @@ export class WildlifeBrain {
     this.animalSfx(b, name, name === 'bear_woof' ? B.woofVol : name === 'bear_jawpop' ? B.popVol : B.huffVol, B.head)
     b.huffT = this.U(every)
   }
+  /** Its breathing, heavy and wet — only ever heard close (inside breathRange). */
+  bearBreathing(dt, dist) {
+    const B = WILD.bear, b = this.bear
+    b.breathT -= dt
+    if (b.breathT > 0) return
+    b.breathT = this.U(B.breathEvery)
+    if (dist < B.breathRange) this.animalSfx(b, 'bear_breath', B.breathVol, B.head)
+  }
+  /** The light on it: how long one's been held there (litT), and its eyes throwing it back (b.eyes: the first sighting in a
+   *  while is a jolt; the first ever, a line). */
+  bearLight(dt, ctx) {
+    const B = WILD.bear, b = this.bear, lit = !!ctx.lit && !!ctx.night
+    b.litT = lit ? b.litT + dt : Math.max(0, b.litT - dt * B.litDecay)
+    let src = lit ? ctx.litFrom : null
+    if (lit && !src) { const p = ctx.player, s = this._src; s[0] = p[0]; s[1] = p[1] + 1.6; s[2] = p[2]; src = s }
+    b.eyes = lit ? eyeshine(true, true, b.yaw, this.eyePos(b, this._e), src) : 0
+    if (b.eyes > 0.35) {
+      // (not while it's already coming at you or on you: those have their jolts, and "then they're gone" would be a lie)
+      if (b.eyesOff > B.eyesGap && !ONYOU[b.state]) { this.scare('eyes'); this.say('bearEyes') }
+      b.eyesOff = 0
+    } else b.eyesOff += dt
+  }
+  /** Sustained fear, 0..1: how close it is (nothing at fearFar, all of it at fearNear) times what it's doing to you. */
+  bearFearLevel(d, safe) {
+    const B = WILD.bear, b = this.bear
+    const t = clamp((B.fearFar - d) / (B.fearFar - B.fearNear), 0, 1), near = t * t * (3 - 2 * t)
+    let f
+    switch (b.state) {
+      case 'chase': case 'maul': f = 1; break
+      case 'loom': case 'bluff': case 'swat': f = 0.9; break
+      case 'standoff': f = 0.6 + 0.3 * near; break
+      case 'notice': case 'rear': case 'huff': case 'dogcharge': f = 0.2 + 0.5 * near; break
+      case 'stalk': f = !b.heard ? 0 : b.sk === 'rush' ? 0.5 + 0.5 * near : b.sk === 'hold' ? 0.45 + 0.45 * near : 0.12 + 0.5 * near; break
+      case 'flee': f = 0; break
+      default: f = d < 15 ? 0.3 * near : 0   // calm, or walking off: only right beside you
+    }
+    if (b.eyes > 0.35) f = Math.max(f, 0.55)
+    return safe ? f * 0.35 : f
+  }
+
+  // ------------------------------------------------------------------ the night stalk
+  /** Where it will follow you: out on the trail (offTrail < stalkTrail), more than `far` m from the tower, not by the shed. */
+  stalkable(ctx, far = WILD.bear.stalkStart) {
+    const pl = ctx.player
+    return !(ctx.offTrail > WILD.bear.stalkTrail) && Math.hypot(pl[0] - this.tower[0], pl[2] - this.tower[1]) > far && !this.nearShed(pl)
+  }
+  nearShed(p) { return !!this.shed && Math.hypot(p[0] - this.shed[0], p[2] - this.shed[1]) < 6 }
+  /** Calm, at night, you out on the trail: your scent builds (faster the nearer you are) until it has you. */
+  bearScent(dt, ctx, d, safe) {
+    const B = WILD.bear, b = this.bear
+    if (!(ctx.night && b.stalkRoll && b.stalkCool <= 0 && b.ignoreT <= 0 && !safe && d < B.scentRange && this.stalkable(ctx))) { b.scent = Math.max(0, b.scent - dt * 0.02); return }
+    b.scent += dt * B.scentRate * (1 - d / B.scentRange)
+    if (b.scent >= 1) this.bearStalk0()
+  }
+  bearStalk0() {
+    const B = WILD.bear, b = this.bear
+    b.scent = 0
+    this.bearEnter('stalk')
+    b.stalking = true; b.stalkT = 0; b.stalkMaxT = this.U(B.stalkMax); b.heard = false; b.heardT = 0; b.litT = 0
+    b.sk = 'follow'; b.skT = 0; b.legT = 0; b.tgtT = 0; b.snapT = this.U(B.snapFirst); b.rushT = this.U(B.rushFirst)
+    b.breathT = 1; b.whineT = this.U(B.whineEvery) * 0.5; b.bhuffT = this.U(B.stalkHuff)
+  }
+  /** The stalk, each frame: keep pace with you out of your light (follow), let itself be heard, rush in and stop (rush, hold),
+   *  go back out from a light held on it (back, wait), and give up at dawn, after a while, or once you're home. */
+  bearStalk(dt, ctx, dxz, pSpeed, safe, bluffR) {
+    const B = WILD.bear, b = this.bear, pl = ctx.player
+    b.stalkT += dt; b.skT += dt
+    if (b.heard) b.heardT += dt
+    const home =safe || Math.hypot(pl[0] - this.tower[0], pl[2] - this.tower[1]) < B.stalkHome || this.nearShed(pl)
+    if (!ctx.night || home || b.stalkT > b.stalkMaxT || dxz > B.stalkLose) { this.bearLeave(pl[0], pl[2], false); return }
+    // walk right up to it and it stands its ground like any bear
+    if (b.sk !== 'back' && dxz < bluffR && b.closing > B.bluffClosing) { this.bearEnter('bluff'); return }
+    // a light held on it: it doesn't like that, and goes back out past 40 m
+    if (b.sk !== 'back' && b.litT >= B.litBack) this.stalkBack(pl, dxz)
+    switch (b.sk) {
+      case 'rush':
+        this.move(b, pl[0], pl[2], B.rushSpeed, dt, B, B.turnRun, true, B.rushAccel); b.act = 'run'
+        if (dxz <= b.rushStopD || b.skT > 6) { b.sk = 'hold'; b.skT = 0; b.holdT = this.U(B.rushHold); b.huffT = 0.5 }
+        break
+      case 'hold':   // pulled up ~10 m off, blowing at you
+        this.hold(b, pl[0], pl[2], B, B.turn, dt); b.act = b.speed > 1 ? 'run' : 'huff'
+        this.bearHuffing(dt, B.huffEvery)
+        if (b.skT > b.holdT) { b.sk = 'follow'; b.skT = 0; b.legT = 0; b.tgtT = 0; b.rushT = this.U(B.rushEvery) }
+        break
+      case 'back': {
+        const v = dxz < B.backDist[0] ? B.runSpeed : B.stalkTrot * 0.5
+        const left = this.move(b, b.tx, b.tz, v, dt, B, v > 2 ? B.turnRun : B.turn); b.act = 'walk'
+        if (left < 2 || b.stuckT > 4 || b.skT > B.backMax) { b.sk = 'wait'; b.skT = 0; b.waitT = this.U(B.backWait) }
+        break
+      }
+      case 'wait':   // out there in the dark, watching; later it comes back
+        this.hold(b, pl[0], pl[2], B, B.turn, dt); b.act = 'idle'
+        if (b.skT > b.waitT || dxz < B.stalkDist[0]) { b.sk = 'follow'; b.skT = 0; b.legT = 0; b.tgtT = 0 }
+        break
+      default:
+        this.stalkFollow(dt, ctx, dxz, pSpeed)
+        if (b.heard) {
+          b.rushT -= dt
+          if (b.rushT <= 0 && dxz > B.rushStop[1] + 4 && dxz < 50) { b.sk = 'rush'; b.skT = 0; b.rushStopD = this.U(B.rushStop); this.scare('rush'); this.stalkSnap() }
+        }
+    }
+    // heard, not seen: sticks breaking under it, a huff now and then, its breathing once it's close
+    b.snapT -= dt
+    if (b.snapT <= 0) { b.snapT = this.U(B.snapEvery); if (dxz < B.snapRange && b.speed > 0.4) this.stalkSnap() }
+    b.bhuffT -= dt
+    if (b.bhuffT <= 0) { b.bhuffT = this.U(B.stalkHuff); if (b.heard && dxz < B.snapRange) this.animalSfx(b, 'bear_huff', B.stalkHuffVol, B.head) }
+    this.bearBreathing(dt, dxz)
+    // the dog knows it's out there
+    const dog = ctx.dog
+    if (b.heard && dog && dog.tamed && d3(dog.pos, pl) < B.whineDog && d3(dog.pos, b.pos) >= WILD.dogStalkBark) {
+      b.whineT -= dt
+      if (b.whineT <= 0) { b.whineT = this.U(B.whineEvery); const e = this.ev('dogWhine'); e.pos[0] = dog.pos[0]; e.pos[1] = dog.pos[1]; e.pos[2] = dog.pos[2] }
+    }
+  }
+  /** Keep pace: stalkD off, abreast of you or a little behind on the side it's on (standing still: where it is), never in
+   *  your torch's cone; it slips out of the beam fast when it's caught in it. */
+  stalkFollow(dt, ctx, dxz, pSpeed) {
+    const B = WILD.bear, b = this.bear, pl = ctx.player, vel = ctx.vel
+    b.legT -= dt
+    if (b.legT <= 0) { b.legT = this.U(B.stalkLeg); b.stalkD = this.U(B.stalkDist) }
+    b.tgtT -= dt
+    if (b.tgtT <= 0) {
+      b.tgtT = 0.2
+      const cur = Math.atan2(b.pos[0] - pl[0], b.pos[2] - pl[2])
+      let want = cur
+      if (pSpeed > 0.4 && vel) {
+        const head = Math.atan2(vel[0], vel[1]), rel = angWrap(cur - head)
+        want = head + (rel >= 0 ? 1 : -1) * clamp(Math.abs(rel), B.stalkSide[0], B.stalkSide[1])
+      }
+      if (ctx.torch && ctx.look) {
+        const ly = Math.atan2(ctx.look[0], ctx.look[1]), off = angWrap(want - ly)
+        if (Math.abs(off) < B.hideCone + 0.05) want = ly + (off >= 0 ? 1 : -1) * (B.hideCone + 0.05)
+      }
+      let tx = pl[0] + Math.sin(want) * b.stalkD, tz = pl[2] + Math.cos(want) * b.stalkD
+      if (!this.ok(tx, tz, B)) {
+        for (let i = 1; i < OFFS.length - 1; i++) {
+          const h = want + OFFS[i] * 0.5, x = pl[0] + Math.sin(h) * b.stalkD, z = pl[2] + Math.cos(h) * b.stalkD
+          if (this.ok(x, z, B) && !this.inLight(ctx, x, z)) { tx = x; tz = z; break }
+        }
+      }
+      b.tx = tx; b.tz = tz
+    }
+    const lit = dxz < 40 && this.inLight(ctx, b.pos[0], b.pos[2])
+    this.move(b, b.tx, b.tz, lit ? B.stalkSlip : Math.hypot(b.tx - b.pos[0], b.tz - b.pos[2]) > 40 ? B.stalkTrot * 1.3 : B.stalkTrot, dt, B, B.turnRun)
+    b.act = 'walk'
+  }
+  /** (x, z) inside your torch's cone (plus a margin): where it won't stand. */
+  inLight(ctx, x, z) {
+    if (!ctx.torch || !ctx.look) return false
+    const pl = ctx.player, ly = Math.atan2(ctx.look[0], ctx.look[1])
+    return Math.abs(angWrap(Math.atan2(x - pl[0], z - pl[2]) - ly)) < WILD.bear.hideCone
+  }
+  /** A light held on it: off it goes, back out past 40 m (and it waits out there a while before it comes back). */
+  stalkBack(pl, dxz) {
+    const B = WILD.bear, b = this.bear
+    this.awayFrom(b.pos[0], b.pos[2], pl[0], pl[2], Math.max(8, B.backDist[0] - dxz), Math.max(14, B.backDist[1] - dxz), B, this._t)
+    this.target(b, this._t[0], this._t[1])
+    b.sk = 'back'; b.skT = 0; b.litT = 0
+    this.animalSfx(b, 'bear_huff', B.huffVol, B.head); this.stalkSnap()
+  }
+  /** A stick breaking under it, somewhere off the trail. The first one you hear tells you what's happening. */
+  stalkSnap() {
+    const B = WILD.bear, b = this.bear, a = this.rng() * TAU, r = 0.5 + this.rng() * 1.5
+    const x = b.pos[0] + Math.sin(a) * r, z = b.pos[2] + Math.cos(a) * r
+    this.sfx('branch_snap', x, this.ground(x, z) + 0.25, z, B.snapVol)
+    if (!b.heard) { b.heard = true; this.say('bearStalk'); this.toast('bearFirst', 6) }
+  }
   /** The tamed dog: barks at it every 1-2 s inside 25 m; the bear may run at her; if she gets in its face it swats. */
   bearDog(dt, ctx, dxz, safe) {
     const B = WILD.bear, b = this.bear, dog = ctx.dog
     if (!dog || !dog.tamed) { b.barkT = WILD.firstBark; b.harassT = Math.max(0, b.harassT - dt); return }
     const dd = d3(b.pos, dog.pos)
-    if (dd < WILD.dogBarkRange) {
+    // while it stalks her she doesn't bark at it (she presses against your legs and whimpers) until it's close
+    if (dd < (b.state === 'stalk' ? WILD.dogStalkBark : WILD.dogBarkRange)) {
       b.barkT -= dt
       if (b.barkT <= 0) {
         b.barkT = this.U(WILD.dogBark); b.barks++
@@ -718,7 +1051,7 @@ export class WildlifeBrain {
       }
     } else b.barkT = WILD.firstBark
     if (dd < B.dogHarassRange && dd < dxz - 0.5) b.harassT += dt; else b.harassT = Math.max(0, b.harassT - dt * 0.5)
-    if (b.harassT > B.dogHarassTime && b.state !== 'swat' && b.state !== 'leave' && b.state !== 'flee') {
+    if (b.harassT > B.dogHarassTime && !BUSY[b.state]) {
       b.harassT = 0
       if (!safe && dxz < B.playerSwatNear) { this.bearEnter('swat'); return }   // you're right there: the paw is for you
       this.animalSfx(b, 'bear_growl', B.growlVol, B.head)
@@ -764,10 +1097,10 @@ export class WildlifeBrain {
   bearTask(dt, ctx) {
     const B = WILD.bear, b = this.bear
     if (ctx.night) {
-      if (!b.nightOn) { b.nightOn = true; b.visited = false; b.nightT = 0; b.visitAt = this.U(B.visitDelay); b.visitRoll = this.rng() < B.visitChance }
+      if (!b.nightOn) { b.nightOn = true; b.visited = false; b.nightT = 0; b.visitAt = this.U(B.visitDelay); b.visitRoll = this.rng() < B.visitChance; b.stalkRoll = this.rng() < B.stalkChance }
       b.nightT += dt
       if (b.task === 'forage' && !b.visited && b.visitRoll && this.route && b.nightT >= b.visitAt) { b.visited = true; this.bearTask0('visit') }
-    } else if (b.nightOn) { b.nightOn = false; if (b.task === 'visit' || b.task === 'sniff') this.bearTask0('return') }
+    } else if (b.nightOn) { b.nightOn = false; b.stalkRoll = false; b.scent = 0; if (b.task === 'visit' || b.task === 'sniff') this.bearTask0('return') }
     switch (b.task) {
       case 'visit': {
         const left = this.followRoute(dt, 1)
@@ -860,6 +1193,7 @@ export class WildlifeBrain {
         pos: [r3(b.pos[0]), r3(b.pos[2])], yaw: r2(b.yaw), state: b.state, task: b.task, routeS: r2(b.routeS), spotI: b.spotI, sniffT: r2(b.sniffT),
         mood: r2(b.mood), ignoreT: r2(b.ignoreT), dogCool: r2(b.dogCool), bluffs: b.bluffs, swats: b.swats,
         nightOn: b.nightOn, nightT: r2(b.nightT), visitAt: r2(b.visitAt), visitRoll: b.visitRoll, visited: b.visited,
+        stalkRoll: b.stalkRoll, stalkCool: r2(b.stalkCool),
       } : null,
       amb: { t: r2(this.amb.t), hush: r2(this.amb.hush), cool },
       flags: Object.keys(this.flags).filter((k) => this.flags[k]),
@@ -886,6 +1220,7 @@ export class WildlifeBrain {
       b.mood = clamp(num(bs.mood, 0), 0, 1); b.ignoreT = Math.max(0, num(bs.ignoreT, 0)); b.dogCool = Math.max(0, num(bs.dogCool, 0))
       b.swats = num(bs.swats, 0)
       b.nightOn = !!bs.nightOn; b.nightT = num(bs.nightT, 0); b.visitAt = num(bs.visitAt, 0); b.visitRoll = !!bs.visitRoll; b.visited = !!bs.visited
+      b.stalkRoll = !!bs.stalkRoll; b.stalkCool = Math.max(0, num(bs.stalkCool, 0))
       b.spotI = clamp(num(bs.spotI, 0) | 0, 0, Math.max(0, this.bearSpots.length - 1))
       const task = ['forage', 'visit', 'sniff', 'return'].includes(bs.task) ? bs.task : 'forage'
       this.bearTask0(task)
