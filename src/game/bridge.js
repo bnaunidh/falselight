@@ -1,38 +1,38 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=9c988591';
-import { Objectives } from './objectives.js?v=9c988591';
-import { Radio } from './radio.js?v=9c988591';
-import { Fuel, FUEL } from './fuel.js?v=9c988591';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=9c988591';
-import { Survival, SURV } from './survival.js?v=9c988591';
-import { createItemsView } from './itemsView.js?v=9c988591';
-import { createChill } from './chill.js?v=9c988591';
-import { createPlume } from './smokePlume.js?v=9c988591';
-import { FireFinder, spokenBearing } from './firefinder.js?v=9c988591';
-import { Photos, classifyShot } from './photos.js?v=9c988591';
-import { CO } from './co.js?v=9c988591';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=9c988591';
-import { OtherLookout } from './otherLookout.js?v=9c988591';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=9c988591';
-import { GuidedHiker } from './hikers.js?v=9c988591';
-import { MorseKeyer, isSOS } from './morse.js?v=9c988591';
-import { normalizeLayout } from './layout.js?v=9c988591';
-import { createSaves } from './saves.js?v=9c988591';
-import { createRng } from './rng.js?v=9c988591';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=9c988591';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=9c988591';
-import * as S from './content/story.js?v=9c988591';
-import { createDog, setDogName } from './dog.js?v=9c988591';
-import { createWildlife } from './wildlife.js?v=9c988591';
-import { Fear, registerFearSounds } from './fear.js?v=9c988591';
-import { epilogue } from './content/ending.js?v=9c988591';
-import { Director, sosLamp } from './director.js?v=9c988591';
-import { createPhotoBoard } from './photoBoard.js?v=9c988591';
-import { makeTent } from './tents.js?v=9c988591';
-import { makeSpringFlow } from './spring.js?v=9c988591';
-import { Follower } from './follower.js?v=9c988591';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=cd4f7406';
+import { Objectives } from './objectives.js?v=cd4f7406';
+import { Radio } from './radio.js?v=cd4f7406';
+import { Fuel, FUEL } from './fuel.js?v=cd4f7406';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=cd4f7406';
+import { Survival, SURV } from './survival.js?v=cd4f7406';
+import { createItemsView } from './itemsView.js?v=cd4f7406';
+import { createChill } from './chill.js?v=cd4f7406';
+import { createPlume } from './smokePlume.js?v=cd4f7406';
+import { FireFinder, spokenBearing } from './firefinder.js?v=cd4f7406';
+import { Photos, classifyShot } from './photos.js?v=cd4f7406';
+import { CO } from './co.js?v=cd4f7406';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=cd4f7406';
+import { OtherLookout } from './otherLookout.js?v=cd4f7406';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=cd4f7406';
+import { GuidedHiker } from './hikers.js?v=cd4f7406';
+import { MorseKeyer, isSOS } from './morse.js?v=cd4f7406';
+import { normalizeLayout } from './layout.js?v=cd4f7406';
+import { createSaves } from './saves.js?v=cd4f7406';
+import { createRng } from './rng.js?v=cd4f7406';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=cd4f7406';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=cd4f7406';
+import * as S from './content/story.js?v=cd4f7406';
+import { createDog, setDogName } from './dog.js?v=cd4f7406';
+import { createWildlife } from './wildlife.js?v=cd4f7406';
+import { Fear, registerFearSounds } from './fear.js?v=cd4f7406';
+import { epilogue } from './content/ending.js?v=cd4f7406';
+import { Director, sosLamp } from './director.js?v=cd4f7406';
+import { createPhotoBoard } from './photoBoard.js?v=cd4f7406';
+import { makeTent } from './tents.js?v=cd4f7406';
+import { makeSpringFlow } from './spring.js?v=cd4f7406';
+import { Follower } from './follower.js?v=cd4f7406';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -609,7 +609,10 @@ export class Game {
       H.losT = (H.losT || 0) - dt;
       if (H.losT <= 0) { H.losT = 0.25; H.seeGround = e.view.lineOfSight(e.camera.position, lv, { trees: false }); H.seeTrees = e.view.lineOfSight(e.camera.position, lv); }
       const flick = H.seeTrees ? 1 : (0.25 + 0.75 * (Math.sin(t * 9.1 + H.rules.phase) > 0.2 ? 1 : 0.15));
-      H.lamp.visible = on && H.seeGround; H.lamp.material.opacity = flick; H.lamp.position.copy(lv); H.lamp.scale.setScalar(Math.max(0.5, d * 0.015)); H.light.position.copy(lv); H.light.intensity = on ? 1.5 : 0;
+      if (r.status === 'straying') lv.x += Math.sin(t * 2.3 + r.phase) * 0.6;   // lost: the light swings about, looking for the path
+      if (r.status === 'fell' && H.fellAt) { lv.set(H.fellAt[0], H.fellAt[1] + 0.25, H.fellAt[2]); }   // where it came to rest, still on, pointing at nothing
+      const onNow = on || (r.status === 'fell' && !!H.fellAt);
+      H.lamp.visible = onNow && H.seeGround; H.lamp.material.opacity = r.status === 'fell' ? 0.85 : flick; H.lamp.position.copy(lv); H.lamp.scale.setScalar(Math.max(0.5, d * 0.015)); H.light.position.copy(lv); H.light.intensity = onNow ? (r.status === 'fell' ? 0.6 : 1.5) : 0;
       if (H.ent) { H.ent.setPosition(V3(r.ground)); const fwd = route_dir(r); if (fwd) H.ent.face(V3(r.ground).add(new THREE.Vector3(fwd[0], 0, fwd[2]))); H.ent.setPose(r.moving ? (Math.floor(t * 1.7) % 2 ? 'step' : 'stand') : 'stand'); H.ent.setVisible(!r.done || r.status === 'saved'); }
       if (!ev) continue;
       if (H.which === 'false') {
@@ -620,7 +623,7 @@ export class Game {
         if (ev === 'straying' && !H.announced.stray) { H.announced.stray = true; this.say(S.LINES.hikerStraying); }
         if (ev === 'straying' || ev === 'stopped' || ev === 'walking') this.refreshTracker();
         if (ev === 'saved') { e.audio.music.sting('found'); setTimeout(() => this.checkpoint('saved'), 2000); this.say(S.LINES.savedN1); this.complete('n1_guide'); this.addLog(S.AUTO_LOG.saved()); this.flags.savedN1 = true; }
-        if (ev === 'fell') { setTimeout(() => this.checkpoint('fell'), 2000); this.say(S.LINES.fellN1); this.obj.complete('n1_guide', null, true); this.refreshTracker(); this.addLog(S.AUTO_LOG.lost()); this.flags.lostN1 = true; e.audio.play('breath', { volume: 0.6 }); }
+        if (ev === 'fell') { const gf = r.ground; H.fellAt = [gf[0], e.world.heightAt(gf[0], gf[2]) - 0.5, gf[2]]; setTimeout(() => this.checkpoint('fell'), 2000); this.say(S.LINES.fellN1); this.obj.complete('n1_guide', null, true); this.refreshTracker(); this.addLog(S.AUTO_LOG.lost()); this.flags.lostN1 = true; e.audio.play('breath', { volume: 0.6 }); }
       }
     }
     function route_dir(r) { return r.route.dir ? r.route.dir(r.s) : null; }
