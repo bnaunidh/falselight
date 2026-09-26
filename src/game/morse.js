@@ -23,10 +23,12 @@ export class MorseKeyer {
     this.firstLetterAt = null
     this.log = []        // [{ t, kind: 'sym'|'letter'|'end', v }]
     this.ended = false
+    this.presses = []    // this attempt's raw presses [{ d, t }] (SOS is judged on their SHAPE, not on fixed timings)
   }
   down(t) {
     if (this.isDown) return
     if (this.ended) { this.reset() }
+    if (this.presses.length && t - this.tUp > 2.6) this.presses = []   // a long pause: a fresh attempt
     this.update(t)
     this.isDown = true; this.tDown = t
   }
@@ -34,6 +36,7 @@ export class MorseKeyer {
     if (!this.isDown) return null
     this.isDown = false; this.tUp = t
     const held = t - this.tDown
+    if (held < 6) this.presses.push({ d: held, t })
     let s = null
     if (held <= this.o.dotMax) s = '.'
     else if (held <= this.o.dashMax) s = '-'
@@ -58,6 +61,24 @@ export class MorseKeyer {
     }
     return ev
   }
+  /** The attempt so far as dots and dashes, classified against YOUR tempo: your first press is a dot, anything clearly
+   *  longer than your dots is a dash (the fixed 0.32 s cut-off made SOS hard to key). */
+  marks() {
+    const P = this.presses; if (!P.length) return []
+    const dots = P.slice(0, 3).map((p) => p.d), base = Math.min(...dots)
+    const thr = Math.max(0.2, Math.min(0.6, base * 1.7))
+    return P.map((p, i) => (i < 3 ? '.' : p.d > thr ? '-' : '.'))
+  }
+  /** Dot/dash cut-off for the hold meter right now (seconds). */
+  threshold() { const P = this.presses; return P.length ? Math.max(0.2, Math.min(0.6, Math.min(...P.slice(0, 3).map((p) => p.d)) * 1.7)) : 0.32 }
+  /** Did the last nine presses make S O S? Three short, three clearly longer, three short: relative, so any steady hand works. */
+  sosShape() {
+    const P = this.presses; if (P.length < 9) return false
+    const d = P.slice(-9).map((p) => p.d), s1 = d.slice(0, 3), l = d.slice(3, 6), s2 = d.slice(6, 9)
+    const shortMax = Math.max(...s1, ...s2), longMin = Math.min(...l)
+    return longMin > shortMax * 1.35 && longMin >= 0.18
+  }
+  clearAttempt() { this.presses = []; this.sym = ''; this.text = ''; this.ended = true }
   get keying() { return this.isDown || !!this.sym || (!!this.text && !this.ended) }
   /** Pretty string for the UI: "··· ——— ··" */
   display() {

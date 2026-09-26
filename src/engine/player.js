@@ -1,7 +1,7 @@
 // FALSE LIGHT — first-person player: walking/jogging, capsule vs COL_wall OBBs, ground from the heightfield and
 // raycasts onto COL_floor/COL_ramp (stairs climb smoothly), the trail-corridor rule, head bob, footsteps.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=9d7eb897';
+import { clamp, damp } from './util.js?v=fa183c0e';
 
 const EYE = 1.65, RADIUS = 0.3, STEP = 0.5;
 

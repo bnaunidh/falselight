@@ -201,3 +201,16 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 @media (max-width:560px){.keys .klist{grid-template-columns:1fr}}
 
 .note.ask input{display:block;width:100%;margin:10px 0 12px;padding:9px 11px;font:22px/1.2 var(--hand,Georgia),serif;background:rgba(255,255,255,.55);border:1px solid rgba(0,0,0,.25);border-radius:6px;color:#2a2418}
+
+/* the SOS guide on the searchlight: the code to send, your marks, the hold meter, on-target */
+.fl-sl .sos{margin:10px 0 6px auto;width:260px;padding:10px 12px;border-radius:8px;background:rgba(10,10,8,.55);border:1px solid rgba(233,224,201,.2);text-align:center}
+.fl-sl .sos .tgt{font:13px/1.2 var(--type);color:#d8cfb6;letter-spacing:.04em}.fl-sl .sos .tgt b{color:#f1dfae;letter-spacing:.15em}
+.fl-sl .sos .slots{display:flex;justify-content:center;align-items:center;gap:6px;margin:9px 0}
+.fl-sl .sos .slots i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.14)}
+.fl-sl .sos .slots i.dot{width:8px}.fl-sl .sos .slots i.dash{width:22px}
+.fl-sl .sos .slots i.ok{background:#f1dfae;box-shadow:0 0 6px rgba(255,210,120,.7)}.fl-sl .sos .slots i.bad{background:#c9582f}
+.fl-sl .sos .hold{position:relative;height:16px;border-radius:8px;background:rgba(255,255,255,.1);overflow:hidden}
+.fl-sl .sos .hold u{position:absolute;left:0;top:0;bottom:0;background:#d8c38a;transition:none}.fl-sl .sos .hold u.dash{background:#f0a45a}
+.fl-sl .sos .hold b{position:absolute;top:0;bottom:0;width:2px;background:rgba(0,0,0,.6)}
+.fl-sl .sos .hold em{position:absolute;inset:0;font:italic 11px/16px Georgia,serif;color:#1d1a14;mix-blend-mode:screen;color:#efe6cd}
+.fl-sl .sos .aim{margin-top:7px;font:12px/1 var(--type);color:rgba(233,224,201,.6)}.fl-sl .sos .aim.on{color:#9fdc8c}

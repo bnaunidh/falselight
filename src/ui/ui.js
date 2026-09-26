@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=9d7eb897';
+import { drawMap } from './mapdraw.js?v=fa183c0e';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -45,8 +45,14 @@ export function createUI(root = document.getElementById('ui')) {
     sl.style.display = 'block';
     const f = Math.max(0, Math.min(1, o.fuel));
     sl.innerHTML = `<div class="dial"><div class="needle" style="transform:rotate(${-60 + f * 120}deg)"></div><div class="lbl">FUEL</div></div>
+      ${o.sos && o.sos.show ? (() => { const S = o.sos, want = '...---...'.split(''), m = S.marks.slice(-9);
+        const slots = want.map((w, i) => { const got = m[i]; return `<i class="${got ? (got === w ? 'ok' : 'bad') : ''} ${w === '-' ? 'dash' : 'dot'}"></i>`; }).join('');
+        const k = Math.min(1, S.hold / (S.thr * 2)), thrPos = 50;
+        return `<div class="sos"><div class="tgt">Answer SOS &nbsp;<b>··· ——— ···</b></div><div class="slots">${slots}</div>
+          <div class="hold${S.keying ? ' on' : ''}"><u style="width:${Math.round(k * 100)}%" class="${S.hold > S.thr ? 'dash' : ''}"></u><b style="left:${thrPos}%"></b><em>${S.keying ? (S.hold > S.thr ? 'long' : 'short') : 'tap = short · hold = long'}</em></div>
+          <div class="aim ${S.onTarget ? 'on' : ''}">${S.onTarget ? '● on their light' : '○ aim at their light'}</div></div>`; })() : ''}
       <div class="morse">${esc(o.morse || '')}</div>
-      <div class="hint">${o.power ? 'Mouse aims the lamp · hold SPACE to flash · F / Esc to step back' : 'No power. Start the generator in the shed.'}</div>`;
+      <div class="hint">${o.power ? rk('Mouse aims the lamp · hold SPACE or click to flash · F / Esc to step back') : 'No power. Start the generator in the shed.'}</div>`;
   };
   U.cameraFrame = (o) => {
     if (!o) { camf.style.display = 'none'; return; }

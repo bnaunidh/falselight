@@ -1,31 +1,31 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=9d7eb897';
-import { Objectives } from './objectives.js?v=9d7eb897';
-import { Radio } from './radio.js?v=9d7eb897';
-import { Fuel, FUEL } from './fuel.js?v=9d7eb897';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=9d7eb897';
-import { Survival, SURV } from './survival.js?v=9d7eb897';
-import { createItemsView } from './itemsView.js?v=9d7eb897';
-import { createChill } from './chill.js?v=9d7eb897';
-import { createPlume } from './smokePlume.js?v=9d7eb897';
-import { FireFinder, spokenBearing } from './firefinder.js?v=9d7eb897';
-import { Photos, classifyShot } from './photos.js?v=9d7eb897';
-import { CO } from './co.js?v=9d7eb897';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=9d7eb897';
-import { OtherLookout } from './otherLookout.js?v=9d7eb897';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=9d7eb897';
-import { GuidedHiker } from './hikers.js?v=9d7eb897';
-import { MorseKeyer, isSOS } from './morse.js?v=9d7eb897';
-import { normalizeLayout } from './layout.js?v=9d7eb897';
-import { createSaves } from './saves.js?v=9d7eb897';
-import { createRng } from './rng.js?v=9d7eb897';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=9d7eb897';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=9d7eb897';
-import * as S from './content/story.js?v=9d7eb897';
-import { createDog, setDogName } from './dog.js?v=9d7eb897';
-import { createWildlife } from './wildlife.js?v=9d7eb897';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=fa183c0e';
+import { Objectives } from './objectives.js?v=fa183c0e';
+import { Radio } from './radio.js?v=fa183c0e';
+import { Fuel, FUEL } from './fuel.js?v=fa183c0e';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=fa183c0e';
+import { Survival, SURV } from './survival.js?v=fa183c0e';
+import { createItemsView } from './itemsView.js?v=fa183c0e';
+import { createChill } from './chill.js?v=fa183c0e';
+import { createPlume } from './smokePlume.js?v=fa183c0e';
+import { FireFinder, spokenBearing } from './firefinder.js?v=fa183c0e';
+import { Photos, classifyShot } from './photos.js?v=fa183c0e';
+import { CO } from './co.js?v=fa183c0e';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=fa183c0e';
+import { OtherLookout } from './otherLookout.js?v=fa183c0e';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=fa183c0e';
+import { GuidedHiker } from './hikers.js?v=fa183c0e';
+import { MorseKeyer, isSOS } from './morse.js?v=fa183c0e';
+import { normalizeLayout } from './layout.js?v=fa183c0e';
+import { createSaves } from './saves.js?v=fa183c0e';
+import { createRng } from './rng.js?v=fa183c0e';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=fa183c0e';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=fa183c0e';
+import * as S from './content/story.js?v=fa183c0e';
+import { createDog, setDogName } from './dog.js?v=fa183c0e';
+import { createWildlife } from './wildlife.js?v=fa183c0e';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -565,20 +565,33 @@ export class Game {
     // the false light goes out if left alone too long
     for (const H of this.hikers) if (H.which === 'false' && H.rules.status === 'signalling' && this.clock.hour > 25.5 && !H.rules.done) { H.rules.status = 'out'; this.say(S.LINES.falseOut); this.addLog(S.AUTO_LOG.falseIgnored()); this.complete('n2_light'); }
   }
+  /** The shutter (Space or the mouse button while you're on the lamp): each press is a flash; nine presses shaped like
+   *  S O S (three short, three clearly longer, three short, against your own tempo) answer whoever you're aimed at. */
+  keySignal(d) {
+    if (this.mode !== 'searchlight') return;
+    const e = this.e, t = e.time.value;
+    if (d) { this.signal.mode = true; this.signal.last = t; this.keyer.down(t); e.audio.play('morse_click', { volume: 0.5 }); return; }
+    this.signal.last = t; this.keyer.up(t); e.audio.play('morse_click', { volume: 0.35 });
+    if (this.keyer.sosShape()) { this.keyer.clearAttempt(); this.answerSOS(t); }
+  }
+  /** The hiker you're answering: the one whose light the beam is on (a generous 11 degrees: it's a big lamp). */
+  sosTarget(t, tol = 11) {
+    const SL = this.e.lights.searchlight, o = SL.worldOrigin(), d = SL.worldDir();
+    let best = null, ba = THREE.MathUtils.degToRad(tol);
+    for (const H of this.hikers) { if (H.rules.status !== 'signalling') continue; const a = V3(H.rules.lampPos(t)).sub(o).angleTo(d); if (a < ba) { ba = a; best = H; } }
+    return best;
+  }
+  answerSOS(t) {
+    if (!this.fuel.power) { this.ui.toast('The lamp is dead. Start the generator.'); return; }
+    const H = this.sosTarget(t);
+    if (!H) { this.ui.toast('Nobody answers. Put the beam on their light first (it locks on when you\'re close).', 3.5); return; }
+    H.rules.answer(t);
+    this.say(H.which === 'false' ? S.LINES.falseAnswered : S.LINES.answeredN1);
+  }
   onMorseEnd(text, t) {
     if (!isSOS(text)) return;
     if (!this.fuel.power) { this.ui.toast('The lamp is dead. Start the generator.'); return; }
-    const SL = this.e.lights.searchlight; const o = SL.worldOrigin(), d = SL.worldDir();
-    for (const H of this.hikers) {
-      if (H.rules.status !== 'signalling') continue;
-      const to = V3(H.rules.lampPos(t)).sub(o);
-      if (to.angleTo(d) < THREE.MathUtils.degToRad(7)) {
-        H.rules.answer(t);
-        if (H.which === 'false') this.say(S.LINES.falseAnswered); else this.say(S.LINES.answeredN1);
-        return;
-      }
-    }
-    this.ui.toast('Nobody answers. Point the lamp at the light before you send.');
+    this.answerSOS(t);   // (letters decoded the classic way still work)
   }
 
   // ------------------------------------------------------------------ the Lost Hiker(s) at the tree line
@@ -881,6 +894,7 @@ export class Game {
     // left click, or the Use key (U by default): whatever is in your hand
     const usePrimary = (d) => {
       if (this.state !== 'play' || this.ui.modalOpen()) return;
+      if (this.mode === 'searchlight') { this.keySignal(d); return; }   // on the lamp, the mouse button works the shutter too
       if (this.placing) { if (d) this.confirmPlace(); return; }
       if (this.camRaised) { if (d) this.takePhoto(); return; }
       if (this.mode === 'walk') this.useActive(d);
@@ -913,12 +927,7 @@ export class Game {
         if (!this.flags.toldBinoc) { this.flags.toldBinoc = true; this.ui.toast('B again (or Esc) lowers them. Your bearing is at the bottom.', 3); }
       } else if (this.binocular && now - (this.binocAt || 0) > 0.45) this.binocular = false;   // held down: letting go lowers them
     });
-    In.onAction('signal', (d) => {
-      if (this.mode !== 'searchlight') return;
-      const t = e.time.value;
-      if (d) { this.signal.mode = true; this.signal.last = t; this.keyer.down(t); e.audio.play('morse_click', { volume: 0.5 }); }
-      else { this.signal.last = t; this.keyer.up(t); e.audio.play('morse_click', { volume: 0.35 }); }
-    });
+    In.onAction('signal', (d) => this.keySignal(d));
   }
   // ------------------------------------------------------------------ items: hands, pack, setting things down anywhere
   fuelUpTop() {
@@ -1173,7 +1182,13 @@ export class Game {
       const o = SL.worldOrigin(), d = SL.worldDir();
       cam.position.copy(o).addScaledVector(d, -0.95).add(this._slUp || (this._slUp = new THREE.Vector3(0, 0.66, 0)));   // over the lamp's shoulder: the housing sits low in the view
       cam.lookAt(o.clone().addScaledVector(d, 60));
-      this.ui.searchlight({ fuel: this.fuel.frac, morse: this.keyer.display(), power: this.fuel.power });
+      const tgt = this.hikers.find((H) => H.rules.status === 'signalling'), onIt = !!this.sosTarget(t);
+      if (tgt && !onIt && this.fuel.power) {   // within ~14 degrees the lamp drifts onto their light (a heavy lamp settles where you point it)
+        const lp = V3(tgt.rules.lampPos(t)), a = lp.clone().sub(o).angleTo(d);
+        if (a < THREE.MathUtils.degToRad(14)) { const y0 = SL.yaw, p0 = SL.pitch; SL.aimAt(lp); const dy = Math.atan2(Math.sin(SL.yaw - y0), Math.cos(SL.yaw - y0)); SL.setAim(y0 + dy * Math.min(1, dt * 2.5), p0 + (SL.pitch - p0) * Math.min(1, dt * 2.5)); }
+      }
+      const held = this.keyer.isDown ? t - this.keyer.tDown : 0;
+      this.ui.searchlight({ fuel: this.fuel.frac, morse: this.keyer.display(), power: this.fuel.power, sos: { show: !!tgt || this.keyer.presses.length > 0, marks: this.keyer.marks(), hold: held, thr: this.keyer.threshold(), onTarget: onIt, keying: this.keyer.isDown } });
     } else if (this.mode === 'finder') {
       let dir = 0; if (e.input.isDown('left')) dir -= 1; if (e.input.isDown('right')) dir += 1;
       this.finder.step(dt, dir, e.input.isDown('jog'), this.co.cold);
