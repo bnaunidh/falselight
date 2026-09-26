@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=d3c7b76b'
+import { clamp } from './util.js?v=225b0c77'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -22,6 +22,10 @@ export const KINDS = {
   // Tillman's prescription, left on the cab shelf: chlorpromazine 25 mg (src/game/fatigue.js pill()): an amber pharmacy vial,
   // white ridged cap, a typed Cascade Pharmacy label (prop_pill_bottle, props_custom.py).
   pills:      { name: 'Pill bottle', model: 'prop_pill_bottle', pack: true },
+  // Tillman's fire cache (src/game/northWoods.js + fireCache.js, which builds these three models in code):
+  key:        { name: 'Padlock key', proc: 'cacheKey', pack: true },     // brass, on a manila tag: F.C. 2410-110 (the station desk)
+  film:       { name: 'Film pack', proc: 'filmPack', pack: true },       // ten exposures for the instant camera (use it: photos.packLeft += 10)
+  water:      { name: 'Water jug', proc: 'waterJug', pack: true },       // a sealed gallon of district water: clean (never makes you sick)
 }
 export const PILLS = { full: 6, label: 'R. TILLMAN · CHLORPROMAZINE 25 MG · TAKE ONE AS DIRECTED · MAY CAUSE DROWSINESS' }
 /** Where the cab's movable things start (three coords; settled onto whatever is under them). [kind, pos, rotY, since (the
@@ -32,9 +36,12 @@ export const CAB_ITEMS = [
   ['lantern', [-1.15, 31.0, 1.865], 2.9], ['lantern', [8.3, 1.62, 5.72], 1.2],   // one on the cab's south shelf, one on the shed shelf
   ['pills', [0.89, 31.3, -1.87], 0.5, 2, { n: PILLS.full }],   // beside the tins on the north shelf
   ['tent', [-1.62, 30.1, 1.55], 0.2, 3, { uses: 3 }], ['tent', [-1.62, 30.1, 1.3], 0.35, 3, { uses: 3 }],   // two spares in the corner by the south shelf
+  // not the cab: the fire cache's padlock key, on the trailhead station's desk beside the fax (northWoods.stationKeySpot)
+  ['key', [33.28, -31.6, 382.72], 1.2, 4],
 ]
-const CAB_V = 3
+const CAB_V = 4
 export const CANTEEN_SIPS = 4
+export const JUG_SIPS = 6   // a gallon jug: six long drinks
 
 export class Inventory {
   constructor(s = {}) {
@@ -127,7 +134,7 @@ export class Inventory {
   useOne(it) { if ((it.n || 1) > 1) it.n--; else this.remove(it.id) }
   /** One pill out of the bottle (false when it's empty). */
   takePill(it) { if (!it || it.kind !== 'pills' || !(it.n > 0)) return false; it.n--; return true }
-  sip(it) { if (!it || it.kind !== 'canteen' || it.fill <= 0) return false; it.fill = clamp(it.fill - 1 / CANTEEN_SIPS); if (it.fill < 1e-3) it.fill = 0; return true }
+  sip(it) { if (!it || (it.kind !== 'canteen' && it.kind !== 'water') || it.fill <= 0) return false; it.fill = clamp(it.fill - 1 / (it.kind === 'water' ? JUG_SIPS : CANTEEN_SIPS)); if (it.fill < 1e-3) it.fill = 0; return true }
   label(it) {
     if (!it) return ''
     const k = KINDS[it.kind]; if (!k) return it.kind
@@ -136,6 +143,9 @@ export class Inventory {
     if (it.kind === 'lantern') return k.name + (it.on ? ' (lit)' : '')
     if (it.kind === 'pills') return k.name + (it.n > 0 ? ` (${it.n} left)` : ' (empty)')
     if (it.kind === 'tent') { const u = it.uses ?? 3; return k.name + (u > 0 ? ` (${u} pitch${u === 1 ? '' : 'es'} left)` : ' (worn out)') }
+    if (it.kind === 'water') return k.name + (it.fill > 0.99 ? ' (sealed, full)' : it.fill > 0 ? ` (${Math.round(it.fill * JUG_SIPS)}/${JUG_SIPS})` : ' (empty)')
+    if (it.kind === 'film') return k.name + ' (10 exposures)'
+    if (it.kind === 'key') return k.name + ' (F.C. 2410-110)'
     if (k.stack && (it.n || 1) > 1) return k.name + ` ×${it.n}`
     return k.name
   }

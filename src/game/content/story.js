@@ -175,6 +175,18 @@ export const LINES = {
   lureOut: [N('The light on the hill goes out. All at once, like a switch.')],
   collapseIn: [N('You wake up on the floor. You don\'t remember lying down.')],
   collapseCold: [N('You wake up on the ground, soaked with dew, shaking so hard your teeth click.')],
+  // ---- Tillman's fire cache, up the old phone line (src/game/northWoods.js). Most of it is found, not narrated.
+  thicket: [N('Young fir, packed so tight you can\'t get an arm through. Tillman must have gone round.')],
+  flagFirst: [N('Orange flagging tape, sun-faded, knotted round the trunk at eye height. Someone marked a way.')],
+  cacheSeen: [N('Down in the hollow, through the trunks: a tin roof. A small grey building that isn\'t on the map.')],
+  cacheLocked: [N('A padlock on the hasp, the brass gone brown. Whoever locked it took the key.')],
+  cacheUnlock: [N('The key turns stiffly. The padlock comes away in your hand.')],
+  haspBroken: [N('The staple tears out of the frame on the third swing and the lock drops onto the step. Everything around you has gone quiet.')],
+  cacheOpened: [N('Fuel, tins, water, a tent in its sack, all stacked on the shelves the way somebody meant to come back for them.')],
+  bootInside: [N('Just inside the door, one rubber boot, standing upright, dried mud up the side. A left boot.')],
+  bootGone: [N('The boot is gone. The door was shut the whole time.')],
+  keyFound: [N('A brass key on a manila tag. Typed on the tag: F.C. 2410-110.')],
+  waltOneCan: [N('One can by the shed door, and a note under it in Walt\'s square capitals: ALL THE DISTRICT COULD SPARE. RAY KEPT A RESERVE AT THE OLD CACHE ON THE PHONE LINE, IF IT\'S STILL THERE. — W.')],
 }
 
 // ---------------------------------------------------------------- the rules card
@@ -200,14 +212,17 @@ export const RULES_FROM_CAMP = 8
 export const PREV_LOG = [
   { date: 'Jun 21 \'82', text: 'On station 1400. Tower in fair shape. South glass cracked, taped. Generator runs rough, needs a new plug.' },
   { date: 'Jul 3', text: 'Smoke at 212, Sheep Ridge. Called it in. Crew had it by dark.' },
+  { date: 'Jul 9', text: 'Walt short on gas again. Walked the old phone line north to the fire cache, brought back two cans. Quicker than waiting on the district.' },
   { date: 'Jul 17', text: 'Somebody down at the creek crying most of the night. Too far to go down. Called it in. Joanne says there is nobody camped at the creek.' },
   { date: 'Jul 18', text: 'Took the glasses to him at first light. SSE of the cab, 160 or so, the big rock across the water past the footbridge. He sits with his face in his hands. Didn\'t want to bother him.' },
   { date: 'Jul 24', text: 'He is there every day. He doesn\'t eat. He doesn\'t move, except when I look at him too long. Then he stops crying. I don\'t look that long anymore.' },
+  { date: 'Jul 30', text: 'Blowdown took the phone line out past the fourth insulator. Flagged a way round the young fir to the old road. Orange tape.' },
   { date: 'Aug 9', text: 'SOS over the burn, 2300. Answered it. Walked him down with the light. He went over the edge off the Cold Creek cut. I had the light right on him. I had it on the trail. I think I had it on the trail.' },
   { date: 'Aug 10', text: 'They didn\'t find the Everly boy. District wants a statement.' },
   { date: 'Aug 12', text: 'Somebody at the tree line. Facing the tower. Not the man from the creek. The boy. The yellow coat.' },
   { date: 'Aug 13', text: 'He is closer in the morning than he was at night. I keep the light on him. The generator can\'t do it all night.' },
   { date: 'Aug 15', text: 'Light on the ravine rim, flashing SOS. It answered before I finished sending. Did not walk it.' },
+  { date: 'Aug 16', text: 'Cache door standing open at first light. I\'d locked it. The cans were lined up by the door. Took the key down to the station. It\'s on the desk by the fax.' },
   { date: 'Aug 19', text: 'Took a picture of the man at the creek. Should not have used the flash.' },
   { date: 'Aug 19', text: 'Turned it over in time. I think in time.' },
   { date: 'Aug 20', text: 'It wasn\'t in time.' },
@@ -237,6 +252,7 @@ export const AUTO_LOG = {
   sent: (ch, t) => `Sent a print by ${ch}, ${t}.`,
   falseIgnored: () => 'Light on the ravine rim. Did not walk it.',
   falseWalked: () => 'Walked a light up from the ravine. It went out at the gate.',
+  cache: (t) => `Found Tillman's fire cache, ${t}. Old road 2410-110.`,
 }
 
 // ---------------------------------------------------------------- the missing poster (camp / station wall)
@@ -257,6 +273,10 @@ export const FINDS = {
   body: { title: 'The ravine', text: 'Thirty-five metres down, on the rocks at the bottom: a yellow rain shell. One boot. He is lying the wrong way round.' },
   noBody: { title: 'The ravine', text: 'Thirty-five metres down. On a ledge, half under moss: a yellow rain shell, sun-faded. It has been there a year.' },
   mailbox: { title: 'Mailbox', text: 'U.S. Mail. Outgoing goes in, flag up. Walt empties it.' },
+  // the fire cache (northWoods.js)
+  phoneWire: { title: 'The old phone line', text: 'One rusted wire, from before the radios. It comes down the tower leg, is tied off to the fence post, and runs away north into the timber, tree to tree, on green glass insulators.' },
+  roadSign: { title: 'U.S. FOREST SERVICE · ROAD 2410-110 · CLOSED', text: 'The plate is rusted through at the bolts and most of its reflector beads are gone. Face-up in the needles at its foot lies a routed board that used to hang under it: TAMARACK FIRE CACHE, with an arrow pointing east along two faint ruts. Young fir grows in them.' },
+  cacheSheet: { title: 'Fire cache · sign-out sheet', text: 'SILVER FORK R.D. · TAMARACK FIRE CACHE · EQUIPMENT OUT\n\nDATE · ITEM · QTY · SIGNED\n6-02-81 · shovel · 1 · J. Haskins\n7-19-81 · backpack pump · 1 · R. Tillman\n7-09-82 · gas · 2 cans · R. Tillman\n8-27-82 · gas · 2 cans · R. Tillman\n8-10-83 · boots, rubber · 1 pair · D.E.\n\nThe last line is in pencil, in careful capitals.' },
 }
 
 // ---------------------------------------------------------------- objectives (the logbook tracker)
@@ -292,6 +312,7 @@ export const OBJECTIVES = {
   weeper_photo: { text: 'He is coming. Photograph him.', hint: 'A picture of him is the only thing he follows. Then send it away.', urgent: true },
   weeper_send:  { text: 'He is coming. Send the picture away.', hint: 'Mailbox at the trailhead — at night it is the only way. By day, the fax.', urgent: true },
   end:          { text: 'The truck comes Thursday.', hint: 'End of the first two nights.' },
+  d2_cache:     { text: 'Find the old fire cache Walt mentioned', hint: 'Tillman walked there along the old phone line. His logbook is on the desk in the cab.', optional: true },
 }
 
 export const PROOF_GOAL = 6
@@ -325,4 +346,5 @@ export const BOOKS = [
   { title: 'Cold Deck · a paperback western, spine broken', text: 'The rider came down off the ridge at a walk, like a man who had all the time left in the world and meant to spend it slowly. Nobody in the town had seen him ride in. Nobody would see him ride out, either.\n\nSomeone has dog-eared this page. Nothing on it is marked.' },
   { title: 'Crossword Omnibus No. 4 · half done', text: 'Seven across, "Keeps watch" (7): SENTINEL is crossed out; LOOKOUT written in.\n\nTwelve down, "Won\'t be seen" (6): left blank. The square has been gone over with the pencil so many times the paper has worn through.' },
   { title: 'Osborne Fire Finder · operating card', text: '1. Level the table. The map is oriented to TRUE north.\n2. Turn the sighting ring until the smoke is behind the hair of the front sight.\n3. Read the azimuth under the rear sight. Report it with the vertical angle if you can.\n4. Two lookouts crossing their azimuths fix the fire. One lookout gives a line.\n\n(Taped over the bottom: "Do not report the rock. The rock is not a fire. —R.T.")' },
+  { title: 'Tamarack L.O. · Station Guide, 1962 (mimeographed)', text: 'WATER. The spring on the west trail. Boil it.\n\nTELEPHONE. The crank line runs from the cab down the northeast leg and north to the station fire cache, tree to tree on glass insulators. Walk it after every windstorm.\n\nFIRE CACHE. At the end of Road 2410-110, about 200 yards north of the tower. Tools, pumps, hose, reserve fuel and rations. Keep it LOCKED. The key hangs in the trailhead station.\n\n(In pencil, later: "road\'s gone at the creek. walk the wire.")' },
 ];

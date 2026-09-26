@@ -1,10 +1,10 @@
 // FALSE LIGHT — the sound board: every sound the game makes, one button each, numbered so you can say "S4 and F2 sound
 // goofy". Nothing plays until you press something. Built on the real audio engine with a stub world.
 import * as THREE from 'three';
-import { createAudio } from '../engine/audio.js?v=d3c7b76b';
-import { registerAnimalSounds, ANIMAL_SOUNDS } from '../engine/animalSounds.js?v=d3c7b76b';
-import { registerScareSounds, SCARE_SOUNDS } from '../engine/scareSounds.js?v=d3c7b76b';
-import { registerFearSounds } from '../game/fear.js?v=d3c7b76b';
+import { createAudio } from '../engine/audio.js?v=225b0c77';
+import { registerAnimalSounds, ANIMAL_SOUNDS } from '../engine/animalSounds.js?v=225b0c77';
+import { registerScareSounds, SCARE_SOUNDS } from '../engine/scareSounds.js?v=225b0c77';
+import { registerFearSounds } from '../game/fear.js?v=225b0c77';
 
 const engine = { camera: new THREE.PerspectiveCamera(), sky: { dayFactor: 1 }, world: { anchors: new Map(), layout: {} }, player: { zone: 'cab' } };
 const audio = createAudio(engine);

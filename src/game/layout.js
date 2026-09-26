@@ -1,6 +1,6 @@
 // Normalises either ENV's exports/data/layout.json or the docs/layout_plan.json fallback into one
 // shape the rules use. Pure: pass heightAt(x, z) to fill y when the source is 2-D.
-import { P, Polyline, fromBearing, dist2d, bearing } from './util.js?v=d3c7b76b'
+import { P, Polyline, fromBearing, dist2d, bearing } from './util.js?v=225b0c77'
 
 const joinRoutes = (...lists) => {
   const out = []
@@ -71,6 +71,14 @@ export function normalizeLayout(raw = {}, heightAt = null) {
     tl = [[200, 46], [191, 40], [182, 34], [174, 28], [168, 22], [176, 16]].map(([b, d]) => hy(fromBearing(tower, b, d).filter((_, i) => i !== 1)))
   }
   tl.sort((a, b) => dist2d(b, gate) - dist2d(a, gate))
+  // one lane, not a ring: from the farthest stone, keep the ones within ~25° of its bearing from the tower (so it comes
+  // straight in from one side, closer each time, instead of hopping round the compass), padding toward the gate if short
+  if (tl.length > 2) {
+    const b0 = bearing(tower, tl[0]), near = (p) => { const d = Math.abs(((bearing(tower, p) - b0 + 540) % 360) - 180); return d <= 25 }
+    const lane = tl.filter(near)
+    while (lane.length < 5) { const last = lane[lane.length - 1], d = dist2d(last, gate); if (d < 26) break; const k = Math.min(1, 7 / d); lane.push(hy([last[0] + (gate[0] - last[0]) * k, last[2] + (gate[2] - last[2]) * k])) }
+    tl = lane
+  }
   out.treeLine = tl
   out.gate = gate
 

@@ -34,7 +34,7 @@ export class Objectives {
   /** The task shown in ink at the top of the tracker. */
   current() {
     const open = this.open()
-    return open.find((o) => o.urgent) || open.find((o) => !o.optional) || open[0] || null
+    return open.find((o) => o.urgent) || open.find((o) => !o.optional) || open.filter((o) => o.optional).pop() || null   // among the optional ones, the newest: what just happened beats a standing 'keep going until dawn'
   }
   /** What comes after (shown smaller, in pencil). */
   next() {
