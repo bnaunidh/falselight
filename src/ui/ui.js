@@ -101,6 +101,13 @@ export function createUI(root = document.getElementById('ui')) {
   U.canClose = () => !!modalClose;   // a screen with a way back (Esc = back); title / death / end have none
   U.closeModal = () => { if (!U.modalOpen()) return; modal.style.display = 'none'; modal.innerHTML = ''; const c = modalClose; modalClose = null; c && c(); };
   function openModal(html, cls, onClose) { modal.className = 'fl-modal ' + (cls || ''); modal.innerHTML = html; modal.style.display = 'block'; modalClose = onClose || null; return modal; }
+  /** A short card with a couple of buttons: buttons [{ id, label }] (the first is the default); onPick(id). Esc picks the last. */
+  U.card = (title, text, buttons, onPick) => {
+    let done = false; const pick = (id) => { if (done) return; done = true; U.closeModal(); onPick(id); };
+    const m = openModal(`<div class="paper note ask"><h2>${esc(title)}</h2><p>${esc(text)}</p><div class="menu">${buttons.map((b) => `<button data-c="${esc(b.id)}">${esc(b.label)}</button>`).join('')}</div></div>`, 'center', () => pick(buttons[buttons.length - 1].id));
+    m.querySelectorAll('button[data-c]').forEach((b) => b.onclick = () => pick(b.dataset.c));
+    const first = m.querySelector('button[data-c]'); if (first) setTimeout(() => first.focus(), 30);
+  };
   /** A one-line answer (naming the dog). onDone(value) — Enter or the button; Esc keeps the default. */
   U.ask = (title, text, value, onDone) => {
     let done = false; const finish = (v) => { if (done) return; done = true; onDone(v); };

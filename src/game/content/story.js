@@ -13,6 +13,24 @@ const W = (text) => ({ who: WHO.DRIVER, text })
 const N = (text) => ({ who: '', text, note: true }) // a bracketed sound or sight
 
 // ---------------------------------------------------------------- radio + dialogue
+/** Played silent (sound off): the beats you'd only HEAR, as short bracketed captions. Keys are LINES entries that are []. */
+export const CAPTIONS = {
+  duskSob: 'someone crying, down by the creek',
+  bootsCatwalk: 'boots on the catwalk',
+  bootsTwo: 'two pairs of boots on the stairs',
+  weeperHush: 'the crying stops',
+  weeperResume: 'the crying again',
+  weeperScream: 'a scream, down at the creek',
+  weeperComing: 'something running through the timber, coming this way',
+  weeperStairs: 'bare feet on the stairs',
+  gateRattle: 'the gate at the foot of the tower rattles',
+  fuelLow: 'the generator note drops',
+  fuelEmpty: 'the generator coughs and stops',
+  knock: 'knocking',
+  followSteps: 'footsteps behind you',
+  followBreath: 'breathing, close behind you',
+};
+
 export const LINES = {
   arrive: [
     W('This is as far as the road goes. Trail starts past the sign. Tower\'s about half a mile, all of it uphill.'),
@@ -95,7 +113,13 @@ export const LINES = {
     D('About last night. The party never checked in at the lot. Deputy went through at first light. Nothing.'),
     D('Probably walked out another way. It happens. ...Walt\'s at the lot until sixteen hundred if you have anything going out. Silver Fork clear.'),
   ],
-  day2Nudge: [N('The district thinks you\'re cracking up. You need something they can\'t explain away.')],
+  day2WalkedOff: [
+    D('Tamarack, Silver Fork. Morning check.'),
+    Y('Silver Fork, Tamarack. Go ahead.'),
+    D('The lot was empty this morning. No car, no note at the trailhead. Deputy says the party must have walked out in the night on their own.'),
+    D('Nobody walks that ridge in the dark on their own. ...Walt\'s at the lot until sixteen hundred if you have anything going out. Silver Fork clear.'),
+  ],
+  day2Nudge: [N('Nobody down there will believe what\'s sitting by the creek. Not without a picture.')],
   weeperHush: [],   // (shown / heard, not narrated)
   weeperResume: [],   // (shown / heard, not narrated)
   weeperSeen: [],   // (shown / heard, not narrated)
@@ -111,6 +135,7 @@ export const LINES = {
   driverFaceDown: [W('Why\'s it upside down?'), N('He doesn\'t turn it over.'), W('Okay.')],
   driverFace: [W('...'), N('He looks at it for a long time. Then he puts it face-down on the seat and starts the truck without saying anything else.')],
   driverHello: [W('Anything going out? Mail\'s in the box, I\'ll take whatever you\'ve got.')],
+  driverHello1: [W('Go on up before it gets hot. I\'m back tomorrow with the mail.')],
   night2Start: [
     D('Tamarack, Silver Fork. Evening check.'),
     Y('Silver Fork, Tamarack. Go ahead.'),
@@ -247,6 +272,7 @@ export const AUTO_LOG = {
   glow: (b, place) => `Glow at ${b}, ${place}. Called it in.`,
   saved: () => 'SOS over the burn. Walked him out with the light. Pruitt, 17. Made the lot.',
   lost: () => 'SOS over the burn. Walked him with the light. Lost him off the trail.',
+  walkedOff: () => 'SOS over the burn. No power to answer it. The light went off into the trees by itself.',
   refuel: (t) => `Refueled the generator, ${t}.`,
   photo: (t, s) => `Photo ${t}. ${s}`,
   sent: (ch, t) => `Sent a print by ${ch}, ${t}.`,
@@ -286,7 +312,7 @@ export const FINDS = {
 // ---------------------------------------------------------------- objectives (the logbook tracker)
 export const OBJECTIVES = {
   d1_walk:      { text: 'Walk up to the tower', hint: 'Follow the trail uphill from the lot. Map: M.' },
-  d1_climb:     { text: 'Climb to the cab', hint: 'Up the stairs under the tower, out through the hatch onto the catwalk, then in by the cab door (E).' },
+  d1_climb:     { text: 'Climb to the cab', hint: 'Up the stairs under the tower, out through the hatch onto the catwalk, then into the cab through the door.' },
   d1_radio:     { text: 'Radio in to Silver Fork', hint: 'The radio is on the desk. E to call.' },
   d1_rules:     { text: 'Read Tillman\'s rules', hint: 'A card taped to the fire finder, middle of the cab.' },
   d1_fuel:      { text: 'Carry a can of fuel up to the cab', hint: 'The cans are by the shed door at the base. E picks one up; carry it up and set it down anywhere up top with G. (Rule 2)' },
@@ -314,7 +340,7 @@ export const OBJECTIVES = {
   n2_dawn:      { text: 'Keep the light until first light', hint: 'Stay in the cab.' },
   rules_more:   { text: 'Read the card again', hint: 'Tab opens the logbook. Turn to Rules: some of it is in your handwriting.', optional: true },
   weeper_photo: { text: 'He is coming. Photograph him.', hint: 'A picture of him is the only thing he follows. Then send it away.', urgent: true },
-  weeper_send:  { text: 'He is coming. Send the picture away.', hint: 'Mailbox at the trailhead — at night it is the only way. By day, the fax.', urgent: true },
+  weeper_send:  { text: 'He is coming. Send the picture away.', hint: 'The mailbox at the trailhead takes it any hour. In daylight, the fax in the cab works too.', urgent: true },
   end:          { text: 'The truck comes Thursday.', hint: 'End of the first two nights.' },
   d2_cache:     { text: 'Find the old fire cache Walt mentioned', hint: 'Tillman walked there along the old phone line. His logbook is on the desk in the cab.', optional: true },
 }

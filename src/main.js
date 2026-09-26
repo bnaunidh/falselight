@@ -3,11 +3,11 @@
 // the engine exists; the live backdrop fades in once the title's set is in (stage A); New game / Continue wait only for
 // stage B (the cab, the trailhead, the item templates: the game is built then); the rest of the forest streams in during
 // day 1, and the day-1 clock holds before dusk until the night (stage D) is in.
-import { createEngine } from './engine/engine.js?v=de9f81663ad5201e';
-import { createUI } from './ui/ui.js?v=210cdbc9f49f078c';
-import { Game } from './game/bridge.js?v=9d26555a1e1af976';
+import { createEngine } from './engine/engine.js?v=dc40a851fa8256cb';
+import { createUI } from './ui/ui.js?v=228ac3f53b466acd';
+import { Game } from './game/bridge.js?v=36bc129c8f4e034d';
 import { createSaves } from './game/saves.js?v=9b2daabbbb6263ff';
-import { UI as WORDS } from './game/content/story.js?v=cacd237e47164d96';
+import { UI as WORDS } from './game/content/story.js?v=7e5059850648baf0';
 import { ACTIONS, keyName } from './engine/input.js?v=18bc18106d93c298';
 import { registerAnimalSounds } from './engine/animalSounds.js?v=98d47a28f0d0689d';
 import { registerScareSounds } from './engine/scareSounds.js?v=03d6d9f843586f50';
@@ -19,6 +19,9 @@ const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
 const saves = createSaves();
 const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, music: 0.35, sound: false, fullscreen: true, keys: {}, fps: 60, saver: 'auto' });
+{ const D = { sens: 1, volume: 0.8, music: 0.35, fps: 60 };   // a bad save (NaN from a half-filled form) must never zero the mouse or the volume
+  for (const [k, v] of Object.entries(D)) if (!Number.isFinite(settings[k]) || settings[k] < 0) settings[k] = v;
+  if (settings.sens < 0.05) settings.sens = D.sens; }
 if (!settings.qv2) { settings.quality = 'medium'; settings.qv2 = true; saves.saveSettings(settings); }   // older saves defaulted to 'high'
 const ui = createUI();
 ui.loading(0, 'opening the lookout…');
@@ -150,6 +153,11 @@ function title() {
     if (a === 'settings') return openSettings(title);
     if (a === 'controls') return ui.screen('controls', { controls: controlsList(), onBack: () => { ui.closeModal(); title(); } });
     if (a === 'sound') { settings.sound = !settings.sound; saves.saveSettings(settings); engine.audio.setMuted(!settings.sound); engine.audio.start(); ui.closeModal(); return title(); }
+    if ((a === 'new' || a === 'continue') && !settings.sound && !settings.soundAsked && !q.has('mute')) {   // once: it's a game you play by ear
+      settings.soundAsked = true; saves.saveSettings(settings);
+      return ui.card('Played by ear', 'The crying by the creek stopping. Boots on the stairs. Something breathing behind you in the dark. FALSE LIGHT is a game you listen to: headphones, if you have them. (Silent, the sounds that matter show as [captions].)',
+        [{ id: 'on', label: 'Sound on' }, { id: 'off', label: 'Play silent' }], (c) => { if (c === 'on') { settings.sound = true; saves.saveSettings(settings); engine.audio.setMuted(false); } engine.audio.start(); begin(a); });
+    }
     begin(a);
   } });
   if (!engine.world) ui.loading(0, null, 'menu');
@@ -188,7 +196,8 @@ function openKeys(back) {
 function openSettings(back) {
   ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, music: settings.music ?? 0.35, fps: settings.fps ?? 60, saver: settings.saver || 'auto', sound: settings.sound, fullscreen: settings.fullscreen,
     onKeys: () => { ui.closeModal(); openKeys(() => openSettings(back)); }, onDone: (v) => {
-    Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, music: +(v.music ?? 0.35), fps: +(v.fps ?? 60), saver: v.saver || 'auto', sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
+    const num = (x, d) => (Number.isFinite(+x) && x !== '' && x != null ? +x : d);
+    Object.assign(settings, { quality: v.quality, sens: num(v.sens, settings.sens || 1), volume: num(v.volume, settings.volume ?? 0.8), music: num(v.music, 0.35), fps: num(v.fps, 60), saver: v.saver || 'auto', sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
     if (engine.audio.setMusicVolume) engine.audio.setMusicVolume(settings.music);
     engine.fpsCap = settings.fps; engine.saverMode = settings.saver; engine._pr = null; engine.resize();
     if (!settings.fullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});

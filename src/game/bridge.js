@@ -21,14 +21,14 @@ import { MorseKeyer, isSOS } from './morse.js?v=bfbb6739aba0c883';
 import { normalizeLayout } from './layout.js?v=38319fe0e0d604c0';
 import { createSaves } from './saves.js?v=9b2daabbbb6263ff';
 import { createRng } from './rng.js?v=d4fee6ae2c2692f2';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=ab730e7fb5384b3e';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=912afb8ed504e6bd';
 import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d92670d68201cefe';
-import * as S from './content/story.js?v=cacd237e47164d96';
+import * as S from './content/story.js?v=7e5059850648baf0';
 import { createDog, setDogName } from './dog.js?v=2010a7d88d3be31c';
 import { createWildlife } from './wildlife.js?v=21bfc0c3d12ab06c';
 import { Fear, registerFearSounds } from './fear.js?v=7313292ea4947f94';
 import { epilogue } from './content/ending.js?v=eb9d7293a71584ff';
-import { Director, sosLamp } from './director.js?v=637f2f4ad8bb0427';
+import { Director, sosLamp } from './director.js?v=bc06bb5f18fce978';
 import { createPhotoBoard } from './photoBoard.js?v=171437e75704cdce';
 import { makeTent } from './tents.js?v=8256affaddf0bab6';
 import { makeSpringFlow } from './spring.js?v=841fcca15db5856c';
@@ -333,7 +333,17 @@ export class Game {
     if (cp) { this.restore(cp); this.startPhase(cp.phase, true, cp); return; }
     this.restartPhase();
   }
+  /** Run fn after `sec` of GAME time: it waits while the game is paused or a menu is up, and a restart or a new phase drops
+   *  it (so nothing from a run you left fires into the next). For beats the story depends on; setTimeout is only for UI. */
+  later(sec, fn) { (this._later || (this._later = [])).push({ at: this.e.time.value + sec, fn, epoch: this._epoch || 0 }); }
+  tickLater() {
+    const L = this._later; if (!L || !L.length) return;
+    const now = this.e.time.value, due = L.filter((x) => now >= x.at).sort((a, b) => a.at - b.at); if (!due.length) return;
+    this._later = L.filter((x) => now < x.at);
+    for (const x of due) if (x.epoch === (this._epoch || 0)) { try { x.fn(); } catch (err) { console.warn('later', err); } }
+  }
   startPhase(phase, restored = false, cp = null) {
+    this._epoch = (this._epoch || 0) + 1; this._later = [];
     if (this.director) this.director.clear(this.dirActions); this._flick = null; this._duckUntil = 0; this._dogWarns = 0;
     this._cpHour = null; this._lastZone = null; this.quietUntil = 0; this.stairN = 0; this._glimpseT = 0;
     const e = this.e;
@@ -436,7 +446,19 @@ export class Game {
     for (const st of this.woods.stock()) this.inv.create(st.kind, { where: 'world', pos: st.pos, rotY: st.rotY, ...(st.extra || {}) });
     this.syncItems(); this.say(S.LINES.cacheOpened); setTimeout(() => this.checkpoint('cache'), 1500);
   }
-  say(lines, opts) { if (typeof lines === 'function') return; this.radio.say(lines, opts); }
+  say(lines, opts) {
+    if (typeof lines === 'function') return;
+    if (Array.isArray(lines) && !lines.length) { this.caption(lines); return; }   // a heard beat: nothing to read, unless you play silent
+    this.radio.say(lines, opts);
+  }
+  /** Sound off: what you'd have heard, bracketed and brief (one per few seconds). key: a CAPTIONS key, or a muted LINES array. */
+  caption(key) {
+    if (!this.e.audio.muted || this.state !== 'play') return;
+    if (Array.isArray(key)) { if (!this._capKeys) { this._capKeys = new Map(); for (const [k, v] of Object.entries(S.LINES)) { if (Array.isArray(v) && !v.length) this._capKeys.set(v, k); else if (v && typeof v === 'object' && !Array.isArray(v)) for (const [k2, v2] of Object.entries(v)) if (Array.isArray(v2) && !v2.length) this._capKeys.set(v2, k2); } } key = this._capKeys.get(key); }
+    const text = key && S.CAPTIONS[key]; if (!text) return;
+    const now = this.e.time.value; if (this._capAt && now - this._capAt < 6 && this._capLast === key) return;
+    this._capAt = now; this._capLast = key; this.ui.toast('[' + text + ']', 2.6);
+  }
   addLog(text, own = false) { this.log.push({ date: PHASES[this.clock.phase].short + ' ' + fmtHour(this.clock.hour), text, own }); if (own) this.ui.toast('The logbook is open to a page you don\'t remember writing.', 4); }
   once(id, fn) { if (this.fired.has(id)) return false; this.fired.add(id); fn(); return true; }
   /** Hold the score silent for `secs` (pickMood 'quiet'): a scripted scare lands on nothing but the wind. */
@@ -470,6 +492,17 @@ export class Game {
   add(id, extra) { if (!this.obj.has(id)) { this.obj.add(id, extra); this.refreshTracker(); } }
   inCab() { return this.player().zone === 'cab'; }
   /** Night falls: never start it with no way to get power (a spare can in the shed), and say so if the light is dead. */
+  /** Never stuck at a gate without fuel: the clock is waiting on a fuel job, the tank is nearly dry and no can anywhere
+   *  holds any: one more can turns up by the generator (once a phase). The cache in the woods is the real reserve. */
+  fuelRescue() {
+    const ph = this.clock.phase, cur = this.obj.current();
+    if (!this.clock.held || this.flags['fuelRescue_' + ph] || !cur || !/fuel|generator|refuel/.test(cur.id)) return;
+    if (this.fuel.tank >= 0.5 || this.inv.items.some((i) => i.kind === 'fuel' && i.fill > 0.01)) return;
+    this.flags['fuelRescue_' + ph] = true;
+    const g = this.anchor('IA_generator') || new THREE.Vector3(9.3, 0.7, 6.8);
+    this.inv.create('fuel', { pos: [g.x - 0.9, g.y, g.z + 0.9], rotY: 1.2, settle: true }); this.syncItems();
+    this.ui.toast('Walt must have left one more: a can by the generator in the shed.', 4);
+  }
   nightFuelCheck() {
     const anyFuel = this.inv.items.some((i) => i.kind === 'fuel' && i.fill > 0.01);
     if (!anyFuel && this.fuel.tank < 1.5) {
@@ -505,7 +538,7 @@ export class Game {
     if (ev === 'start') {
       if (ph === 'day1') { this.add('d1_walk'); this.say(S.LINES.arrive); this.truckVisible = true; }
       if (ph === 'night1') { this.say(S.LINES.night1Start); this.add('n1_dawn', { optional: true }); this.nightFuelCheck(); }
-      if (ph === 'day2') { this.say(f.lostN1 ? S.LINES.day2Lost : S.LINES.day2Saved); this.add('d2_camp'); this.add('d2_overlook'); this.add('d2_photo'); this.add('d2_send'); this.truckVisible = true;
+      if (ph === 'day2') { this.say(f.lostN1 ? S.LINES.day2Lost : f.walkedOffN1 && !f.savedN1 ? S.LINES.day2WalkedOff : S.LINES.day2Saved); this.add('d2_camp'); this.add('d2_overlook'); this.add('d2_photo'); this.add('d2_send'); this.truckVisible = true;
         if (!this.photos.hasCamera) this.photos.giveCamera(1);
         { const cam = this.inv.items.find((i) => i.kind === 'camera'); if (cam && cam.where === 'world') { const r = this.inv.take(cam.id); if (!r.ok) Object.assign(cam, { where: 'pack', slot: this.inv.freePack() >= 0 ? this.inv.freePack() : 4, pos: null }); } else if (!cam) this.inv.create('camera', { where: 'pack', slot: this.inv.freePack() >= 0 ? this.inv.freePack() : 4 }); }
         const full = this.inv.items.filter((i) => i.kind === 'fuel' && i.fill > 0.01).length, fa = this.anchor('IA_fuel_cans') || new THREE.Vector3(7.05, 0.4, 7.9);
@@ -545,14 +578,14 @@ export class Game {
       this.clock.addGate('hiker', 24.5, () => this.hikers.some((k) => k.rules.done && k.rules.kind === 'hiker'));
       if (this.clock.held === 'hiker' && !this.fuel.power && !this.inv.items.some((i) => i.kind === 'fuel' && i.fill > 0.01)) {
         this._darkHold = (this._darkHold || 0) + dt;
-        if (this._darkHold > 240) { const H = this.hikers.find((k) => k.rules.kind === 'hiker' && !k.rules.done); if (H) { H.rules.status = 'out'; this.say([{ who: S.WHO.NOTE, note: true, text: 'Down on the ridge the little light starts moving again, slowly, on its own. Then it\'s gone into the trees.' }]); } this._darkHold = 0; }
+        if (this._darkHold > 240) { const H = this.hikers.find((k) => k.rules.kind === 'hiker' && !k.rules.done); if (H) { H.rules.status = 'out'; this.say([{ who: S.WHO.NOTE, note: true, text: 'Down on the ridge the little light starts moving again, slowly, on its own. Then it\'s gone into the trees.' }]); this.flags.walkedOffN1 = true; for (const id of ['n1_answer', 'n1_guide']) if (this.obj.has(id)) this.obj.complete(id, null, true); this.refreshTracker(); this.addLog(S.AUTO_LOG.walkedOff()); } this._darkHold = 0; }
       } else this._darkHold = 0;
       if (h >= 21.3) this.once('glow1', () => { this.say(S.LINES.glowN1); this.add('n1_fire'); this.showFire('Hatchet Peak', true); });
       if (h >= 22.2) this.once('sos1q', () => this.quiet());   // ~15 s of nothing but the wind before the light
       if (h >= 22.4) this.once('sos1', () => { this.quiet(); this.spawnHiker('night1'); this.say(S.LINES.sosN1); this.add('n1_answer'); });
       // the gate: rule 6 says write down the time; nobody writes it for you any more (E on the logbook does)
       if (h >= 26.0) this.once('gate', () => { this.quiet(); this.e.audio.play('gate_rattle', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.2 }); this.say(S.LINES.gateRattle); f.gateRattled = true; this.add('n1_gate', { optional: true });
-        if (this.flags.gateShut) setTimeout(() => { if (this.state !== 'play') return; this.flags.gateShut = false; this.flags.gateOpenedByIt = true; this.e.audio.play('door_open', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.1 }); this.fear.spike(0.55, 'gate'); }, 2600); });
+        if (this.flags.gateShut) this.later(2.6, () => { this.flags.gateShut = false; this.flags.gateOpenedByIt = true; this.e.audio.play('door_open', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.1 }); this.fear.spike(0.55, 'gate'); }); });
       if (h >= 28.4) this.once('dawnObj', () => this.add('n1_dawn'));
     }
     if (ph === 'day2') {
@@ -584,7 +617,7 @@ export class Game {
       this.quiet();
       const pts = [[3, 30.1, 3], [3, 30.1, 0], [3, 30.1, -3], [0, 30.1, -3], [-3, 30.1, -3], [-3, 30.1, 0], [-3, 30.1, 3], [0, 30.1, 3]];
       const step = (p, v = 1.3) => { if (this.state === 'play') e.audio.play('footstep_wood', { position: V3(p), volume: v }); };
-      pts.forEach((p, i) => setTimeout(() => step(p), 600 + i * 700));
+      pts.forEach((p, i) => this.later(0.6 + i * 0.7, () => step(p)));
       if (id === 'boots_catwalk') { this.say(S.LINES.bootsCatwalk); return; }
       // Rule 11 (count the boots: there should be one pair): a second pair ~350 ms behind, the other way round, that stops
       // on the door side and stays there. Then nothing (the quiet above holds the score off for the silence after).
@@ -592,8 +625,8 @@ export class Game {
       let di = 5;   // [-3, 30.1, 0]: the door side, unless the cab has a real door anchor
       if (door) { let bd = Infinity; pts.forEach((p, i) => { const d = Math.hypot(p[0] - door.x, p[2] - door.z); if (d < bd) { bd = d; di = i; } }); }
       const back = []; for (let i = pts.length - 1; i >= di; i--) back.push(pts[i]);   // from where the first pair started, the other way, to the door
-      back.forEach((p, k) => setTimeout(() => step(p, k === back.length - 1 ? 1.5 : 1.15), 950 + k * 700));
-      setTimeout(() => { if (this.state === 'play') this.say(S.LINES.bootsTwo); }, 950 + (back.length - 1) * 700 + 300);   // said as the second pair stops
+      back.forEach((p, k) => this.later(0.95 + k * 0.7, () => step(p, k === back.length - 1 ? 1.5 : 1.15)));
+      this.later(0.95 + (back.length - 1) * 0.7 + 0.3, () => this.say(S.LINES.bootsTwo));   // said as the second pair stops
     } else if (id === 'fax_silhouette') {
       const st = this.anchor('IA_fax'); if (st) { this.otherEnt = e.entities.spawn('other_lookout', { position: st.clone().add(new THREE.Vector3(2.5, -1, 1.2)), pose: 'back_window' }); this.say(S.LINES.faxSilhouette); setTimeout(() => { this.otherEnt && this.otherEnt.remove(); this.otherEnt = null; }, 9000); }
     } else if (id === 'bed_sitter') {
@@ -742,7 +775,7 @@ export class Game {
       if (ev === 'hush') { this.say(S.LINES.weeperHush); }
       if (ev === 'resume') this.say(S.LINES.weeperResume);
       if (ev === 'lookup') { /* pose shows it */ }
-      if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); this.afterSeen(); }
+      if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); if (!this.night) { this.later(2.5, () => this.say(S.LINES.weeperDay)); } this.add('weeper_photo'); this.afterSeen(); }
       if (ev === 'scream') this.say(S.LINES.weeperScream);
       if (ev === 'coming') { this.say(S.LINES.weeperComing); this.add(this.weeperTask()); }
       if (ev === 'stairs') { this.say(S.LINES.weeperStairs); }
@@ -919,7 +952,7 @@ export class Game {
       if (can && this.fuel.tank < FUEL.capacity - 0.05) {
         const pour = Math.min(FUEL.capacity - this.fuel.tank, FUEL.can * can.fill);
         this.fuel.tank += pour; this.fuel.wasLow = this.fuel.frac < FUEL.low; can.fill = Math.max(0, can.fill - pour / FUEL.can); if (can.fill < 0.01) can.fill = 0;
-        e.audio.play('fuel_pour'); this.addLog(S.AUTO_LOG.refuel(this.hourText())); { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.night && this.obj.has(rid) && !this.obj.isDone(rid)) this.complete(rid); } this.flags.refueledOnce = true;
+        e.audio.play('fuel_pour'); this.addLog(S.AUTO_LOG.refuel(this.hourText())); { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.night && this.obj.has(rid) && !this.obj.isDone(rid)) this.complete(rid); } if (this.night) this.flags.refueledOnce = true;
         this.ui.toast(can.fill > 0 ? `Tank full. About ${Math.round(can.fill * FUEL.can * 10) / 10} L left in the can.${this.fuel.genOn ? '' : ' Now start it (E).'}` : `Tank at ${this.fuel.tank.toFixed(1)} L. The can is empty: set it down anywhere (G).${this.fuel.genOn ? '' : ' Now start it (E).'}`, 3.5);
         this.refreshHotbar();
       }
@@ -928,7 +961,7 @@ export class Game {
     }, () => true, 0.7);
     reg('mailbox', 'IA_mailbox', 'E — Mail a photograph', () => this.sendFlow('mailbox'), () => this.photos.sendable().length > 0);
     reg('fax', 'IA_fax', 'E — The fax machine (send or copy a photograph)', () => this.faxMenu(), () => this.photos.sendable().length > 0);
-    reg('truck', 'IA_truck', () => this.photos.sendable().length ? 'E — Give Walt a photograph' : 'E — Talk to Walt', () => { if (this.photos.sendable().length) this.sendFlow('driver'); else this.say(S.LINES.driverHello); }, () => this.truckVisible);
+    reg('truck', 'IA_truck', () => this.photos.sendable().length ? 'E — Give Walt a photograph' : 'E — Talk to Walt', () => { if (this.photos.sendable().length) this.sendFlow('driver'); else this.say(this.clock.phase === 'day1' ? S.LINES.driverHello1 : S.LINES.driverHello); }, () => this.truckVisible);
     reg('pack', 'IA_camp_backpack', 'E — Search the pack', () => {
       e.audio.music.sting('found');
       const f = S.FINDS.camp_backpack; this.flags.rulesTo = Math.max(this.flags.rulesTo, f.rulesTo);
@@ -939,7 +972,7 @@ export class Game {
       const f = this.flags.lostN1 ? S.FINDS.body : S.FINDS.noBody;
       if (this.flags.lostN1 && !this.bodyEnt) { const ov = V3(this.L.places.ravine_overlook); this.bodyEnt = e.entities.spawn('lost_hiker_body', { position: new THREE.Vector3(ov.x + 22, e.world.heightAt(ov.x + 22, ov.z + 4), ov.z + 4), pose: 'body' }); }
       this.player().lookAt(V3(this.L.places.ravine_overlook).add(new THREE.Vector3(24, -30, 4)), 1.2);
-      setTimeout(() => { if (this.state !== 'play' || this.ui.modalOpen()) return; this.openModal(() => this.ui.note(f.title, f.text, () => { this.closedModal(); this.complete('d2_overlook'); })); }, 1400);
+      this.later(1.4, () => { const open = () => { if (this.state !== 'play') return; if (this.ui.modalOpen()) return this.later(0.5, open); this.openModal(() => this.ui.note(f.title, f.text, () => { this.closedModal(); this.complete('d2_overlook'); })); }; open(); });
     }, () => this.clock.phase === 'day2');
     reg('rest', 'IA_bed', 'E — Lie down and rest (let the hours pass)', () => {
       if (this.clock.held) { const c = this.obj.current(); this.ui.toast('You can\'t sleep yet.' + (c ? ' ' + this.obj.text(c) + '.' : ''), 3); return; }
@@ -1197,6 +1230,12 @@ export class Game {
     if (!it || it.where !== 'hand' || this.mode !== 'walk') { this.cancelPlace(); return; }
     const P = this.player(), taken = new Set(this.inv.world.map((i) => i.hook).filter(Boolean));
     pl.spot = this.iv.findSpot(3.5, it.kind, taken, { x: P.position.x, z: P.position.z, yaw: P.yaw });
+    if (pl.spot.ok && !pl.spot.hook) {   // only somewhere you could pick it up again: not past the ravine rim or the edge of the district, not through the cab wall
+      const sp = pl.spot.pos, I = this.e.interact;
+      const ground = sp[1] > 20 || !P.allowedXZ || P.allowedXZ(sp[0], sp[2]) || Math.hypot(sp[0] - P.position.x, sp[2] - P.position.z) < 0.8;
+      const wall = !I.canReach || I.canReach({ id: 'place' }, V3(sp));
+      if (!ground || !wall) pl.spot.ok = false;
+    }
     pl.rotY = pl.spot.hook ? pl.spot.rotY : P.yaw + Math.PI + pl.rot;
     this.iv.ghost(it.kind, pl.spot.pos, pl.rotY, pl.spot.ok);
   }
@@ -1541,7 +1580,7 @@ export class Game {
     const e = this.e;
     this.ui.update(dt);
     if (this.state !== 'play') return;
-    this.phaseTime += dt;
+    this.phaseTime += dt; this.tickLater();
     // clock → sky
     const [hFrom, hTo] = this.clock.tick(dt);
     e.sky.setTime(dayHour(this.clock.hour));
@@ -1559,6 +1598,7 @@ export class Game {
     // fuel + generator + searchlight power
     const SL = e.lights.searchlight;
     const beamOn = this.mode === 'searchlight' ? this.slLit : this.slLit && !this.leftOff;
+    if ((this._frT = (this._frT || 0) - dt) <= 0) { this._frT = 3; this.fuelRescue(); }
     for (const ev of this.fuel.tick(this.clock.held ? 0 : dt, SL.on)) {
       if (ev === 'low') { this.say(S.LINES.fuelLow); if (this.night) { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true });
         // once a night the sputtering draws the bear up to the shed (~15 s out; moved near if it's far and unseen): you come
@@ -1719,7 +1759,7 @@ export class Game {
     e.post.params.co = this.co.blood;
     for (const ev of coEv) {
       if (ev === 'shiver') this.say(S.LINES.shiver);
-      if (ev === 'passout') { e.post.set({ blackout: 1 }); this.say(S.LINES.passout); setTimeout(() => { this.co.wake(); e.post.set({ blackout: 0 }); this.say(S.LINES.wakeWindow); }, 3500); }
+      if (ev === 'passout') { e.post.set({ blackout: 1 }); this.say(S.LINES.passout); this.later(3.5, () => { this.co.wake(); e.post.set({ blackout: 0 }); this.say(S.LINES.wakeWindow); }); }
       if (ev.startsWith('hallucinate:') && this.surv.fatigue.letsThrough(this.rng)) this.hallucinate(ev.split(':')[1]);   // the pill holds most of them back
     }
     // world entities
@@ -1846,9 +1886,9 @@ export class Game {
   makeFollowActions() {
     const e = this.e, at = (p) => { const v = V3(p); v.y = e.world.heightAt(v.x, v.z) + 0.05; return v; };
     return {
-      step: (p, v, wet) => { e.audio.play('footstep_dirt', { position: at(p), volume: 0.35 + 0.9 * v }); if (wet && e.audio.has('footstep_wet')) e.audio.play('footstep_wet', { position: at(p), volume: 0.4 * v }); },
-      breath: (p, v) => e.audio.play('breath_close', { position: at(p).add(new THREE.Vector3(0, 1.5, 0)), volume: v }),
-      flee: (p) => { e.audio.play('branch_snap', { position: at(p), volume: 1.2 }); for (let k = 1; k <= 5; k++) setTimeout(() => { if (this.state === 'play') e.audio.play('footstep_dirt', { position: at(p).add(new THREE.Vector3(0, 0, 0)), volume: 1 - k * 0.16 }); }, 120 + k * 170); this.fear.spike(0.6, 'woods'); this.scare({ shake: 0.25, seconds: 0.3 }); },
+      step: (p, v, wet) => { this.caption('followSteps'); e.audio.play('footstep_dirt', { position: at(p), volume: 0.35 + 0.9 * v }); if (wet && e.audio.has('footstep_wet')) e.audio.play('footstep_wet', { position: at(p), volume: 0.4 * v }); },
+      breath: (p, v) => (this.caption('followBreath'), e.audio.play('breath_close', { position: at(p).add(new THREE.Vector3(0, 1.5, 0)), volume: v })),
+      flee: (p) => { e.audio.play('branch_snap', { position: at(p), volume: 1.2 }); for (let k = 1; k <= 5; k++) this.later(0.12 + k * 0.17, () => e.audio.play('footstep_dirt', { position: at(p), volume: 1 - k * 0.16 })); this.fear.spike(0.6, 'woods'); this.scare({ shake: 0.25, seconds: 0.3 }); },
       fear: (k) => { this.followFear = k; },
       caught: () => { this.scare({ shake: 1, seconds: 0.5 }); this.die('woods'); },
       dog: (p) => { const d = this.dog; if (d && d.tamed && d.position.distanceTo(this.player().position) < 15) e.audio.play('dog_growl', { position: d.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.7 }); },
@@ -1888,7 +1928,8 @@ export class Game {
       panic: (sec) => { if (this.mode !== 'walk' || this.sitting) return; e.input.press('forward', sec * 1000); e.input.press('jog', sec * 1000); },
       passTime: (min) => { const c = this.clock, to = c.hour + min / 60, g = c.gates.filter((q) => q.at > c.hour && q.at < to && !q.open()); c.setHour(g.length ? Math.min(...g.map((q) => q.at)) : Math.min(to, c.def.end - 0.02)); },
       dropHeld: () => { const it = this.inv.activeItem; if (!it || it.kind === 'backpack') return null; if (this.placing) this.cancelPlace(); if (it.kind === 'camera' && this.camRaised) this.lowerCamera();
-        const p = P().position, a = P().yaw + Math.PI * (0.5 + Math.random()), at = this.iv.settle([p.x + Math.sin(a) * 0.5, p.y + 0.3, p.z + Math.cos(a) * 0.5]);
+        const p = P().position, a = P().yaw + Math.PI * (0.5 + Math.random()); let at = this.iv.settle([p.x + Math.sin(a) * 0.5, p.y + 0.3, p.z + Math.cos(a) * 0.5]);
+        if (!at || Math.abs(at[1] - p.y) > 0.6) at = [p.x, p.y + 0.02, p.z];   // (not over the catwalk rail or down a slope: at your feet)
         this.inv.place(it.id, at, Math.random() * 6.28, null); this.syncItems(); e.audio.sfx(it.kind === 'fuel' ? 'metal_heavy' : 'knock_one', { position: V3(at), volume: 0.35 }); return it.kind; },
       movePlayer: (pos, look) => { const W = e.world, rav = W.layout && W.layout.ravine && W.layout.ravine.polygon, onTower = pos[1] > 20 || Math.hypot(pos[0], pos[2]) < 7.5;
         if (!onTower && ((W.trail && W.trail.nearest(pos[0], pos[2]).dist > 15) || (rav && pointInPolygon(pos, rav)))) return false;

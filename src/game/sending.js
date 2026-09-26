@@ -4,7 +4,7 @@
 //   driver   — only while his truck is at the lot (Day 2, 08:00–16:00), and he looks at everything first.
 export const CHANNELS = {
   mailbox: { label: 'the mailbox', arrives: 2 },
-  fax: { label: 'the fax', from: 7, to: 19, arrives: 0 },
+  fax: { label: 'the fax', from: 7, to: 20.3, arrives: 0 },   // (daylight lasts till about 20:30)
   driver: { label: 'the driver', arrives: 1 },
 }
 

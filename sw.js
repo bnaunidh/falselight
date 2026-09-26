@@ -3,7 +3,7 @@
    downloads what changed, and a page is only ever answered with files of the build that served its index.html (no mixed
    code). A new build installs in the background and is taken at the title screen (src/engine/updates.js), never mid-run.
    Kill switch: open the game with ?nosw (unregisters this worker for that browser). */
-const BUILD = 'd202b2aa00';
+const BUILD = '2949f1c7b0';
 const PREFIX = 'falselight-';                  // the origin (bnaunidh.github.io) is shared with other sites: only touch ours
 const STORE = PREFIX + 'files-v1';
 const SCOPE = new URL(self.registration.scope);

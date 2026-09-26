@@ -218,5 +218,6 @@ export function createPlayer(engine) {
       camera.position.x += Math.cos(yaw) * bobX; camera.position.z -= Math.sin(yaw) * bobX;
     },
   };
+  api.allowedXZ = allowedXZ;   // (the game asks: could you stand there? e.g. before setting something down)
   return api;
 }
