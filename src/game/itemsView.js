@@ -3,8 +3,8 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=fa183c0e';
-import { createSurfaces } from './surfaces.js?v=fa183c0e';
+import { KINDS } from './items.js?v=42224745';
+import { createSurfaces } from './surfaces.js?v=42224745';
 
 export function createItemsView(engine) {
   const { scene, camera } = engine;

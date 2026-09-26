@@ -1,31 +1,32 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=fa183c0e';
-import { Objectives } from './objectives.js?v=fa183c0e';
-import { Radio } from './radio.js?v=fa183c0e';
-import { Fuel, FUEL } from './fuel.js?v=fa183c0e';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=fa183c0e';
-import { Survival, SURV } from './survival.js?v=fa183c0e';
-import { createItemsView } from './itemsView.js?v=fa183c0e';
-import { createChill } from './chill.js?v=fa183c0e';
-import { createPlume } from './smokePlume.js?v=fa183c0e';
-import { FireFinder, spokenBearing } from './firefinder.js?v=fa183c0e';
-import { Photos, classifyShot } from './photos.js?v=fa183c0e';
-import { CO } from './co.js?v=fa183c0e';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=fa183c0e';
-import { OtherLookout } from './otherLookout.js?v=fa183c0e';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=fa183c0e';
-import { GuidedHiker } from './hikers.js?v=fa183c0e';
-import { MorseKeyer, isSOS } from './morse.js?v=fa183c0e';
-import { normalizeLayout } from './layout.js?v=fa183c0e';
-import { createSaves } from './saves.js?v=fa183c0e';
-import { createRng } from './rng.js?v=fa183c0e';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=fa183c0e';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=fa183c0e';
-import * as S from './content/story.js?v=fa183c0e';
-import { createDog, setDogName } from './dog.js?v=fa183c0e';
-import { createWildlife } from './wildlife.js?v=fa183c0e';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=42224745';
+import { Objectives } from './objectives.js?v=42224745';
+import { Radio } from './radio.js?v=42224745';
+import { Fuel, FUEL } from './fuel.js?v=42224745';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=42224745';
+import { Survival, SURV } from './survival.js?v=42224745';
+import { createItemsView } from './itemsView.js?v=42224745';
+import { createChill } from './chill.js?v=42224745';
+import { createPlume } from './smokePlume.js?v=42224745';
+import { FireFinder, spokenBearing } from './firefinder.js?v=42224745';
+import { Photos, classifyShot } from './photos.js?v=42224745';
+import { CO } from './co.js?v=42224745';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=42224745';
+import { OtherLookout } from './otherLookout.js?v=42224745';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=42224745';
+import { GuidedHiker } from './hikers.js?v=42224745';
+import { MorseKeyer, isSOS } from './morse.js?v=42224745';
+import { normalizeLayout } from './layout.js?v=42224745';
+import { createSaves } from './saves.js?v=42224745';
+import { createRng } from './rng.js?v=42224745';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=42224745';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=42224745';
+import * as S from './content/story.js?v=42224745';
+import { createDog, setDogName } from './dog.js?v=42224745';
+import { createWildlife } from './wildlife.js?v=42224745';
+import { Fear, registerFearSounds } from './fear.js?v=42224745';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -85,6 +86,7 @@ export class Game {
     this.interactions();
     this.inputs();
     this.iv = createItemsView(e); this.itemIA = new Map(); this.health = 1; this.limp = 0;
+    this.fear = new Fear(); registerFearSounds(e.audio);   // the heart: game.fear.spike(k, why) from anything that scares you
     e.player.onLand = (drop, v) => this.onLand(drop, v);
     this.itemsReady = this.iv.load().then(() => { try { this.iv.buildSurfaces(); } catch (err) { console.warn('surfaces', err); } this.syncItems(); }).catch((err) => console.warn('items', err));
     // Juniper, the stray on the spring trail (src/game/dog.js + dogBrain.js)
@@ -150,7 +152,7 @@ export class Game {
       setTimeScale: (k) => { if (this.clock && !this.resting) this.clock.speed = k; },
       calm: (dt) => {
         const P = e.post.params;
-        if (!(this.weeper && this.weeper.triggered)) P.fear = Math.max(0, P.fear - dt * 0.25);
+        if (!(this.weeper && this.weeper.triggered)) { P.fear = Math.max(0, P.fear - dt * 0.25); this.fear.level = Math.max(0, this.fear.level - dt * 0.08); this.fear.spikes = Math.max(0, this.fear.spikes - dt * 0.08); }
         if (this.co) this.co.blood = Math.max(0, this.co.blood - dt * 0.006);
         this.limp = Math.max(0, (this.limp || 0) - dt / 40);
       },
@@ -468,7 +470,8 @@ export class Game {
       if (h >= 22.2) this.once('sos1q', () => this.quiet());   // ~15 s of nothing but the wind before the light
       if (h >= 22.4) this.once('sos1', () => { this.quiet(); this.spawnHiker('night1'); this.say(S.LINES.sosN1); this.add('n1_answer'); });
       // the gate: rule 6 says write down the time; nobody writes it for you any more (E on the logbook does)
-      if (h >= 26.0) this.once('gate', () => { this.quiet(); this.e.audio.play('gate_rattle', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.2 }); this.say(S.LINES.gateRattle); f.gateRattled = true; this.add('n1_gate', { optional: true }); });
+      if (h >= 26.0) this.once('gate', () => { this.quiet(); this.e.audio.play('gate_rattle', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.2 }); this.say(S.LINES.gateRattle); f.gateRattled = true; this.add('n1_gate', { optional: true });
+        if (this.flags.gateShut) setTimeout(() => { if (this.state !== 'play') return; this.flags.gateShut = false; this.flags.gateOpenedByIt = true; this.e.audio.play('door_open', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.1 }); this.fear.spike(0.55, 'gate'); }, 2600); });
       if (h >= 28.4) this.once('dawnObj', () => this.add('n1_dawn'));
     }
     if (ph === 'day2') {
@@ -626,7 +629,7 @@ export class Game {
       if (ev === 'hush') { this.say(S.LINES.weeperHush); }
       if (ev === 'resume') this.say(S.LINES.weeperResume);
       if (ev === 'lookup') { /* pose shows it */ }
-      if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); e.audio.play('heart', { volume: 1 }); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); }
+      if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); }
       if (ev === 'scream') this.say(S.LINES.weeperScream);
       if (ev === 'coming') { this.say(S.LINES.weeperComing); this.add(this.weeperTask()); }
       if (ev === 'stairs') { this.say(S.LINES.weeperStairs); }
@@ -673,8 +676,7 @@ export class Game {
     // fear
     const near = W.pos ? dist(W.pos, this.pos()) : 999;
     const fear = Math.max(W.triggered ? Math.max(0.25, 1 - near / 120) : 0, this.bearFear || 0);
-    e.post.params.fear += (fear - e.post.params.fear) * Math.min(1, dt * 1.5);
-    if (W.triggered || (this.bearFear || 0) > 0.5) { this.heartT = (this.heartT || 0) - dt; if (this.heartT <= 0) { e.audio.play('heart', { volume: 0.4 + fear }); this.heartT = 1.4 - fear * 0.8; } }
+    this.weeperFear = fear;   // → the fear meter (the heart, the tunnel) in updateBody
     if (W.triggered) this.add(this.weeperTask());
   }
 
@@ -749,12 +751,11 @@ export class Game {
     reg('heater', 'IA_heater', () => this.co.heater ? 'E — Turn the heater off' : 'E — Light the propane heater', () => { this.co.toggleHeater(); e.audio.play(this.co.heater ? 'heater_on' : 'heater_off', { volume: 0.7, position: this.anchor('IA_heater') }); });
     for (const k of ['n', 'e', 's', 'w']) reg('win_' + k, 'IA_window_' + k, () => this.co.windows[k] ? 'E — Close the window' : 'E — Open the window', () => {
       const open = this.co.toggleWindow(k); e.audio.play(open ? 'window_open' : 'window_close', { volume: 0.7, position: this.anchor('IA_window_' + k) });
-      this.ui.toast(open ? 'Cold air pours in. The cab smells of pine instead of propane.' : 'The window thumps shut. Quieter.', 2.5);
     }, () => true, 0.7);
     reg('searchlight', 'IA_searchlight', 'E — Take the searchlight', () => this.enterSearchlight(), () => true, 0.7);
     const fullCan = () => this.inv.inHands('fuel', (i) => i.fill > 0.01);
     const tankTxt = () => `tank ${this.fuel.tank.toFixed(1)} of ${FUEL.capacity} L`;
-    const startGen = () => { const r = this.fuel.start(); if (r.ok) { e.audio.play('generator_start'); this.complete('d1_generator'); this.ui.toast('It catches and settles into a rattle. The searchlight has power.', 3); } else this.ui.toast('The tank is dry. Bring a can of fuel (the cans are outside the shed door).', 3.5); };
+    const startGen = () => { const r = this.fuel.start(); if (r.ok) { e.audio.play('generator_start'); this.complete('d1_generator'); } else this.ui.toast('The tank is dry. Bring a can of fuel (the cans are outside the shed door).', 3.5); };
     reg('generator', 'IA_generator', () => fullCan() && this.fuel.tank < FUEL.capacity - 0.05 ? `E — Pour fuel into the generator (${tankTxt()})` : this.fuel.genOn ? `E — Stop the generator (${tankTxt()})` : `E — Start the generator (${tankTxt()})`, () => {
       const can = fullCan();
       if (can && this.fuel.tank < FUEL.capacity - 0.05) {
@@ -788,15 +789,20 @@ export class Game {
     }, () => !this.resting && !this.weeper.triggered, 0.8);
     reg('door', 'IA_cab_door', () => this.flags.doorShut ? 'E — Open the door' : 'E — Shut the door', () => {
       this.flags.doorShut = !this.flags.doorShut; e.audio.play(this.flags.doorShut ? 'door_close' : 'door_open', { volume: 0.8, position: this.anchor('IA_cab_door') });
-      if (this.flags.doorShut && this.inCab()) this.ui.toast('The latch drops. The wind noise halves.', 2);
-    }, () => true, 0.75);
+          }, () => true, 0.75);
+    // the gate in the fence at the stair foot: shut it behind you (it has a collider while it's shut). What opens it at night isn't you.
+    reg('gate', 'IA_gate', () => this.flags.gateShut ? 'E — Open the gate' : 'E — Shut the gate', () => {
+      this.flags.gateShut = !this.flags.gateShut; this.flags.gateOpenedByIt = false;
+      e.audio.play(this.flags.gateShut ? 'door_close' : 'door_open', { volume: 0.7, position: this.anchor('IA_gate') });
+      if (this.flags.gateShut) e.audio.play('gate_rattle', { position: this.anchor('IA_gate'), volume: 0.35 });
+    }, () => true, 0.9);
     reg('lamp', 'IA_lamp', () => e.lights.cabLamp.on ? 'E — Pull the chain (lamp off)' : 'E — Pull the chain (lamp on)', () => {
       e.lights.cabLamp.on = !e.lights.cabLamp.on; this.flags.lampOff = !e.lights.cabLamp.on; e.audio.play('lamp_chain', { volume: 0.6 });
     }, () => true, 0.6);
     reg('stove', 'IA_stove', () => this.coffee == null ? 'E — Light the stove and put the coffee on' : this.coffee < 1 ? 'The coffee pot is ticking on the burner…' : 'E — Pour a cup of coffee', () => {
       if (this.coffee == null && !this.potOnStove()) { this.ui.toast('Put the coffee pot on the burner first (it\'s an item: E picks it up, G sets it down).', 3.5); return; }
-      if (this.coffee == null) { this.coffee = 0; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); this.ui.toast('The burner catches with a soft whump. Give it a minute.', 2.5); }
-      else if (this.coffee >= 1) { this.coffee = null; this.surv.drink(0.3); this.surv.warmth = 1; this.co.blood = Math.max(0, this.co.blood - 0.02); this.ui.toast('Boiled coffee, grounds and all. Heat spreads through your chest.', 3); this.refreshHotbar(); }
+      if (this.coffee == null) { this.coffee = 0; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); }
+      else if (this.coffee >= 1) { this.coffee = null; this.surv.drink(0.3); this.surv.warmth = 1; this.co.blood = Math.max(0, this.co.blood - 0.02); this.refreshHotbar(); }
     }, () => this.coffee == null || this.coffee >= 1, 0.6);
     reg('books', 'IA_books', 'E — Take a book off the shelf', () => {
       const b = S.BOOKS[(this.bookI = ((this.bookI ?? -1) + 1) % S.BOOKS.length)];
@@ -1029,7 +1035,7 @@ export class Game {
   /** Light or put out a hurricane lantern (in your hand or set down: E on it picks it up, so light it in hand). */
   toggleLantern(it) {
     it.on = !it.on; this.e.audio.play('morse_click', { volume: 0.25 });
-    this.ui.toast(it.on ? 'You turn up the wick and strike a match. Warm light, and the smell of kerosene.' : 'You turn the wick down until it goes out.', 2.5); this.refreshHotbar();
+    this.refreshHotbar();
   }
   potOnStove() { const s = this.anchor('IA_stove'); return !!s && this.inv.world.some((i) => i.kind === 'pot' && Math.hypot(i.pos[0] - s.x, i.pos[2] - s.z) < 0.4 && Math.abs(i.pos[1] - (s.y - 0.05)) < 0.35); }
   toggleFlashlight() {
@@ -1084,13 +1090,14 @@ export class Game {
     if (this.state !== 'play') return;
     if (shake > (this._shake ? this._shake.amp * (1 - this._shake.t / this._shake.dur) : 0)) this._shake = { amp: Math.min(1, shake), t: 0, dur: Math.max(0.1, seconds) };
     if (fov) this.fovPunch = Math.min(this.fovPunch || 0, fov);
-    if (heartbeat && this.e.time.value - (this._beatAt ?? -9) > 1.5) { this._beatAt = this.e.time.value; this.e.audio.play('heart', { volume: 1 }); }
+    this.fear.spike(Math.max(shake * 0.9, heartbeat ? 0.6 : 0, Math.min(1, -fov / 12)), 'scare');
   }
   /** Something hurt you that isn't a fall (the bear's swat). One blow never kills from above half health. */
   hurt(amount, why = 'generic') {
     if (this.state !== 'play') return;
     const e = this.e, floor = this.health > 0.5 ? 0.05 : 0;
     this.health = Math.max(floor, this.health - amount); this.hurtAt = e.time.value; this.limp = Math.min(1, this.limp + amount);
+    this.fear.spike(Math.min(1, 0.5 + amount), 'hurt');
     e.audio.sfx('cloth', { volume: 0.6 }); e.audio.sfx('knock_one', { volume: 0.5 });
     if (this.health <= 0.001) this.die(why);
   }
@@ -1103,9 +1110,8 @@ export class Game {
     if (drop >= 8) { this.health = 0; this.die('fall'); return; }
     const dmg = Math.min(0.95, Math.pow((drop - 1.5) / 5.5, 1.3));
     this.health = Math.max(0, this.health - dmg); this.hurtAt = e.time.value; this.limp = Math.min(1, this.limp + dmg * 1.5);
-    e.post.params.fear = Math.min(1, 0.45 + dmg);
+    this.fear.spike(Math.min(1, 0.45 + dmg), 'fall');
     if (this.health <= 0.001) { this.die('fall'); return; }
-    this.ui.toast(dmg > 0.4 ? 'You hit the ground hard. Something in your ankle gives.' : 'You land badly. That will bruise.', 3);
     setTimeout(() => this.checkpoint('fell'), 1500);
   }
   /** What Esc means right now, short of pausing. Returns true if it did something. */
@@ -1221,8 +1227,9 @@ export class Game {
       this._door.quaternion.setFromAxisAngle(this._yAxis || (this._yAxis = new THREE.Vector3(0, 1, 0)), THREE.MathUtils.degToRad(178) * k);
     }
     if (this._doorCol) this._doorCol.enabled = !!this.flags.doorShut && this._doorA < 0.15;
+    this.updateGate(dt);
     // coffee on the stove
-    if (this.coffee != null && this.coffee < 1) { this.coffee = Math.min(1, this.coffee + dt / 25); if (this.coffee >= 1) this.ui.toast('The coffee pot rattles its lid.', 2.5); }
+    if (this.coffee != null && this.coffee < 1) { this.coffee = Math.min(1, this.coffee + dt / 25); if (this.coffee >= 1) e.audio.play('knock_one', { position: this.anchor('IA_stove') || undefined, volume: 0.15 }); }
     // the camera on the south shelf appears at dusk on day 1 (a real item: E picks it up)
     if (this.flags.cameraOut && !this.photos.hasCamera && this.iv.templates.camera && !this.inv.items.some((i) => i.kind === 'camera')) {
       const a = this.anchor('IA_camera_shelf') || new THREE.Vector3(-0.62, 30.9, 1.865);
@@ -1233,7 +1240,7 @@ export class Game {
     for (const ev of this.photos.tick(dt)) {
       if (ev.kind === 'seen') {
         const p = this.photos.get(ev.id);
-        if (p && p.forbidden) { e.audio.music.sting('seen'); this.weeper.trigger('print', { night: this.night, carrier: p.id }); this.say(S.LINES.weeperSeen); e.audio.play('heart', { volume: 1 }); this.add('weeper_send'); }
+        if (p && p.forbidden) { e.audio.music.sting('seen'); this.weeper.trigger('print', { night: this.night, carrier: p.id }); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); this.add('weeper_send'); }
       }
     }
     if (this.holding) { const p = this.photos.get(this.holding); const v = this.photos.look(this.holding); this.ui.print(p && v ? { ...v, dataURL: p.dataURL } : null); } else this.ui.print(null);
@@ -1245,14 +1252,13 @@ export class Game {
       nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false })) {
       if (ev === 'thirsty') this.ui.toast('Your mouth is dry. Drink something: the canteen, or the spring.', 4);
       if (ev === 'hungry') this.ui.toast('Your stomach is knotted. Eat something: there are tins on the shelf in the cab.', 4);
-      if (ev === 'freezing') this.ui.toast('You\'re shaking with cold. Get inside and light the heater.', 4);
     }
     // injuries mend slowly on their own, quickly asleep; a limp fades
     if (this.health < 1 && e.time.value - (this.hurtAt ?? -99) > 8) this.health = Math.min(1, this.health + dt * (this.resting ? 1 / 25 : this.sitting ? 1 / 90 : 1 / 240));
     this.limp = Math.max(0, this.limp - dt / 45);
     Pl.speedMul = this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1);
     this.survT = (this.survT || 0) - dt;
-    if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph, health: this.health }); this.refreshHotbar(); }
+    if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph, health: this.health, bpm: this.fear.bpm, sleep: this.fatigueHUD ? this.fatigueHUD() : null }); this.refreshHotbar(); }
     // items: the thing in your hand, the placing ghost, wheel = switch hands (or turn what you're placing)
     const wh = e.input.consumeWheel();
     if (wh && this.mode === 'walk' && !this.ui.modalOpen()) { if (this.placing) this.placing.rot += wh * Math.PI / 12; else this.selectSlot((this.inv.active + (wh > 0 ? 1 : HAND_SLOTS - 1)) % HAND_SLOTS); }
@@ -1269,6 +1275,7 @@ export class Game {
       for (const w of this.lostWatchers || []) if (w.pos) d = Math.max(d, Math.max(0, 1 - dist(w.pos, me) / 90) * 0.8);
       d = Math.max(d, (this.bearFear || 0) * 0.6);
       e.lights.dread += (d - e.lights.dread) * Math.min(1, dt * 1.5); }
+    this.updateBody(dt, t);
     this.updateLanterns(dt, t);
     const coEv = this.co.tick(dt, { inCab: this.inCab(), night: this.night, rng: this.rng, coldTarget: this.surv.coldTarget });
     e.post.params.co = this.co.blood;
@@ -1327,10 +1334,54 @@ export class Game {
       sh.t += dt; const k = sh.amp * Math.max(0, 1 - sh.t / sh.dur); if (k <= 0.001) this._shake = null;
       else { const c = e.camera, w = t * 38; c.position.x += Math.sin(w * 1.3) * 0.045 * k; c.position.y += Math.sin(w * 1.7 + 1) * 0.035 * k; c.rotation.z += Math.sin(w * 0.9 + 2) * 0.03 * k; }
     }
+    if (this.fear.shake > 0.01 && this.mode === 'walk') {   // scared hands: a fine tremor in the view (and the torch beam)
+      const c = e.camera, k = this.fear.shake * 0.0035;
+      c.rotation.x += (Math.sin(t * 23.1) + Math.sin(t * 37.7 + 1.3) * 0.6) * k; c.rotation.y += (Math.sin(t * 19.3 + 2.1) + Math.sin(t * 41.9) * 0.5) * k;
+    }
+  }
+  /** The fence gate swings between the way the model stands it (open, swung out) and shut across the gap. */
+  updateGate(dt) {
+    const e = this.e;
+    if (this._gate === undefined) {
+      const g = this._gate = e.world.objects.get('FL_gate') || null;
+      if (g) {
+        this._gateOpenQ = g.quaternion.clone(); this._gateShutQ = new THREE.Quaternion(); this._gateA = this.flags.gateShut ? 0 : 1;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.7, 0.16), new THREE.MeshBasicMaterial({ visible: false }));
+        m.name = 'COL_wall_gate'; m.position.set(g.position.x + 0.67, g.position.y + 0.8, g.position.z); m.visible = false;   // across the gap (the hinge is at its west post)
+        g.parent.add(m); m.updateWorldMatrix(true, false);
+        this._gateCol = { name: 'COL_wall_gate', type: 'wall', mesh: m, enabled: false }; e.world.colliders.push(this._gateCol);
+        const P = this.player(); if (P.rebuildColliders) P.rebuildColliders();
+      }
+    }
+    if (!this._gate) return;
+    const tgt = this.flags.gateShut ? 0 : 1, was = this._gateA;
+    this._gateA += Math.sign(tgt - this._gateA) * Math.min(Math.abs(tgt - this._gateA), dt * (this.flags.gateOpenedByIt ? 0.25 : 1.2));   // slow when it's not you
+    if (was !== this._gateA) { const k = this._gateA * this._gateA * (3 - 2 * this._gateA); this._gate.quaternion.slerpQuaternions(this._gateShutQ, this._gateOpenQ, k); }
+    const col = !!this.flags.gateShut && this._gateA < 0.15;
+    if (this._gateCol.enabled !== col) this._gateCol.enabled = col;
+  }
+  /** Fear → the heart (heard + seen), and hot / cold / hurt → the screen. Every frame. */
+  updateBody(dt, t) {
+    const e = this.e, P = e.post.params, Pl = this.player(), F = this.fear;
+    const lit = e.lights.flashlight.on || this.inv.items.some((i) => i.kind === 'lantern' && i.on && i.where === 'hand');
+    const moving = e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right');
+    const threat = Math.max(e.lights.dread * 0.95, this.weeperFear || 0, (this.bearFear || 0), this.co ? Math.max(0, this.co.blood - 0.3) * 0.8 : 0);
+    const evs = F.update(dt, { threat, dark: this.night && !this.inCab() && !lit ? 1 : 0, exertion: moving && e.input.isDown('jog') && Pl.stamina > 0.05 ? 1 : 0,
+      health: this.health, calm: !!(this.sitting || this.resting) });
+    if (this.state === 'play') for (const ev of evs) e.audio.play(ev.kind === 'lub' ? 'heart_lub' : ev.kind === 'dub' ? 'heart_dub' : ev.kind, { volume: ev.v });
+    P.fear += (Math.max(F.level * 0.8, this.weeperFear || 0) - P.fear) * Math.min(1, dt * 2);
+    P.pulse = F.pulse;
+    // the body's temperature follows the air slowly (co.cold is the shiver model); heat builds the same way
+    const feels = this.surv.feelsF, heatT = Math.max(0, Math.min(1, (feels - 78) / 14));
+    this.bodyHeat = (this.bodyHeat || 0) + (heatT - (this.bodyHeat || 0)) * Math.min(1, dt * 0.03);
+    const cold = Math.max(0, Math.min(1, (this.co.cold - 0.35) / 0.6)), heat = Math.max(0, Math.min(1, (this.bodyHeat - 0.1) / 0.8));
+    const since = t - (this.hurtAt ?? -99), hurt = Math.min(1, Math.max(0, (0.55 - this.health) / 0.45) + 0.55 * Math.exp(-since * 1.6));
+    P.cold = cold * 0.85; P.heat = heat * 0.8; P.hurt = hurt;
+    this.ui.body({ cold, heat, hurt, pulse: F.pulse });
   }
   hallucinate(kind) {
     const e = this.e;
-    this.say(S.LINES.hallu[kind] || []);
+    this.say(S.LINES.hallu[kind] || []); this.fear.spike(kind === 'figure' ? 0.7 : 0.45, 'hallucination');
     if (kind === 'figure') { const h = e.entities.spawn('other_lookout', { position: new THREE.Vector3(2.6, 30.0, 1.2), facing: new THREE.Vector3(0, 30, 0), pose: 'back_window' }); setTimeout(() => h.remove(), 1600); }
     if (kind === 'knock') e.audio.play('knock', { position: this.anchor('IA_cab_door') || this.anchor('IA_trapdoor') || new THREE.Vector3(-1.5, 30, 0), volume: 1.2 });
   }

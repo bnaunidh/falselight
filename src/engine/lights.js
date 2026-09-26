@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=fa183c0e';
+import { clamp, damp } from './util.js?v=42224745';
 
 // The searchlight beam: light scattered by haze inside the cone. Each pixel the cone covers gets ONE fragment (front faces
 // from outside, back faces from inside) and works out analytically how much beam its view ray crosses: the ray's closest

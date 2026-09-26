@@ -47,26 +47,26 @@ export const LINES = {
     Y(`Silver Fork, Tamarack. I have it at ${spoken}.`),
     D('Tamarack, say again? That doesn\'t match what the pilot has. Check your sights and try me again.'),
   ],
-  duskSob: [N('Somebody is crying. Far down the hill, by the creek.')],
+  duskSob: [],   // (shown / heard, not narrated)
   cameraFound: [N('A camera, on the shelf by the south window. A note under it in pencil: "10 shots. Make them count. — R.T."')],
-  bootsCatwalk: [N('Boots on the catwalk. Slow. All the way around the cab, and then nothing.')],
-  bootsTwo: [N('Boots on the catwalk. Two pairs. One of them stops outside the door.')],   // night 2: rule 11 pays off
-  glimpse: [N('Far below, across the creek, someone is sitting on a rock with his face in his hands.')],   // day 1, from the catwalk
+  bootsCatwalk: [],   // (shown / heard, not narrated)
+  bootsTwo: [],   // (shown / heard, not narrated)   // night 2: rule 11 pays off
+  glimpse: [],   // (shown / heard, not narrated)   // day 1, from the catwalk
   night1Start: [
     D('Tamarack, Silver Fork. Evening check.'),
     Y('Silver Fork, Tamarack. Go ahead.'),
     D('Lightning went through the north end this afternoon. Keep an eye on Hatchet Peak tonight. Silver Fork clear.'),
   ],
-  glowN1: [N('A glow, low on the horizon. Northwest. It wasn\'t there a minute ago.')],
+  glowN1: [],   // (shown / heard, not narrated)
   fireOk: (spoken, place) => [
     Y(`Silver Fork, Tamarack. Glow at ${spoken}. ${place}, near the top.`),
     D(`Copy, ${spoken}. That\'s our strike. Thanks, Tamarack. Silver Fork clear.`),
   ],
   fireBad: (spoken) => [Y(`Silver Fork, Tamarack. Glow at ${spoken}.`), D('Tamarack, we don\'t have anything on that line. Check it again.')],
-  sosN1: [N('A small light, far out to the west, over the burn. It flashes. Three short. Three long. Three short.')],
-  answeredN1: [N('The light answers. Long, long, long. Long, short, long.'), D('Tamarack, Silver Fork. You have a light out there?'), Y('Silver Fork, Tamarack. Somebody on the burn. I\'m walking them out with the searchlight.'), D('Copy. I\'ll have the deputy meet them at the lot. Keep them on the trail.')],
-  hikerStopped: [N('The light has stopped moving.')],
-  hikerStraying: [N('The light is leaving the trail. It follows the beam.')],
+  sosN1: [],   // (shown / heard, not narrated)
+  answeredN1: [D('Tamarack, Silver Fork. You have a light out there?'), Y('Silver Fork, Tamarack. Somebody on the burn. I\'m walking them out with the searchlight.'), D('Copy. I\'ll have the deputy meet them at the lot. Keep them on the trail.')],
+  hikerStopped: [],   // (shown / heard, not narrated)
+  hikerStraying: [],   // (shown / heard, not narrated)
   savedN1: [
     D('Tamarack, Silver Fork.'),
     Y('Go ahead.'),
@@ -79,10 +79,10 @@ export const LINES = {
     Y('...Silver Fork, Tamarack. I lost them. Off the trail, near the — I lost them.'),
     D('...Copy. We\'ll look at first light. Silver Fork clear.'),
   ],
-  fuelLow: [N('The searchlight dims. The generator\'s note drops, far below.')],
-  fuelEmpty: [N('The generator coughs and stops. The beam goes out.')],
-  gateRattle: [N('Down at the foot of the stairs, the gate rattles. Once. Then again, harder.')],
-  dawn: [N('Grey in the east. The night is over.')],
+  fuelLow: [],   // (shown / heard, not narrated)
+  fuelEmpty: [],   // (shown / heard, not narrated)
+  gateRattle: [],   // (shown / heard, not narrated)
+  dawn: [],   // (shown / heard, not narrated)
   day2Saved: [
     D('Tamarack, Silver Fork. Morning check.'),
     Y('Silver Fork, Tamarack. Go ahead.'),
@@ -96,13 +96,13 @@ export const LINES = {
     D('Probably walked out another way. It happens. ...Walt\'s at the lot until sixteen hundred if you have anything going out. Silver Fork clear.'),
   ],
   day2Nudge: [N('The district thinks you\'re cracking up. You need something they can\'t explain away.')],
-  weeperHush: [N('The crying stops.')],
-  weeperResume: [N('The crying starts again.')],
-  weeperSeen: [N('He is looking at you.')],
-  weeperScream: [N('The crying becomes screaming. It doesn\'t stop for breath.')],
+  weeperHush: [],   // (shown / heard, not narrated)
+  weeperResume: [],   // (shown / heard, not narrated)
+  weeperSeen: [],   // (shown / heard, not narrated)
+  weeperScream: [],   // (shown / heard, not narrated)
   weeperDay: [N('He stands up in the creek. He faces the tower. He is waiting for dark.')],
-  weeperComing: [N('The screaming is moving. Up the hill. Toward the tower.')],
-  weeperStairs: [N('Something is on the stairs. Fast. Bare feet on the treads.')],
+  weeperComing: [],   // (shown / heard, not narrated)
+  weeperStairs: [],   // (shown / heard, not narrated)
   weeperGone: [N('The screaming stops all at once. Somewhere, somebody else is looking at the picture.')],
   faxSent: [N('The fax takes it. The paper comes back out warm.')],
   faxSilhouette: [N('Someone is standing at the station\'s back window. Their back is to you. The lamp inside is off.')],
@@ -116,20 +116,20 @@ export const LINES = {
     Y('Silver Fork, Tamarack. Go ahead.'),
     D('Dry lightning forecast after twenty-two hundred, southwest. Sheep Ridge is where it usually starts. Silver Fork clear.'),
   ],
-  treeLine: [N('Someone is standing at the edge of the trees below. Facing the tower.')],
-  glowN2: [N('A glow to the southwest. Sheep Ridge.')],
-  falseSOS: [N('A light on the rim of the ravine. Not on any trail. It flashes SOS — very evenly.')],
-  falseAnswered: [N('It answers before you\'ve finished.')],
-  falseOut: [N('The light goes out all at once. Like a switch.')],
-  falseArrived: [N('The light reaches the gate at the bottom of the stairs, and goes out. Nobody comes up.')],
-  bedSitter: [N('Someone is sitting on the edge of your bed, with his back to you.')],
+  treeLine: [],   // (shown / heard, not narrated)
+  glowN2: [],   // (shown / heard, not narrated)
+  falseSOS: [],   // (shown / heard, not narrated)
+  falseAnswered: [],   // (shown / heard, not narrated)
+  falseOut: [],   // (shown / heard, not narrated)
+  falseArrived: [],   // (shown / heard, not narrated)
+  bedSitter: [],   // (shown / heard, not narrated)
   hallu: {
-    figure: [N('Someone on the catwalk, outside the glass.')],
-    knock: [N('Three knocks on the door.')],
+    figure: [],
+    knock: [],
     text: [N('The logbook is open. You don\'t remember opening it.')],
     voice: [D('Tamarack. ...Tamarack. Come down.')],
   },
-  shiver: [N('Your hands are stiff with cold.')],
+  shiver: [],   // (shown / heard, not narrated)
   passout: [N('You don\'t remember sitting down.')],
   wakeWindow: [N('The north window is open. You didn\'t open it.')],
   ownEntry: [N('The logbook is open to a page you don\'t remember writing.')],

@@ -1,7 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=fa183c0e';
+import { drawMap } from './mapdraw.js?v=42224745';
+import { createOverlays } from './overlays.js?v=42224745';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -19,6 +20,7 @@ export function createUI(root = document.getElementById('ui')) {
   const modal = $('div', 'fl-modal', root);
   const binoc = $('div', 'fl-binoc', root);
   const hot = $('div', 'fl-hot', root), surv = $('div', 'fl-surv', root);
+  const body = createOverlays(root);
   let subTimer = 0, toastTimer = 0;
 
   let rk = (t) => t; U.setRekey = (f) => { rk = f || ((t) => t); };   // show the player's own (rebound) keys
@@ -232,6 +234,7 @@ export function createUI(root = document.getElementById('ui')) {
     fire: '<svg viewBox="0 0 24 24"><path d="M12 2.5c.8 3.6-2.6 5-2.6 8.4 0 1.6 1.2 2.8 2.6 2.8s2.6-1.2 2.6-2.7c0-.9-.3-1.7-.8-2.5 2.8 1.6 4.7 4.3 4.7 7.2A6.5 6.5 0 0 1 12 22a6.5 6.5 0 0 1-6.5-6.3C5.5 9.8 12 8.5 12 2.5z"/></svg>',
     snow: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9.5 3.8 12 6l2.5-2.2M9.5 20.2 12 18l2.5 2.2M4 10.3l3.3-.3-.9-3.2M20 13.7l-3.3.3.9 3.2M4 13.7l3.3.3-.9 3.2M20 10.3l-3.3-.3.9-3.2"/></svg>',
     therm: '<svg viewBox="0 0 24 24"><path d="M10 4a2 2 0 1 1 4 0v9.3a4.5 4.5 0 1 1-4 0zm1.2 3v7.2a2.9 2.9 0 1 0 1.6 0V7z"/></svg>',
+    moon: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>',
     heart: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.8a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10.2-7.5 10.2z"/></svg>',
     drop: '<svg viewBox="0 0 24 24"><path d="M12 2.5C9 7 5.5 10.4 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10.4 15 7 12 2.5z"/></svg>',
     food: '<svg viewBox="0 0 24 24"><path d="M6 6.5C6 5.1 8.7 4 12 4s6 1.1 6 2.5v11c0 1.4-2.7 2.5-6 2.5s-6-1.1-6-2.5zm1.6 2.6v6.6c1 .6 2.6 1 4.4 1s3.4-.4 4.4-1V9.1c-1.1.5-2.7.8-4.4.8s-3.3-.3-4.4-.8zM12 5.6c-2.4 0-4.2.5-4.2.9s1.8.9 4.2.9 4.2-.5 4.2-.9-1.8-.9-4.2-.9z"/></svg>',
@@ -242,18 +245,45 @@ export function createUI(root = document.getElementById('ui')) {
     hot.style.display = 'flex'; if (hot._k === key) return; hot._k = key;
     hot.innerHTML = `<div class="lbl">${esc(o.label || '')}</div><div class="row">` + o.slots.map((s, i) => `<div class="slot${i === o.active ? ' on' : ''}${s ? '' : ' empty'}"><b>${i + 1}</b>${s ? (s.icon ? `<img src="${s.icon}" alt="">` : `<span>${esc(s.short)}</span>`) : ''}${s && s.fill != null ? `<i><u style="width:${Math.round(s.fill * 100)}%"></u></i>` : ''}</div>`).join('') + `</div><div class="pk">${esc(o.pack || '')}</div>`;
   };
+  // the body, minimal: the temperature you feel, then small rings (water, food, health, sleep) that only speak up when
+  // they need to; the heart ring beats at your real heart rate. Built once; updates only touch attributes.
+  const RING_C = 2 * Math.PI * 15.5;
+  let sv = null;
+  const buildSurv = () => {
+    const ring = (cls, icon, label) => `<div class="ring ${cls}" title="${label}"><svg viewBox="0 0 36 36"><circle class="tr" cx="18" cy="18" r="15.5"/><circle class="ar" cx="18" cy="18" r="15.5" stroke-dasharray="${RING_C} ${RING_C}"/></svg><span class="ic">${icon}</span></div>`;
+    surv.innerHTML = `<div class="t"><span class="ti"></span><b></b><small></small></div><div class="rings">${ring('w', ICON.drop, 'Water')}${ring('f', ICON.food, 'Food')}${ring('h', ICON.heart, 'Health')}${ring('s', ICON.moon, 'Sleep')}</div>`;
+    const q = (c) => surv.querySelector(c);
+    sv = { t: q('.t'), ti: q('.ti'), b: q('.t b'), sm: q('.t small'), rings: {}, last: {}, calmAt: 0 };
+    for (const k of ['w', 'f', 'h', 's']) sv.rings[k] = { el: q('.ring.' + k), arc: q('.ring.' + k + ' .ar'), v: -1 };
+  };
   U.survival = (o) => {
     if (!o) { surv.style.display = 'none'; return; }
-    surv.style.display = 'block';
+    surv.style.display = 'block'; if (!sv) buildSurv();
     const f = Math.round(o.feels), a = Math.round(o.air);
-    const sub = [Math.abs(a - f) >= 2 ? `air ${a}°` : '', o.mph >= 3 ? `wind ${Math.round(o.mph)} mph` : '', o.wet > 0.15 ? 'wet' : ''].filter(Boolean).join(' · ');
+    const sub = [Math.abs(a - f) >= 3 ? `air ${a}°` : '', o.mph >= 6 ? `${Math.round(o.mph)} mph` : '', o.wet > 0.15 ? 'wet' : ''].filter(Boolean).join(' · ');
+    const tcls = o.feels < 36 ? 'freeze' : o.icon === 'snow' ? 'cold' : o.feels > 80 ? 'hot' : o.icon === 'fire' ? 'warm' : 'ok';
+    if (sv.last.tcls !== tcls) { sv.t.className = 't ' + tcls; sv.ti.innerHTML = tcls === 'freeze' || tcls === 'cold' ? ICON.snow : tcls === 'hot' || tcls === 'warm' ? ICON.fire : ICON.therm; sv.last.tcls = tcls; }
+    if (sv.last.f !== f) { sv.b.textContent = f + '°'; sv.last.f = f; }
+    if (sv.last.sub !== sub) { sv.sm.textContent = sub; sv.last.sub = sub; }
     const hp = o.health == null ? 1 : o.health;
-    const key = [o.icon, f, sub, Math.round(o.water * 40), Math.round(o.food * 40), Math.round(hp * 40)].join('|'); if (surv._k === key) return; surv._k = key;
-    const lvl = (v) => (v < 0.18 ? ' low' : '');
-    surv.innerHTML = `<div class="t ${o.icon}">${ICON[o.icon]}<span>${f}°F</span>${sub ? `<small>${esc(sub)}</small>` : ''}</div>
-      <div class="m w${lvl(o.water)}">${ICON.drop}<i><u style="width:${Math.round(o.water * 100)}%"></u></i></div>
-      <div class="m f${lvl(o.food)}">${ICON.food}<i><u style="width:${Math.round(o.food * 100)}%"></u></i></div>` +
-      (hp < 0.99 ? `<div class="m h${hp < 0.3 ? ' low' : ''}">${ICON.heart}<i><u style="width:${Math.round(hp * 100)}%"></u></i></div>` : '');
+    const vals = { w: o.water, f: o.food, h: hp, s: o.sleep == null ? null : o.sleep };
+    let loud = tcls !== 'ok';
+    for (const k in vals) {
+      const R = sv.rings[k], v = vals[k];
+      if (v == null) { R.el.style.display = 'none'; continue; }
+      R.el.style.display = '';
+      const q = Math.round(v * 60) / 60;
+      if (q !== R.v) { if (R.v >= 0 && Math.abs(q - R.v) > 0.02) loud = true; R.v = q; R.arc.setAttribute('stroke-dasharray', `${(q * RING_C).toFixed(1)} ${RING_C.toFixed(1)}`); }
+      const low = v < (k === 'h' ? 0.35 : 0.2); R.el.classList.toggle('low', low); if (low) loud = true;
+      R.el.classList.toggle('full', v > 0.97);
+    }
+    // the heart ring beats with you (the CSS animation's period = one beat); only re-set when the rate moves
+    const bpm = Math.round((o.bpm || 64) / 4) * 4;
+    if (bpm !== sv.last.bpm) { sv.rings.h.el.style.setProperty('--beat', (60 / bpm).toFixed(3) + 's'); sv.last.bpm = bpm; }
+    sv.rings.h.el.classList.toggle('racing', (o.bpm || 64) > 100); if ((o.bpm || 64) > 100) loud = true;
+    // quiet when everything's fine: it fades back after a few seconds of nothing changing
+    const now = performance.now(); if (loud) sv.calmAt = now + 5000;
+    surv.classList.toggle('calm', now > sv.calmAt);
   };
   U.pack = (d, onPick, onClose) => {
     const cell = (s, w, i, on) => `<button class="cell${s ? '' : ' empty'}${on ? ' on' : ''}" data-w="${w}" data-i="${i}">${w === 'hand' ? `<b>${i + 1}</b>` : ''}${s ? (s.icon ? `<img src="${s.icon}" alt="">` : '') + `<span>${esc(s.label)}</span>` : '<span>empty</span>'}</button>`;
@@ -265,5 +295,6 @@ export function createUI(root = document.getElementById('ui')) {
     m.querySelectorAll('button.cell').forEach((b) => b.onclick = () => onPick(b.dataset.w, +b.dataset.i));
   };
   U.hideHUD = (b) => { root.classList.toggle('nohud', !!b); };
+  U.body = (o) => body.update(o); U.bodyClear = () => body.clear(); U.bodyState = () => body.state;
   return U;
 }
