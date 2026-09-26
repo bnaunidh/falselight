@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated": "2026-09-25T12:08:40",
+ "generated": "2026-09-25T18:41:57",
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
@@ -11,6 +11,11 @@
    "path": "models/char_dog.glb",
    "bytes": 1551456,
    "mtime": 1790363265
+  },
+  "char_weeper": {
+   "path": "models/char_weeper.glb",
+   "bytes": 6400836,
+   "mtime": 1790377402
   },
   "prop_backpack": {
    "path": "models/prop_backpack.glb",

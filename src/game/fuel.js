@@ -1,6 +1,6 @@
 // Generator + fuel. Pure. The searchlight has power only while the generator runs with fuel in the
 // tank. There is never enough for a whole night: a full tank lasts ~5 real minutes with the beam on.
-import { clamp } from './util.js?v=760ffcd2'
+import { clamp } from './util.js?v=8547b0d4'
 
 export const FUEL = {
   capacity: 5.0,        // litres in the generator tank
