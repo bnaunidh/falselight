@@ -1,38 +1,38 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=687d625a';
-import { Objectives } from './objectives.js?v=687d625a';
-import { Radio } from './radio.js?v=687d625a';
-import { Fuel, FUEL } from './fuel.js?v=687d625a';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=687d625a';
-import { Survival, SURV } from './survival.js?v=687d625a';
-import { createItemsView } from './itemsView.js?v=687d625a';
-import { createChill } from './chill.js?v=687d625a';
-import { createPlume } from './smokePlume.js?v=687d625a';
-import { FireFinder, spokenBearing } from './firefinder.js?v=687d625a';
-import { Photos, classifyShot } from './photos.js?v=687d625a';
-import { CO } from './co.js?v=687d625a';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=687d625a';
-import { OtherLookout } from './otherLookout.js?v=687d625a';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=687d625a';
-import { GuidedHiker } from './hikers.js?v=687d625a';
-import { MorseKeyer, isSOS } from './morse.js?v=687d625a';
-import { normalizeLayout } from './layout.js?v=687d625a';
-import { createSaves } from './saves.js?v=687d625a';
-import { createRng } from './rng.js?v=687d625a';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=687d625a';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=687d625a';
-import * as S from './content/story.js?v=687d625a';
-import { createDog, setDogName } from './dog.js?v=687d625a';
-import { createWildlife } from './wildlife.js?v=687d625a';
-import { Fear, registerFearSounds } from './fear.js?v=687d625a';
-import { epilogue } from './content/ending.js?v=687d625a';
-import { Director, sosLamp } from './director.js?v=687d625a';
-import { createPhotoBoard } from './photoBoard.js?v=687d625a';
-import { makeTent } from './tents.js?v=687d625a';
-import { makeSpringFlow } from './spring.js?v=687d625a';
-import { Follower } from './follower.js?v=687d625a';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=d3c7b76b';
+import { Objectives } from './objectives.js?v=d3c7b76b';
+import { Radio } from './radio.js?v=d3c7b76b';
+import { Fuel, FUEL } from './fuel.js?v=d3c7b76b';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=d3c7b76b';
+import { Survival, SURV } from './survival.js?v=d3c7b76b';
+import { createItemsView } from './itemsView.js?v=d3c7b76b';
+import { createChill } from './chill.js?v=d3c7b76b';
+import { createPlume } from './smokePlume.js?v=d3c7b76b';
+import { FireFinder, spokenBearing } from './firefinder.js?v=d3c7b76b';
+import { Photos, classifyShot } from './photos.js?v=d3c7b76b';
+import { CO } from './co.js?v=d3c7b76b';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=d3c7b76b';
+import { OtherLookout } from './otherLookout.js?v=d3c7b76b';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=d3c7b76b';
+import { GuidedHiker } from './hikers.js?v=d3c7b76b';
+import { MorseKeyer, isSOS } from './morse.js?v=d3c7b76b';
+import { normalizeLayout } from './layout.js?v=d3c7b76b';
+import { createSaves } from './saves.js?v=d3c7b76b';
+import { createRng } from './rng.js?v=d3c7b76b';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=d3c7b76b';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d3c7b76b';
+import * as S from './content/story.js?v=d3c7b76b';
+import { createDog, setDogName } from './dog.js?v=d3c7b76b';
+import { createWildlife } from './wildlife.js?v=d3c7b76b';
+import { Fear, registerFearSounds } from './fear.js?v=d3c7b76b';
+import { epilogue } from './content/ending.js?v=d3c7b76b';
+import { Director, sosLamp } from './director.js?v=d3c7b76b';
+import { createPhotoBoard } from './photoBoard.js?v=d3c7b76b';
+import { makeTent } from './tents.js?v=d3c7b76b';
+import { makeSpringFlow } from './spring.js?v=d3c7b76b';
+import { Follower } from './follower.js?v=d3c7b76b';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -782,12 +782,18 @@ export class Game {
     const subject = cls.weeper ? 'weeper' : cls.subject;
     const p = this.photos.take({ subject, forbidden: forbidden && !!cls.weeper, entities: shot.meta.entities, dataURL: shot.dataURL, flash, phase: this.clock.phase, hour: this.clock.hour });
     if (!p) return;
+    this.shrinkForSave(p);
     e.audio.play('camera_eject', { volume: 0.9 });
     this.addLog(S.AUTO_LOG.photo(this.hourText(), subject === 'nothing' ? 'Nothing much.' : subject === 'weeper' ? 'The man at the creek.' : subject.replace('_', ' ') + '.'));
     if (subject === 'weeper') this.complete('d2_photo');
     if (this.weeper.triggered && subject === 'weeper') { if (this.weeper.offerCarrier(p.id)) { this.complete('weeper_photo'); this.add('weeper_send'); this.ui.toast('That one. That\'s the picture he\'ll follow.', 3); } }
     this.lowerCamera(); this.holding = p.id; this.photos.open(p.id);
     // a photo taken while he's looking up is also "seeing" him if the print is looked at later — handled by Photos
+  }
+  /** A small copy of a print for the save file (480 px, JPEG): the full picture stays in memory for looking at. */
+  shrinkForSave(p) {
+    if (!p || !p.dataURL || p.saveURL) return;
+    const im = new Image(); im.onload = () => { try { const S = 480, c = document.createElement('canvas'); c.width = S; c.height = Math.round(S * im.height / im.width); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); p.saveURL = c.toDataURL('image/jpeg', 0.78); } catch (err) { /* keep the full one */ } }; im.src = p.dataURL;
   }
   lowerCamera() { this.camRaised = false; this.ui.cameraFrame(null); this.fovTarget = 68; }
   sendFlow(channel) {
@@ -992,6 +998,7 @@ export class Game {
       if (this.state === 'play') this.onPause && this.onPause();
     });
     In.onAction('searchlight', (d) => {
+      if (d && this.resting) { this.wake(); return; }   // lying down: the key gets you up first
       if (!d || this.state !== 'play' || this.ui.modalOpen()) return;
       if (this.camRaised) { this.flashOn = !this.flashOn; return; }
       if (this.mode === 'searchlight') { this.exitMode(); return; }
@@ -1000,9 +1007,10 @@ export class Game {
       if (z === 'cab' || z === 'catwalk') this.enterSearchlight();
       else this.ui.toast('The searchlight is on the cab roof. Work it from the cab or the catwalk (F).', 3);
     });
-    In.onAction('logbook', (d) => { if (!d || this.state !== 'play') return; if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openLogbook(); });
-    In.onAction('map', (d) => { if (!d || this.state !== 'play') return; if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openMap(); });
+    In.onAction('logbook', (d) => { if (!d || this.state !== 'play') return; if (this.resting) this.wake(); if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openLogbook(); });
+    In.onAction('map', (d) => { if (!d || this.state !== 'play') return; if (this.resting) this.wake(); if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openMap(); });
     In.onAction('camera', (d) => {
+      if (d && this.resting) { this.wake(); return; }   // lying down: the key gets you up first
       if (!d || this.state !== 'play' || this.mode !== 'walk' || this.ui.modalOpen()) return;
       if (this.holding) { this.holding = null; this.photos.close(); this.ui.print(null); return; }
       this.toggleCamera();
@@ -1020,10 +1028,11 @@ export class Game {
     In.onAction('secondary', (d) => { if (d && this.placing) this.cancelPlace(); });
     for (let i = 0; i < HAND_SLOTS; i++) In.onAction('slot' + (i + 1), (d) => { if (d && this.state === 'play' && this.mode === 'walk' && !this.ui.modalOpen()) this.selectSlot(i); });
     In.onAction('place', (d) => {
+      if (d && this.resting) { this.wake(); return; }   // lying down: the key gets you up first
       if (!d || this.state !== 'play' || this.mode !== 'walk' || this.ui.modalOpen()) return;
       if (this.placing) this.confirmPlace(); else this.beginPlace();
     });
-    In.onAction('inventory', (d) => { if (!d || this.state !== 'play') return; if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openPack(); });
+    In.onAction('inventory', (d) => { if (!d || this.state !== 'play') return; if (this.resting) this.wake(); if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openPack(); });
     In.onAction('flip', (d) => {
       if (!this.holding) { this.throwKey(d); return; }   // Q: flip a print you're holding; otherwise throw what's in your hand
       if (!d) return;
@@ -1032,6 +1041,7 @@ export class Game {
     });
     In.onAction('flashlight', (d) => { if (d && this.state === 'play' && !this.ui.modalOpen()) this.toggleFlashlight(); });
     In.onAction('binoculars', (d) => {
+      if (d && this.resting) { this.wake(); return; }   // lying down: the key gets you up first
       if (this.state !== 'play' || this.mode !== 'walk' || this.ui.modalOpen()) { this.binocular = false; return; }
       const now = e.time.value;
       if (d) {
@@ -1257,6 +1267,12 @@ export class Game {
     });
     const P = this.player(); if (P.rebuildColliders) P.rebuildColliders();
   }
+  /** Up off the bunk (or out of the tent): time back to normal, eyes open, looking ahead. */
+  wake() {
+    if (!this.resting) return;
+    this.resting = false; this.restIn = null; this.clock.speed = 1; this.e.post.set({ blackout: 0 });
+    const Pl = this.player(); Pl.lookAt(new THREE.Vector3(Pl.position.x - Math.sin(Pl.yaw) * 4, Pl.position.y + 1.6, Pl.position.z - Math.cos(Pl.yaw) * 4), 0.8);   // sit up and look ahead
+  }
   /** Q held = winding up (the meter under the crosshair), released = the throw. The longer you hold, the farther (up to ~1.1 s). */
   throwKey(d) {
     const e = this.e, now = e.time.value, it = this.inv.activeItem;
@@ -1303,6 +1319,7 @@ export class Game {
   }
   cancelPlace() { this.placing = null; this.iv && this.iv.ghost(null); this.refreshHotbar(); }
   toggleCamera() {
+    if (this.placing) this.cancelPlace();
     if (!this.camRaised) {
       if (!this.inv.find('camera')) { this.ui.toast(this.photos.hasCamera ? 'You set the camera down somewhere.' : 'You don\'t have a camera.'); return; }
       const r = this.inv.ready('camera'); if (!r.ok) { this.ui.toast(r.why, 2.5); return; }
@@ -1457,8 +1474,7 @@ export class Game {
     e.sky.setTime(dayHour(this.clock.hour));
     // radio
     if (this.resting && (this.obj.list.length !== this.restObjN || this.radio.busy || e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right') || this.clock.held)) {
-      this.resting = false; this.restIn = null; this.clock.speed = 1; e.post.set({ blackout: 0 });
-      const Pl = this.player(); Pl.lookAt(new THREE.Vector3(Pl.position.x - Math.sin(Pl.yaw) * 4, Pl.position.y + 1.6, Pl.position.z - Math.cos(Pl.yaw) * 4), 0.8);   // sit up and look ahead
+      this.wake();
     }
     for (const ev of this.radio.tick(dt)) {
       if (ev.kind === 'start') {
@@ -1571,8 +1587,8 @@ export class Game {
     if ((this._boardT = (this._boardT || 0) - dt) <= 0) {
       this._boardT = 0.5; this.board.sync(this.photos.prints);
       const bad = this.photos.prints.find((p) => p.pin != null && !p.sent && p.forbidden && !p.faceDown && !p.seen && p.develop >= 0.55);
-      if (bad && this.inCab()) { const cam = e.camera, to = this.board.center.clone().sub(cam.position), fw = cam.getWorldDirection(new THREE.Vector3());
-        if (to.length() < 2.2 && to.angleTo(fw) < 0.6) { bad.seen = true; this.printSeen(bad); } }
+      if (bad && this.inCab() && !this.resting && !this.ui.modalOpen()) { const cam = e.camera, to = this.board.center.clone().sub(cam.position), fw = cam.getWorldDirection(new THREE.Vector3());
+        if (to.length() < 2.2 && to.angleTo(fw) < 0.6 && e.view.lineOfSight(cam.position, this.board.center) && (e.view.litAt ? !!e.view.litAt(this.board.center) : true)) { bad.seen = true; this.printSeen(bad); } }   // lit and actually in sight
     }
     if (this.holding) { const p = this.photos.get(this.holding); const v = this.photos.look(this.holding); this.ui.print(p && v ? { ...v, dataURL: p.dataURL } : null); } else this.ui.print(null);
     // CO
@@ -1811,7 +1827,7 @@ export class Game {
         g.fillStyle = '#eee'; g.fillRect(0, 0, W, H); g.save(); g.translate(W / 2, H / 2); g.rotate(0.012); g.filter = 'grayscale(1) contrast(1.8) brightness(1.08)'; g.drawImage(im, -W / 2, -H / 2, W, H); g.restore();
         const d = g.getImageData(0, 0, W, H); for (let i = 0; i < d.data.length; i += 4) { const n = (Math.random() - 0.5) * 38 + ((i / 4 / W) % 3 < 1 ? -10 : 0); d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } g.putImageData(d, 0, 0);
         res(c.toDataURL('image/jpeg', 0.7)); }; im.onerror = () => res(src.dataURL); im.src = src.dataURL; });
-    const p = this.photos.copy(src, url);
+    const p = this.photos.copy(src, url); this.shrinkForSave(p);
     this.e.audio.play('radio_squelch', { volume: 0.2, position: this.anchor('IA_fax') || undefined });
     this.addLog(`${this.hourText()} — copied ${src.id} on the station fax (${p.id}).`);
     this.ui.toast(`The fax chatters and pushes out a copy, face-down: ${p.id}. It's in your photos (Tab → Photos).`, 3.5);
@@ -1839,11 +1855,15 @@ export class Game {
     const P = this.photos.prints;
     if (this.holding) {
       const p = this.photos.get(this.holding); if (!p) return;
+      if (!p.faceDown && p.develop < 1) { this.ui.toast('Let it finish developing first (or turn it face-down with Q).', 2.5); return; }
       const slot = this.board.freeSlot(P); if (slot < 0) { this.ui.toast('The board is full.', 2); return; }
       p.pin = slot; p.pinnedAt = this.e.time.value; this.holding = null; this.photos.close(); this.ui.print(null);
       this.e.audio.sfx('knock_one', { position: this.board.center.clone(), volume: 0.12 }); this.board.sync(P); this._boardT = 0.5; return;
     }
-    const up = P.filter((p) => p.pin != null && !p.sent).sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0))[0];
+    // the print you're looking at comes down (not just the last one pinned)
+    const cam = this.e.camera, fw = cam.getWorldDirection(new THREE.Vector3()), pinned = P.filter((p) => p.pin != null && !p.sent);
+    const at = (p) => { const s = this.board.slotPos ? this.board.slotPos(p.pin) : null; return s ? s.clone().sub(cam.position).angleTo(fw) : 9; };
+    const up = pinned.sort((a, b) => at(a) - at(b) || (b.pinnedAt || 0) - (a.pinnedAt || 0))[0];
     if (!up) { this.ui.toast('Hold a print (Tab → Photos, or a fresh one from the camera) and pin it up here.', 3); return; }
     up.pin = null; this.board.sync(P); this.holding = up.id; this.photos.open(up.id); this.e.audio.play('paper', { volume: 0.4 });
   }

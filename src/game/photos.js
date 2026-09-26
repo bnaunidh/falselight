@@ -2,7 +2,7 @@
 // A print develops over 60 s (grey-blue → the image blooms in). Shaking it (Q) speeds it up.
 // A forbidden print — the Weeper looking up — gives you one second, once the face starts to
 // resolve, to turn it face-down. Only a print you are looking at can be seen.
-import { clamp } from './util.js?v=687d625a'
+import { clamp } from './util.js?v=d3c7b76b'
 
 export const PHOTO = { develop: 60, shakeBoost: 3.2, shakeWindow: 1.2, resolveAt: 0.55, flipWindow: 1.0, pack: 10 }
 
@@ -81,7 +81,7 @@ export class Photos {
   }
   sendable() { return this.prints.filter((p) => !p.sent) }
   toJSON(withImages = true) {
-    return { hasCamera: this.hasCamera, packLeft: this.packLeft, nextId: this.nextId, prints: this.prints.map((p) => ({ ...p, window: null, dataURL: withImages ? p.dataURL : null })) }
+    return { hasCamera: this.hasCamera, packLeft: this.packLeft, nextId: this.nextId, prints: this.prints.map((p) => { const { saveURL, ...q } = p; return { ...q, window: null, dataURL: withImages ? (saveURL || p.dataURL) : null } }) }   // saves carry the small copy
   }
 }
 

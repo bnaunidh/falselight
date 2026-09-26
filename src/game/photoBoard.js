@@ -57,6 +57,8 @@ export function createPhotoBoard(scene, at, { w = 0.72, h = 0.52 } = {}) {
         m.color.setRGB(0.13 + 0.87 * k, 0.19 + 0.81 * k, 0.16 + 0.84 * k);
       });
     },
+    /** World position of a slot's card (for 'the one you're looking at'). */
+    slotPos(i) { const s = slots[i]; return s ? s.card.getWorldPosition(new THREE.Vector3()) : null; },
     freeSlot(prints) { const used = new Set(prints.filter((p) => p.pin != null && !p.sent).map((p) => p.pin)); for (let i = 0; i < slots.length; i++) if (!used.has(i)) return i; return -1; },
   };
   return api;
