@@ -1,30 +1,30 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=8547b0d4';
-import { Objectives } from './objectives.js?v=8547b0d4';
-import { Radio } from './radio.js?v=8547b0d4';
-import { Fuel, FUEL } from './fuel.js?v=8547b0d4';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=8547b0d4';
-import { Survival, SURV } from './survival.js?v=8547b0d4';
-import { createItemsView } from './itemsView.js?v=8547b0d4';
-import { createChill } from './chill.js?v=8547b0d4';
-import { createPlume } from './smokePlume.js?v=8547b0d4';
-import { FireFinder, spokenBearing } from './firefinder.js?v=8547b0d4';
-import { Photos, classifyShot } from './photos.js?v=8547b0d4';
-import { CO } from './co.js?v=8547b0d4';
-import { Weeper, lookupChance } from './weeper.js?v=8547b0d4';
-import { OtherLookout } from './otherLookout.js?v=8547b0d4';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=8547b0d4';
-import { GuidedHiker } from './hikers.js?v=8547b0d4';
-import { MorseKeyer, isSOS } from './morse.js?v=8547b0d4';
-import { normalizeLayout } from './layout.js?v=8547b0d4';
-import { createSaves } from './saves.js?v=8547b0d4';
-import { createRng } from './rng.js?v=8547b0d4';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=8547b0d4';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=8547b0d4';
-import * as S from './content/story.js?v=8547b0d4';
-import { createDog } from './dog.js?v=8547b0d4';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=39bbb9d6';
+import { Objectives } from './objectives.js?v=39bbb9d6';
+import { Radio } from './radio.js?v=39bbb9d6';
+import { Fuel, FUEL } from './fuel.js?v=39bbb9d6';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=39bbb9d6';
+import { Survival, SURV } from './survival.js?v=39bbb9d6';
+import { createItemsView } from './itemsView.js?v=39bbb9d6';
+import { createChill } from './chill.js?v=39bbb9d6';
+import { createPlume } from './smokePlume.js?v=39bbb9d6';
+import { FireFinder, spokenBearing } from './firefinder.js?v=39bbb9d6';
+import { Photos, classifyShot } from './photos.js?v=39bbb9d6';
+import { CO } from './co.js?v=39bbb9d6';
+import { Weeper, lookupChance } from './weeper.js?v=39bbb9d6';
+import { OtherLookout } from './otherLookout.js?v=39bbb9d6';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=39bbb9d6';
+import { GuidedHiker } from './hikers.js?v=39bbb9d6';
+import { MorseKeyer, isSOS } from './morse.js?v=39bbb9d6';
+import { normalizeLayout } from './layout.js?v=39bbb9d6';
+import { createSaves } from './saves.js?v=39bbb9d6';
+import { createRng } from './rng.js?v=39bbb9d6';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=39bbb9d6';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=39bbb9d6';
+import * as S from './content/story.js?v=39bbb9d6';
+import { createDog } from './dog.js?v=39bbb9d6';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -766,12 +766,15 @@ export class Game {
       if (this.holding) { this.holding = null; this.photos.close(); this.ui.print(null); return; }
       this.toggleCamera();
     });
-    In.onAction('primary', (d) => {
+    // left click, or the Use key (U by default): whatever is in your hand
+    const usePrimary = (d) => {
       if (this.state !== 'play' || this.ui.modalOpen()) return;
       if (this.placing) { if (d) this.confirmPlace(); return; }
       if (this.camRaised) { if (d) this.takePhoto(); return; }
       if (this.mode === 'walk') this.useActive(d);
-    });
+    };
+    In.onAction('primary', usePrimary);
+    In.onAction('use', usePrimary);
     In.onAction('secondary', (d) => { if (d && this.placing) this.cancelPlace(); });
     for (let i = 0; i < HAND_SLOTS; i++) In.onAction('slot' + (i + 1), (d) => { if (d && this.state === 'play' && this.mode === 'walk') this.selectSlot(i); });
     In.onAction('place', (d) => {
@@ -1086,6 +1089,7 @@ export class Game {
     const moving = e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right') ? 1 : 0;
     this.iv.hold(this.mode === 'walk' && !this.camRaised && !this.binocular && !this.placing && act ? act.kind : null, t, moving);
     if (e.lights.flashlight.on && !this.inv.inHands('flashlight')) e.lights.flashlight.on = false;
+    this.iv.setTorchGlow(e.lights.flashlight.on);
     const coEv = this.co.tick(dt, { inCab: this.inCab(), night: this.night, rng: this.rng, coldTarget: this.surv.coldTarget });
     e.post.params.co = this.co.blood;
     for (const ev of coEv) {

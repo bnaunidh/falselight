@@ -165,6 +165,8 @@ export function createAudio(engine) {
     splash: (d, v) => { const t = ctx.currentTime; burst(d, { f: 900, Q: 0.7, a: 0.004, d: 0.18, v: 0.55 * v });
       burst(d, { type: 'lowpass', f: 420, a: 0.01, d: 0.25, v: 0.35 * v, brown: true });
       for (let k = 0; k < 5; k++) tone(d, { f: 500 + Math.random() * 900, f1: 1400 + Math.random() * 800, a: 0.002, d: 0.035, v: 0.03 * v, t: t + 0.05 + Math.random() * 0.25 }); },
+    // a floorboard taking weight: a slow stick-slip buzz, low and dry (the Kenney 'creak' samples are squeaky hinges: they read as metal)
+    board_creak: (d, v) => { const bp = filt('bandpass', 340 + Math.random() * 180); bp.Q.value = 1.3; bp.connect(d); tone(bp, { type: 'sawtooth', f: 80 + Math.random() * 40, f1: 62 + Math.random() * 18, a: 0.04, d: 0.26 + Math.random() * 0.12, v: 0.09 * v }); burst(d, { type: 'lowpass', f: 280, d: 0.05, v: 0.1 * v, brown: true }); },
     stair_creak: (d, v) => { tone(d, { type: 'sawtooth', f: 180 + Math.random() * 90, f1: 120 + Math.random() * 40, a: 0.05, d: 0.45, v: 0.06 * v }); },
     door: (d, v) => { tone(d, { type: 'sawtooth', f: 320, f1: 190, a: 0.08, d: 0.7, v: 0.07 * v }); burst(d, { type: 'lowpass', f: 180, d: 0.25, v: 0.8 * v, brown: true, t: ctx.currentTime + 0.75 }); },
     trapdoor: (d, v) => { burst(d, { type: 'lowpass', f: 140, Q: 2, d: 0.45, v: 1.2 * v, brown: true }); burst(d, { f: 900, d: 0.08, v: 0.2 * v }); },
@@ -229,7 +231,7 @@ export function createAudio(engine) {
       const set = surface === 'wood' ? 'footstep_wood' : surface === 'gravel' ? 'footstep_gravel' : 'footstep_dirt';
       if (ctx && A.started && playSample(set, bus.sfx, v * (surface === 'wood' ? 0.9 : 0.7))) { if (wet) api.play('footstep_wet', { volume: v * 0.4 }); }
       else api.play(wet ? 'footstep_wet' : 'footstep_' + surface, { volume: v });
-      if (surface === 'wood' && Math.random() < 0.18) api.play('stair_creak', { volume: 0.8 });
+      if (surface === 'wood' && Math.random() < 0.1) api.play('board_creak', { volume: 0.8 });
     },
     thunder(delay) { if (!ctx || !A.started) return; setTimeout(() => api.play('thunder', { volume: 0.9 }), delay * 1000); },
     update(dt) {

@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=8547b0d4';
+import { drawMap } from './mapdraw.js?v=39bbb9d6';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -53,10 +53,22 @@ export function createUI(root = document.getElementById('ui')) {
     camf.innerHTML = `<div class="frame"></div><div class="info">${o.left} left · flash ${o.flash ? 'ON' : 'off'} (F) · click to take · C to lower</div>`;
   };
   U.binoculars = (on, brg) => {
+    if (root.classList.contains('binoc-up') !== !!on) root.classList.toggle('binoc-up', !!on);   // the HUD hides behind the eyecups
     binoc.style.display = on ? 'block' : 'none'; if (!on) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    if (binoc._wh !== W + 'x' + H) {   // lens geometry in px, rebuilt when the window changes
+      binoc._wh = W + 'x' + H;
+      const r = Math.min(H * 0.46, W * 0.27), dx = r * 0.62, cy = H / 2;
+      binoc.innerHTML = `<svg width="${W}" height="${H}" style="position:absolute;inset:0"><defs>
+        <radialGradient id="flbl"><stop offset="0.86" stop-color="#000"/><stop offset="1" stop-color="#fff"/></radialGradient>
+        <mask id="flbm" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>
+          <circle cx="${W / 2 - dx}" cy="${cy}" r="${r}" fill="url(#flbl)"/><circle cx="${W / 2 + dx}" cy="${cy}" r="${r}" fill="url(#flbl)"/>
+          <rect x="${W / 2 - dx}" y="${cy - r * 0.8}" width="${dx * 2}" height="${r * 1.6}" fill="#000"/></mask></defs>
+        <rect width="${W}" height="${H}" fill="#050505" mask="url(#flbm)"/></svg><div class="brg"></div>`;
+    }
     const b = Math.round(brg || 0) % 360, pts = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
     const txt = String(b).padStart(3, '0') + '° ' + pts[Math.round(b / 22.5) % 16];
-    let el = binoc.querySelector('.brg'); if (!el) { el = document.createElement('div'); el.className = 'brg'; binoc.appendChild(el); }
+    const el = binoc.querySelector('.brg');
     if (el.textContent !== txt) el.textContent = txt;
   };
   U.print = (o) => {
@@ -131,7 +143,7 @@ export function createUI(root = document.getElementById('ui')) {
     }
     if (kind === 'controls') {
       const m = openModal(`<div class="paper controls2"><h2>Controls</h2><div class="kgrid">${o.controls.map(([k, v]) => `<div><kbd>${esc(k)}</kbd><span>${esc(v)}</span></div>`).join('')}</div>
-        <p class="note2">The searchlight is on the roof — use the control column in the cab. Hold SPACE while you're on it to flash Morse: <b>··· ——— ···</b></p>
+        <p class="note2">The searchlight is on the cab roof: work it from the cab or the catwalk. Hold the Morse key while you're on it to flash: <b>··· ——— ···</b>. Every key can be changed in Settings → Keys.</p>
         <div class="menu"><button data-a="back">Back</button></div></div>`, 'center');
       m.querySelector('[data-a=back]').onclick = () => o.onBack();
       return;
@@ -142,9 +154,31 @@ export function createUI(root = document.getElementById('ui')) {
         <label>Mouse sensitivity <input data-k="sens" type="range" min="0.4" max="2.5" step="0.1" value="${o.sens}"></label>
         <label>Sound <select data-k="sound"><option value="off" ${o.sound ? '' : 'selected'}>off</option><option value="on" ${o.sound ? 'selected' : ''}>on</option></select></label>
         <label>Volume <input data-k="volume" type="range" min="0" max="1" step="0.05" value="${o.volume}"></label>
+        <button class="keysbtn" data-a="keys">Keys… <em>rebind any control</em></button>
         <label>Full screen <select data-k="fullscreen"><option value="on" ${o.fullscreen !== false ? 'selected' : ''}>on (Esc works in menus)</option><option value="off" ${o.fullscreen === false ? 'selected' : ''}>off</option></select></label>
         <button data-a="done">Done</button></div>`, 'center');
-      m.querySelector('[data-a=done]').onclick = () => { const v = {}; m.querySelectorAll('[data-k]').forEach((i) => v[i.dataset.k] = i.value); o.onDone(v); };
+      const read = () => { const v = {}; m.querySelectorAll('[data-k]').forEach((i) => v[i.dataset.k] = i.value); return v; };
+      m.querySelector('[data-a=done]').onclick = () => o.onDone(read());
+      m.querySelector('[data-a=keys]').onclick = () => o.onKeys && o.onKeys(read());
+      return;
+    }
+    if (kind === 'keys') {   // o: { actions: [[id, label]], binds: {id: [codes]}, getBinds(), keyName, onSet(id, code), onReset(), onBack() }
+      let waiting = null, list = null;
+      const render = () => { list.innerHTML = o.actions.map(([id, label]) => `<button data-id="${id}" class="${waiting === id ? 'wait' : ''}"><span>${esc(label)}</span><kbd>${waiting === id ? 'press a key…' : esc((o.binds[id] || []).map(o.keyName).join(' / ') || '—')}</kbd></button>`).join('');
+        list.querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => { waiting = b.dataset.id; render(); }); };
+      const onKey = (e) => {   // capture phase: the game never sees the key you're binding
+        if (!waiting) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (e.code !== 'Escape') { o.onSet(waiting, e.code); o.binds = o.getBinds(); }
+        waiting = null; render();
+      };
+      window.addEventListener('keydown', onKey, true);
+      const m = openModal(`<div class="paper keys"><h2>Keys</h2><p class="kh">Click a control, then press the key you want. Esc cancels. Esc always pauses.</p><div class="klist"></div>
+        <div class="menu"><button data-a="reset">Reset to defaults</button><button data-a="back">Done</button></div></div>`, 'center', () => window.removeEventListener('keydown', onKey, true));
+      list = m.querySelector('.klist');
+      m.querySelector('[data-a=reset]').onclick = () => { o.onReset(); o.binds = o.getBinds(); waiting = null; render(); };
+      m.querySelector('[data-a=back]').onclick = () => o.onBack();
+      render();
       return;
     }
     if (kind === 'pause') {

@@ -1,7 +1,7 @@
 // Clock and phases. Nights run past 24 (02:00 = 26.0) so the hour is monotonic inside a phase.
 // A day and a night each take about 12 real minutes. "Gates" hold the clock at a time until the
 // phase's required work is done, so the player can never be pushed past something unfinished.
-import { clamp } from './util.js?v=8547b0d4'
+import { clamp } from './util.js?v=39bbb9d6'
 
 export const PHASE_ORDER = ['day1', 'night1', 'day2', 'night2', 'end']
 export const PHASES = {

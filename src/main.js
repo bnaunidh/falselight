@@ -1,18 +1,20 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=8547b0d4';
-import { createUI } from './ui/ui.js?v=8547b0d4';
-import { Game } from './game/bridge.js?v=8547b0d4';
-import { createSaves } from './game/saves.js?v=8547b0d4';
-import { UI as WORDS } from './game/content/story.js?v=8547b0d4';
+import { createEngine } from './engine/engine.js?v=39bbb9d6';
+import { createUI } from './ui/ui.js?v=39bbb9d6';
+import { Game } from './game/bridge.js?v=39bbb9d6';
+import { createSaves } from './game/saves.js?v=39bbb9d6';
+import { UI as WORDS } from './game/content/story.js?v=39bbb9d6';
+import { ACTIONS, keyName } from './engine/input.js?v=39bbb9d6';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
 const saves = createSaves();
-const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, sound: false, fullscreen: true });
+const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, sound: false, fullscreen: true, keys: {} });
 if (!settings.qv2) { settings.quality = 'medium'; settings.qv2 = true; saves.saveSettings(settings); }   // older saves defaulted to 'high'
 const ui = createUI();
 ui.loading(0, 'starting');
 const engine = await createEngine(canvas, { quality: q.get('q') || settings.quality });
+engine.input.setBindings(settings.keys || {});   // your keys (Settings → Keys)
 engine.input.sensitivity = 0.0022 * settings.sens;
 engine.audio.setVolume(+settings.volume);
 engine.audio.setMuted(!settings.sound || q.has('mute'));   // sound is OFF until the player turns it on in Settings
@@ -42,7 +44,7 @@ function title() {
   engine.lights.cabLamp.on = true;
   ui.screen('title', { canContinue: saves.has(), continueLabel: continueLabel(), sound: settings.sound, onAction: (a) => {
     if (a === 'settings') return openSettings(title);
-    if (a === 'controls') return ui.screen('controls', { controls: WORDS.controls, onBack: () => { ui.closeModal(); title(); } });
+    if (a === 'controls') return ui.screen('controls', { controls: controlsList(), onBack: () => { ui.closeModal(); title(); } });
     if (a === 'sound') { settings.sound = !settings.sound; saves.saveSettings(settings); engine.audio.setMuted(!settings.sound); engine.audio.start(); ui.closeModal(); return title(); }
     ui.closeModal(); ui.hideHUD(false); engine.audio.start();
     engine.lights.searchlight.on = false; engine.lights.searchlight.operating = false;
@@ -65,8 +67,21 @@ function goFullscreen() {
   if (settings.fullscreen === false || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
   document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(() => { try { navigator.keyboard && navigator.keyboard.lock && navigator.keyboard.lock(['Escape']); } catch (e) { /* not supported */ } }).catch(() => {});
 }
+// the controls card, written from the live key bindings
+function controlsList() {
+  const B = engine.input.binds, k = (a) => (B[a] || []).map(keyName).join(' / ') || '—';
+  return [...ACTIONS.map(([a, label]) => [a === 'pause' ? k(a) + ' / Esc' : k(a), label]), ['Mouse', 'look'], ['Click', 'use what\'s in your hand'], ['Wheel', 'switch hands · turn what you\'re setting down']];
+}
+function openKeys(back) {
+  ui.screen('keys', { actions: ACTIONS, binds: engine.input.binds, keyName, getBinds: () => engine.input.binds,
+    onSet: (id, code) => { const cur = { ...(settings.keys || {}) }; for (const a of Object.keys(cur)) cur[a] = cur[a].filter((c) => c !== code); cur[id] = [code];
+      settings.keys = cur; saves.saveSettings(settings); engine.input.setBindings(settings.keys); },
+    onReset: () => { settings.keys = {}; saves.saveSettings(settings); engine.input.setBindings({}); },
+    onBack: () => { ui.closeModal(); back(); } });
+}
 function openSettings(back) {
-  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, sound: settings.sound, fullscreen: settings.fullscreen, onDone: (v) => {
+  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, sound: settings.sound, fullscreen: settings.fullscreen,
+    onKeys: () => { ui.closeModal(); openKeys(() => openSettings(back)); }, onDone: (v) => {
     Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
     if (!settings.fullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
     engine.input.sensitivity = 0.0022 * settings.sens; engine.audio.setVolume(settings.volume); engine.audio.setMuted(!settings.sound);

@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=8547b0d4';
+import { clamp, damp } from './util.js?v=39bbb9d6';
 
 // The searchlight beam: light scattered by haze inside the cone. Each pixel the cone covers gets ONE fragment (front faces
 // from outside, back faces from inside) and works out analytically how much beam its view ray crosses: the ray's closest
@@ -93,9 +93,9 @@ export function createLights(engine) {
     else { origin.rotation.set(SL.pitch, SL.yaw, 0, 'YXZ'); }
   }
   // ---------------- flashlight (camera-mounted)
-  const flash = new THREE.SpotLight(0xffe6c0, 0, 38, THREE.MathUtils.degToRad(19), 0.55, 1.6);
+  const flash = new THREE.SpotLight(0xffe6c0, 0, 45, THREE.MathUtils.degToRad(20), 0.6, 1.6);
   flash.castShadow = q.flashShadows; flash.shadow.mapSize.set(512, 512); flash.shadow.camera.near = 0.2; flash.shadow.bias = -0.0005;
-  camera.add(flash); flash.position.set(0.18, -0.2, 0.05); flash.target.position.set(0.05, -0.05, -3); camera.add(flash.target);
+  camera.add(flash); flash.position.set(0.12, -0.075, -0.34); flash.target.position.set(0.02, -0.04, -4); camera.add(flash.target);   // at the lens of the torch in your hand, so it lights the path, not the torch
   const FL = {
     on: false, battery: 1, light: flash,
     isLit(p) {
@@ -141,7 +141,7 @@ export function createLights(engine) {
       const inside = tcc > 0 && _cp.addScaledVector(d, -tcc).length() < 0.34 + (22 - 0.34) * Math.min(1, tcc / beamLen) + 0.2;
       const side = inside ? THREE.BackSide : THREE.FrontSide; if (bm.side !== side) { bm.side = side; bm.needsUpdate = true; }
       glow.visible = I > 0.02; glow.material.opacity = Math.min(1, I * 1.2);
-      flash.intensity = FL.on ? 40 * (0.5 + 0.5 * FL.battery) : 0; flash.shadow.autoUpdate = FL.on;
+      flash.intensity = FL.on ? 130 * (0.5 + 0.5 * FL.battery) : 0; flash.shadow.autoUpdate = FL.on;
       LAMP.flicker = damp(LAMP.flicker, 0, 3, dt);
       lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) : 0;
       cfT += dt; cf.intensity = cfT < 0.05 ? 2600 : cfT < 0.25 ? 2600 * Math.exp(-(cfT - 0.05) * 22) : 0;

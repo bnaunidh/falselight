@@ -3,8 +3,8 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=8547b0d4';
-import { createSurfaces } from './surfaces.js?v=8547b0d4';
+import { KINDS } from './items.js?v=39bbb9d6';
+import { createSurfaces } from './surfaces.js?v=39bbb9d6';
 
 export function createItemsView(engine) {
   const { scene, camera } = engine;
@@ -56,7 +56,8 @@ export function createItemsView(engine) {
 
   // ---------------------------------------------------------------- the thing in your hand
   let vm = null, vmKind = null;
-  const HOLD = { fuel: [0.17, -0.17, -0.3], flashlight: [0.12, -0.11, -0.24], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
+  V.setTorchGlow = () => {};   // (the beam shows it's on; a lens glow read as a halo from behind)
+  const HOLD = { fuel: [0.17, -0.17, -0.3], flashlight: [0.125, -0.12, -0.25], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
     canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23] };
   V.hold = (kind, t = 0, moving = 0) => {
     if (kind !== vmKind || (!vm && kind && T[kind] && HOLD[kind])) {
@@ -66,7 +67,7 @@ export function createItemsView(engine) {
         vm = T[kind].obj.clone(true);
         vm.traverse((m) => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = false; m.frustumCulled = false; } });
         vm.scale.setScalar(0.42);           // small and close = normal size at arm's length, and never pokes through walls
-        vm.rotation.set(0.12, kind === 'fuel' ? 1.9 : 2.6, 0.05);
+        vm.rotation.set(0.12, kind === 'fuel' ? 1.9 : kind === 'flashlight' ? Math.PI + 0.14 : 2.6, 0.05);   // the torch's lens is at the model's +Z end
         camera.add(vm);
       }
     }

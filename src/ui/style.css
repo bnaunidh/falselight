@@ -37,7 +37,8 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .fl-camframe{display:none;position:fixed;inset:0}
 .fl-camframe .frame{position:absolute;left:50%;top:50%;width:min(62vh,62vw);height:min(62vh,62vw);transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.35);box-shadow:0 0 0 200vmax rgba(0,0,0,.55)}
 .fl-camframe .info{position:absolute;left:50%;bottom:6vh;transform:translateX(-50%);font-family:var(--type);font-size:13px;letter-spacing:.06em;color:#ddd6c6}
-.fl-binoc{display:none;position:fixed;inset:0;background:radial-gradient(ellipse 30% 42% at 35% 50%,transparent 60%,#000 62%),radial-gradient(ellipse 30% 42% at 65% 50%,transparent 60%,#000 62%);mix-blend-mode:multiply}
+.fl-binoc{display:none;position:fixed;inset:0;pointer-events:none;z-index:4}
+#ui.binoc-up .fl-tracker,#ui.binoc-up .fl-hot,#ui.binoc-up .fl-surv,#ui.binoc-up .fl-toast{opacity:0!important}
 
 .fl-print{display:none;position:fixed;right:5vw;bottom:6vh;width:250px}
 .fl-print .card{position:relative;width:250px;height:300px;background:#f2efe6;box-shadow:0 12px 30px rgba(0,0,0,.6);transform:rotate(2deg)}
@@ -145,7 +146,7 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 #fl-clickres.on{display:flex}
 #fl-clickres small{font-size:13px;opacity:.65;letter-spacing:.02em}
 
-#binoc .brg { position: absolute; left: 50%; top: 8%; transform: translateX(-50%); font: 600 15px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; color: rgba(235,240,230,.85); text-shadow: 0 1px 3px #000; }
+.fl-binoc .brg { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); font: 600 15px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; color: rgba(235,240,230,.85); text-shadow: 0 1px 3px #000; }
 
 /* hands (hotbar), body (temperature · water · food), the pack sheet */
 #ui.nohud .fl-hot,#ui.nohud .fl-surv{opacity:0!important;pointer-events:none}
@@ -186,3 +187,15 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .packsheet .off,.packsheet .tip{font-size:14px;opacity:.75;line-height:1.45}
 @media (max-width:700px){.fl-hot .slot{width:48px;height:48px}.fl-hot .slot img{width:40px;height:40px}.fl-surv .m i{width:80px}}
 .fl-surv .m.h{color:#d9786a}.fl-surv .m.h u{background:#d9786a}
+
+/* Settings → Keys */
+.settings .keysbtn{display:flex;justify-content:space-between;align-items:baseline;width:100%;margin:6px 0 10px;padding:8px 12px;font:inherit;background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.18);border-radius:6px;cursor:pointer}
+.settings .keysbtn em{font-size:12px;opacity:.65}
+.paper.keys{max-width:560px;width:92vw}
+.keys .kh{font-size:13px;opacity:.75;margin:0 0 8px}
+.keys .klist{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;max-height:min(60vh,520px);overflow:auto;padding-right:4px}
+.keys .klist button{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 8px;font:14px/1.2 Georgia,serif;text-align:left;background:transparent;border:0;border-bottom:1px dashed rgba(0,0,0,.18);cursor:pointer;color:inherit}
+.keys .klist button:hover{background:rgba(0,0,0,.05)}
+.keys .klist kbd{font:600 12px/1 ui-monospace,Menlo,monospace;padding:4px 7px;border-radius:4px;background:rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.2);white-space:nowrap}
+.keys .klist button.wait kbd{background:#c9582f;color:#fff;border-color:#c9582f}
+@media (max-width:560px){.keys .klist{grid-template-columns:1fr}}
