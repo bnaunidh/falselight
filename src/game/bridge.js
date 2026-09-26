@@ -1,36 +1,37 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=1fafa2b9';
-import { Objectives } from './objectives.js?v=1fafa2b9';
-import { Radio } from './radio.js?v=1fafa2b9';
-import { Fuel, FUEL } from './fuel.js?v=1fafa2b9';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=1fafa2b9';
-import { Survival, SURV } from './survival.js?v=1fafa2b9';
-import { createItemsView } from './itemsView.js?v=1fafa2b9';
-import { createChill } from './chill.js?v=1fafa2b9';
-import { createPlume } from './smokePlume.js?v=1fafa2b9';
-import { FireFinder, spokenBearing } from './firefinder.js?v=1fafa2b9';
-import { Photos, classifyShot } from './photos.js?v=1fafa2b9';
-import { CO } from './co.js?v=1fafa2b9';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=1fafa2b9';
-import { OtherLookout } from './otherLookout.js?v=1fafa2b9';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=1fafa2b9';
-import { GuidedHiker } from './hikers.js?v=1fafa2b9';
-import { MorseKeyer, isSOS } from './morse.js?v=1fafa2b9';
-import { normalizeLayout } from './layout.js?v=1fafa2b9';
-import { createSaves } from './saves.js?v=1fafa2b9';
-import { createRng } from './rng.js?v=1fafa2b9';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=1fafa2b9';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=1fafa2b9';
-import * as S from './content/story.js?v=1fafa2b9';
-import { createDog, setDogName } from './dog.js?v=1fafa2b9';
-import { createWildlife } from './wildlife.js?v=1fafa2b9';
-import { Fear, registerFearSounds } from './fear.js?v=1fafa2b9';
-import { epilogue } from './content/ending.js?v=1fafa2b9';
-import { Director, sosLamp } from './director.js?v=1fafa2b9';
-import { createPhotoBoard } from './photoBoard.js?v=1fafa2b9';
-import { makeTent } from './tents.js?v=1fafa2b9';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=aec1a0d7';
+import { Objectives } from './objectives.js?v=aec1a0d7';
+import { Radio } from './radio.js?v=aec1a0d7';
+import { Fuel, FUEL } from './fuel.js?v=aec1a0d7';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=aec1a0d7';
+import { Survival, SURV } from './survival.js?v=aec1a0d7';
+import { createItemsView } from './itemsView.js?v=aec1a0d7';
+import { createChill } from './chill.js?v=aec1a0d7';
+import { createPlume } from './smokePlume.js?v=aec1a0d7';
+import { FireFinder, spokenBearing } from './firefinder.js?v=aec1a0d7';
+import { Photos, classifyShot } from './photos.js?v=aec1a0d7';
+import { CO } from './co.js?v=aec1a0d7';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=aec1a0d7';
+import { OtherLookout } from './otherLookout.js?v=aec1a0d7';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=aec1a0d7';
+import { GuidedHiker } from './hikers.js?v=aec1a0d7';
+import { MorseKeyer, isSOS } from './morse.js?v=aec1a0d7';
+import { normalizeLayout } from './layout.js?v=aec1a0d7';
+import { createSaves } from './saves.js?v=aec1a0d7';
+import { createRng } from './rng.js?v=aec1a0d7';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=aec1a0d7';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=aec1a0d7';
+import * as S from './content/story.js?v=aec1a0d7';
+import { createDog, setDogName } from './dog.js?v=aec1a0d7';
+import { createWildlife } from './wildlife.js?v=aec1a0d7';
+import { Fear, registerFearSounds } from './fear.js?v=aec1a0d7';
+import { epilogue } from './content/ending.js?v=aec1a0d7';
+import { Director, sosLamp } from './director.js?v=aec1a0d7';
+import { createPhotoBoard } from './photoBoard.js?v=aec1a0d7';
+import { makeTent } from './tents.js?v=aec1a0d7';
+import { makeSpringFlow } from './spring.js?v=aec1a0d7';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -329,7 +330,7 @@ export class Game {
     if (this.bodyEnt) { this.bodyEnt.remove(); this.bodyEnt = null; }
     this.exitMode(); this.holding = null;
     this.placing = null; this.syncItems();
-    this.campTents(); this.buildTents();
+    this.campTents(); this.buildTents(); this.springWater();
     if (!this.flags.tentGiven) {   // saves from before the emergency tent: you get one (a free hand or the pack, else at your feet)
       this.flags.tentGiven = true;
       if (!this.inv.items.some((i) => i.kind === 'tent' && i.where !== 'world')) {
@@ -339,7 +340,7 @@ export class Game {
     }
     if (!restored) this.health = Math.max(this.health ?? 1, 0.85);   // a night's sleep (or a day's) mends most of it
     if (!restored) this.dogFetch();
-    if (!restored && !isNight(phase) && phase !== 'day1' && this.surv) this.surv.fatigue.sleep(2, 1);   // the 05:30 -> 07:30 you got in bed
+    if (!restored && !isNight(phase) && phase !== 'day1' && this.surv) { this.surv.fatigue.sleep(2, 1); const F = this.surv.fatigue; F.awake = Math.max(0, F.awake - 0.1 * 18); }   // the 05:30 -> 07:30 in the bunk, and 10% more rest for getting through the night
     if (this.weeper.state === 'caught' || (this.weeper.state === 'gone' && !isNight(phase))) this.weeper.state = this.weeper.state === 'gone' ? 'gone' : 'sitting';
     if (['coming', 'stairs', 'door', 'hunting', 'screaming'].includes(this.weeper.state)) { this.weeper.state = isNight(phase) ? 'screaming' : 'seen_day'; this.weeper.timer = 0; this.weeper.progress = 0; }   // by day he waits for dark
     const sky = e.sky;
@@ -1192,6 +1193,41 @@ export class Game {
     const r = this.inv.take(it.id); this.syncItems(); this.refreshHotbar();
     this.ui.toast(r.ok ? `Packed up (${T.uses} pitch${T.uses === 1 ? '' : 'es'} left).` : 'Packed up. Your hands and pack are full: it\'s on the ground here.', 3);
   }
+  /** The spring: water out of the pipe into the barrel, and the overflow down across the trail. */
+  springWater() {
+    if (this.springFlow !== undefined) return; this.springFlow = null;
+    const e = this.e; let root = null; e.scene.traverse((o) => { if (!root && /prop_spring/.test(o.name || '')) root = o; });
+    if (!root) return;
+    const box = (n) => { let m = null; root.traverse((o) => { if (!m && o.isMesh && (o.name || '').endsWith(n)) m = o; }); return m ? new THREE.Box3().setFromObject(m) : null; };
+    const pipe = box('_steel'), water = box('_glass2'); if (!pipe || !water) return;
+    const wc = water.getCenter(new THREE.Vector3()); wc.y = water.max.y;
+    const ends = [new THREE.Vector3(pipe.min.x, 0, pipe.min.z), new THREE.Vector3(pipe.max.x, 0, pipe.max.z), new THREE.Vector3(pipe.min.x, 0, pipe.max.z), new THREE.Vector3(pipe.max.x, 0, pipe.min.z)];
+    const out = ends.sort((a, b) => a.distanceToSquared(new THREE.Vector3(wc.x, 0, wc.z)) - b.distanceToSquared(new THREE.Vector3(wc.x, 0, wc.z)))[0];
+    out.y = (pipe.min.y + pipe.max.y) / 2 - 0.01;
+    this.springFlow = makeSpringFlow(e.scene, { outlet: out, surface: wc, radius: (water.max.x - water.min.x) / 2, heightAt: (x, z) => e.world.heightAt(x, z) });
+  }
+  /** How much sun is on you (0..1): daylight, cloud, and whether a tree crown stands between you and the sun (a ray toward
+   *  the sun, past the crowns of the trees around: firs throw long shade in the afternoon). The same sun path as sky.js. */
+  sunOn() {
+    const e = this.e, P = this.player(); if (this.night || this.inCab()) return 0;
+    const sky = e.sky, day = Math.max(0, Math.min(1, (sky.dayFactor ?? 1)));
+    const cloud = 1 - Math.min(1, (sky.weather.rain || 0) * 1.5 + (sky.weather.fog || 0) * 0.7);
+    if (day * cloud < 0.02) return 0;
+    const h = ((dayHour(this.clock.hour) % 24) + 24) % 24, ang = (h - 6) / 12 * Math.PI, el = Math.max(0.12, Math.sin(ang));
+    const sd = new THREE.Vector3(Math.cos(ang) * 0.9, el, 0.45).normalize(), hz = Math.hypot(sd.x, sd.z) || 1, ux = sd.x / hz, uz = sd.z / hz, tanE = sd.y / hz;
+    let shade = 0; const TG = e.world.trunkGrid, px = P.position.x, pz = P.position.z, py = 1.6;
+    const bs = this.L.places && this.L.places.burn_scar, burn = bs ? [...(bs.position || bs), Math.max(60, bs.zoneRadius || 0)] : null;
+    if (TG && !(P.onStructure && P.position.y > 20)) {
+      const cx = Math.floor(px / 20), cz = Math.floor(pz / 20);
+      for (let gx = cx - 2; gx <= cx + 2; gx++) for (let gz = cz - 2; gz <= cz + 2; gz++) for (const t of TG.get(gx + ',' + gz) || []) {
+        if (burn && (t[0] - burn[0]) ** 2 + (t[1] - burn[2]) ** 2 < burn[3] * burn[3]) continue;   // the burn's snags have no crowns: no shade there
+        const dx = t[0] - px, dz = t[1] - pz, s2 = dx * ux + dz * uz; if (s2 <= 0 || s2 > 45) continue;   // behind you, or too far to matter
+        const perp = Math.abs(dx * uz - dz * ux), y = py + s2 * tanE, R = 2.2 + t[2] * 2.2;   // the ray's height there; the crown's radius
+        if (perp < R && y > 5 && y < 30) { shade += 0.8 * (1 - perp / R); if (shade >= 1) break; }
+      }
+    }
+    return day * cloud * (1 - Math.min(1, shade));
+  }
   /** The hikers' camp: what's left of it. One tent still up (sagging), one down, a slash through its side. */
   campTents() {
     if (this._campTents) return; this._campTents = [];
@@ -1535,7 +1571,7 @@ export class Game {
     const Pl = this.player(), wx = e.sky.weather, ha = this.anchor('IA_heater');
     for (const ev of this.surv.tick(Math.max(0, hTo - hFrom), { hour: dayHour(this.clock.hour), y: Pl.position.y, zone: Pl.zone, rain: wx.rain, fog: wx.fog, wind: wx.wind,
       heater: this.co.heater, open: this.co.open, inWater: !!Pl.inWater, jog: e.input.isDown('jog') && Pl.stamina > 0.05, night: this.night,
-      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood, shelter: !!this.restIn })) {
+      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood, shelter: !!this.restIn, sun: (this._sunT = (this._sunT || 0) - dt) <= 0 ? (this._sunT = 0.5, this._sun = this.sunOn()) : (this._sun || 0) })) {
       if (ev === 'thirsty') this.ui.toast('Your mouth is dry. Drink something: the canteen, or the spring.', 4);
       if (/^tired[123]$/.test(ev) || ev === 'rested') this.say(S.LINES[ev]);
       if (ev === 'crash') this.say(S.LINES.coffeeCrash);
@@ -1660,6 +1696,7 @@ export class Game {
       if (this.resting) { L.t += dt; e.post.params.blackout = 0.85 * Math.min(1, Math.max(0, (L.t - 1.6) / 2.4)); }
       if (!this.resting && L.k <= 0) this._lie = null;
     }
+    if (this.springFlow) this.springFlow.update(dt);
     if (this.fear.shake > 0.01 && this.mode === 'walk') {   // scared hands: a fine tremor in the view (and the torch beam)
       const c = e.camera, k = this.fear.shake * 0.0035;
       c.rotation.x += (Math.sin(t * 23.1) + Math.sin(t * 37.7 + 1.3) * 0.6) * k; c.rotation.y += (Math.sin(t * 19.3 + 2.1) + Math.sin(t * 41.9) * 0.5) * k;

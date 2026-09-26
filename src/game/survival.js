@@ -1,8 +1,8 @@
 // Body and weather: air temperature (°F, the lookout is a 1983 Forest Service post), wind chill, the cab's own air,
 // thirst and hunger, and sleep (this.fatigue: src/game/fatigue.js). Pure. Rates are per GAME hour, so resting on the bed
 // costs water and food like real hours do (and pays the sleep back).
-import { clamp } from './util.js?v=1fafa2b9'
-import { Fatigue } from './fatigue.js?v=1fafa2b9'
+import { clamp } from './util.js?v=aec1a0d7'
+import { Fatigue } from './fatigue.js?v=aec1a0d7'
 
 export const SURV = {
   thirst: 1 / 16,       // a full water meter lasts 16 game hours
@@ -59,7 +59,7 @@ export class Survival {
     this.airF = inCab ? this.cabF : out
     this.warmth = Math.max(0, this.warmth - dtH * 0.7)
     this.chill = Math.max(0, this.chill - dtH * 1.5); this.sick = Math.max(0, this.sick - dtH / 8)
-    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet + 7 * this.warmth - 5 * this.chill + (shelter && !inCab ? 7 : 0)
+    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet + 7 * this.warmth - 5 * this.chill + (shelter && !inCab ? 7 : 0) + (!inCab && !shelter ? 10 * (ctx.sun || 0) - 3 * (1 - (ctx.sun || 0)) * (ctx.night ? 0 : 1) : 0)   // sun on you: hot; deep shade: cool
     this.warming = inCab && ctx.heater && this.cabF > out + 3
     // thirst + hunger (worse jogging, or sweating in a hot cab)
     const hot = this.feelsF > 74 ? 1.4 : 1
