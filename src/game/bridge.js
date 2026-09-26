@@ -1,34 +1,35 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f815e1db';
-import { Objectives } from './objectives.js?v=f815e1db';
-import { Radio } from './radio.js?v=f815e1db';
-import { Fuel, FUEL } from './fuel.js?v=f815e1db';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=f815e1db';
-import { Survival, SURV } from './survival.js?v=f815e1db';
-import { createItemsView } from './itemsView.js?v=f815e1db';
-import { createChill } from './chill.js?v=f815e1db';
-import { createPlume } from './smokePlume.js?v=f815e1db';
-import { FireFinder, spokenBearing } from './firefinder.js?v=f815e1db';
-import { Photos, classifyShot } from './photos.js?v=f815e1db';
-import { CO } from './co.js?v=f815e1db';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=f815e1db';
-import { OtherLookout } from './otherLookout.js?v=f815e1db';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f815e1db';
-import { GuidedHiker } from './hikers.js?v=f815e1db';
-import { MorseKeyer, isSOS } from './morse.js?v=f815e1db';
-import { normalizeLayout } from './layout.js?v=f815e1db';
-import { createSaves } from './saves.js?v=f815e1db';
-import { createRng } from './rng.js?v=f815e1db';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=f815e1db';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=f815e1db';
-import * as S from './content/story.js?v=f815e1db';
-import { createDog, setDogName } from './dog.js?v=f815e1db';
-import { createWildlife } from './wildlife.js?v=f815e1db';
-import { Fear, registerFearSounds } from './fear.js?v=f815e1db';
-import { epilogue } from './content/ending.js?v=f815e1db';
-import { Director, sosLamp } from './director.js?v=f815e1db';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=45434b3a';
+import { Objectives } from './objectives.js?v=45434b3a';
+import { Radio } from './radio.js?v=45434b3a';
+import { Fuel, FUEL } from './fuel.js?v=45434b3a';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=45434b3a';
+import { Survival, SURV } from './survival.js?v=45434b3a';
+import { createItemsView } from './itemsView.js?v=45434b3a';
+import { createChill } from './chill.js?v=45434b3a';
+import { createPlume } from './smokePlume.js?v=45434b3a';
+import { FireFinder, spokenBearing } from './firefinder.js?v=45434b3a';
+import { Photos, classifyShot } from './photos.js?v=45434b3a';
+import { CO } from './co.js?v=45434b3a';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=45434b3a';
+import { OtherLookout } from './otherLookout.js?v=45434b3a';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=45434b3a';
+import { GuidedHiker } from './hikers.js?v=45434b3a';
+import { MorseKeyer, isSOS } from './morse.js?v=45434b3a';
+import { normalizeLayout } from './layout.js?v=45434b3a';
+import { createSaves } from './saves.js?v=45434b3a';
+import { createRng } from './rng.js?v=45434b3a';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=45434b3a';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=45434b3a';
+import * as S from './content/story.js?v=45434b3a';
+import { createDog, setDogName } from './dog.js?v=45434b3a';
+import { createWildlife } from './wildlife.js?v=45434b3a';
+import { Fear, registerFearSounds } from './fear.js?v=45434b3a';
+import { epilogue } from './content/ending.js?v=45434b3a';
+import { Director, sosLamp } from './director.js?v=45434b3a';
+import { createPhotoBoard } from './photoBoard.js?v=45434b3a';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -85,6 +86,8 @@ export class Game {
     const seat = W.weeperSeat || V3(this.L.places.weeper_rock || [58, -42, 196]);
     this.weeperSeat = seat;
     this.weeperH = e.entities.spawn('weeper', { position: seat.clone(), facing: V3(this.L.places.creek_bridge || [34, -46, 176]), pose: 'sit_sob' });
+    // the cork board: west wall of the cab at eye level, beside the trail map and above the peg rail (pin the print in your hand)
+    this.board = createPhotoBoard(e.scene, { center: new THREE.Vector3(-1.99, 31.36, 1.12), normal: new THREE.Vector3(1, 0, 0) }, { w: 0.66, h: 0.46 });
     this.interactions();
     this.inputs();
     this.iv = createItemsView(e); this.itemIA = new Map(); this.health = 1; this.limp = 0;
@@ -99,6 +102,7 @@ export class Game {
         windows: { n: an('IA_window_n', [0, 31.3, -2.05]), e: an('IA_window_e', [2.05, 31.3, 0]), s: an('IA_window_s', [0, 31.3, 2.05]), w: an('IA_window_w', [-2.05, 31.3, 0]) },
         treeLine: this.L.treeLine || [] }); }
     this.dirActions = this.makeDirectorActions();
+
     e.player.onLand = (drop, v) => this.onLand(drop, v);
     this.itemsReady = this.iv.load().then(() => { try { this.iv.buildSurfaces(); } catch (err) { console.warn('surfaces', err); } this.syncItems(); }).catch((err) => console.warn('items', err));
     // Juniper, the stray on the spring trail (src/game/dog.js + dogBrain.js)
@@ -787,6 +791,7 @@ export class Game {
       const P = S.POSTER; this.openModal(() => this.ui.note(`${P.head} — ${P.name}`, P.lines.join('\n') + '\n\n' + P.foot, () => this.closedModal()));
     }, () => true, 0.45);
     reg('map', 'IA_map', 'E — The trail map', () => this.openMap());
+    reg('board', this.board.anchor, () => this.holding ? 'E — Pin the print to the board' : this.photos.prints.some((p) => p.pin != null && !p.sent) ? 'E — Take a print down' : 'The cork board (hold a print to pin it up)', () => this.useBoard(), () => true, 0.6);
     reg('heater', 'IA_heater', () => this.co.heater ? 'E — Turn the heater off' : 'E — Light the propane heater', () => { this.co.toggleHeater(); e.audio.play(this.co.heater ? 'heater_on' : 'heater_off', { volume: 0.7, position: this.anchor('IA_heater') }); });
     for (const k of ['n', 'e', 's', 'w']) reg('win_' + k, 'IA_window_' + k, () => this.co.windows[k] ? 'E — Close the window' : 'E — Open the window', () => {
       const open = this.co.toggleWindow(k); e.audio.play(open ? 'window_open' : 'window_close', { volume: 0.7, position: this.anchor('IA_window_' + k) });
@@ -896,7 +901,7 @@ export class Game {
       mine: this.log.map((en) => ({ ...en, text: S.coDistort(en.text, this.co.blood) })),
       photos: this.photos.prints.map((p) => ({ id: p.id, dataURL: p.dataURL, develop: p.develop, faceDown: p.faceDown, sent: !!p.sent })),
       proofs: this.proofs, proofGoal: S.PROOF_GOAL,
-      onPhoto: (id) => { this.ui.closeModal(); this.holding = id; this.photos.open(id); },
+      onPhoto: (id) => { this.ui.closeModal(); const p = this.photos.get(id); if (p) p.pin = null; this.holding = id; this.photos.open(id); },
       onPage: (pg) => { if (pg === 'rules' && this.obj.has('rules_more')) this.complete('rules_more'); },   // opened on (or turned to) the card
     };
     this.openModal(() => this.ui.logbook(data, () => this.closedModal(), page));
@@ -1316,8 +1321,15 @@ export class Game {
     for (const ev of this.photos.tick(dt)) {
       if (ev.kind === 'seen') {
         const p = this.photos.get(ev.id);
-        if (p && p.forbidden) { e.audio.music.sting('seen'); this.weeper.trigger('print', { night: this.night, carrier: p.id }); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); this.add('weeper_send'); }
+        if (p && p.forbidden) this.printSeen(p);
       }
+    }
+    // the board: keep what's pinned in step (a second is plenty), and a face-up print of HIS face, developed, looked at up close, is seeing it
+    if ((this._boardT = (this._boardT || 0) - dt) <= 0) {
+      this._boardT = 0.5; this.board.sync(this.photos.prints);
+      const bad = this.photos.prints.find((p) => p.pin != null && !p.sent && p.forbidden && !p.faceDown && !p.seen && p.develop >= 0.55);
+      if (bad && this.inCab()) { const cam = e.camera, to = this.board.center.clone().sub(cam.position), fw = cam.getWorldDirection(new THREE.Vector3());
+        if (to.length() < 2.2 && to.angleTo(fw) < 0.6) { bad.seen = true; this.printSeen(bad); } }
     }
     if (this.holding) { const p = this.photos.get(this.holding); const v = this.photos.look(this.holding); this.ui.print(p && v ? { ...v, dataURL: p.dataURL } : null); } else this.ui.print(null);
     // CO
@@ -1517,6 +1529,23 @@ export class Game {
         this._dogStare = { pos: V3(pos), until: e.time.value + (kind === 'growl' ? 5 : 3) };
         e.audio.play(kind === 'growl' ? 'dog_growl' : 'dog_whine', { position: d.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.9 }); return true; },
     };
+  }
+  /** Seeing HIS face in a print (in your hand, or up on the board). */
+  printSeen(p) {
+    const e = this.e; e.audio.music.sting('seen'); this.weeper.trigger('print', { night: this.night, carrier: p.id }); this.say(S.LINES.weeperSeen); this.fear.spike(1, 'seen'); this.add('weeper_send');
+  }
+  /** E on the cork board: pin the print you're holding, or take the last one you pinned back down into your hand. */
+  useBoard() {
+    const P = this.photos.prints;
+    if (this.holding) {
+      const p = this.photos.get(this.holding); if (!p) return;
+      const slot = this.board.freeSlot(P); if (slot < 0) { this.ui.toast('The board is full.', 2); return; }
+      p.pin = slot; p.pinnedAt = this.e.time.value; this.holding = null; this.photos.close(); this.ui.print(null);
+      this.e.audio.sfx('knock_one', { position: this.board.center.clone(), volume: 0.12 }); this.board.sync(P); this._boardT = 0.5; return;
+    }
+    const up = P.filter((p) => p.pin != null && !p.sent).sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0))[0];
+    if (!up) { this.ui.toast('Hold a print (Tab → Photos, or a fresh one from the camera) and pin it up here.', 3); return; }
+    up.pin = null; this.board.sync(P); this.holding = up.id; this.photos.open(up.id); this.e.audio.play('paper', { volume: 0.4 });
   }
   /** The nearest real threat to the dog (a Vector3) or null. */
   nearestThreat() {

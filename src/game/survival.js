@@ -1,8 +1,8 @@
 // Body and weather: air temperature (°F, the lookout is a 1983 Forest Service post), wind chill, the cab's own air,
 // thirst and hunger, and sleep (this.fatigue: src/game/fatigue.js). Pure. Rates are per GAME hour, so resting on the bed
 // costs water and food like real hours do (and pays the sleep back).
-import { clamp } from './util.js?v=f815e1db'
-import { Fatigue } from './fatigue.js?v=f815e1db'
+import { clamp } from './util.js?v=45434b3a'
+import { Fatigue } from './fatigue.js?v=45434b3a'
 
 export const SURV = {
   thirst: 1 / 16,       // a full water meter lasts 16 game hours
