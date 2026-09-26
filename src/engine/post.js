@@ -20,7 +20,7 @@ export function createPost(engine) {
   const NM = 5;
   for (let i = 0; i < NM; i++) mips.push({ down: mk(4, 4), up: mk(4, 4) });
   const P = {
-    co: 0, fear: 0, blackout: 0, pulse: 0, cold: 0, heat: 0, hurt: 0, exposure: 1.0, bloom: 0.55, grain: 0.055, time: 0, saturation: 1.0, contrast: 1.04,
+    co: 0, fear: 0, blackout: 0, pulse: 0, cold: 0, heat: 0, hurt: 0, deep: 0, exposure: 1.0, bloom: 0.55, grain: 0.055, time: 0, saturation: 1.0, contrast: 1.04,
     set(o) { Object.assign(P, o); },
   };
   const downMat = new THREE.ShaderMaterial({
@@ -48,13 +48,13 @@ export function createPost(engine) {
   const compMat = new THREE.ShaderMaterial({
     uniforms: {
       tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0.5 }, uExp: { value: 1 }, uTime: { value: 0 },
-      uGrain: { value: 0.05 }, uCO: { value: 0 }, uFear: { value: 0 }, uBlack: { value: 0 }, uPulse: { value: 0 }, uCold: { value: 0 }, uHeat: { value: 0 }, uHurt: { value: 0 }, uRes: { value: new THREE.Vector2() },
+      uGrain: { value: 0.05 }, uCO: { value: 0 }, uFear: { value: 0 }, uBlack: { value: 0 }, uPulse: { value: 0 }, uCold: { value: 0 }, uHeat: { value: 0 }, uHurt: { value: 0 }, uDeep: { value: 0 }, uRes: { value: new THREE.Vector2() },
       uSat: { value: 1 }, uCon: { value: 1.04 },
     },
     vertexShader: FS_VERT, depthTest: false, depthWrite: false,
     fragmentShader: `uniform sampler2D tScene; uniform sampler2D tBloom; uniform float uBloom; uniform float uExp; uniform float uTime;
       uniform float uGrain; uniform float uCO; uniform float uFear; uniform float uBlack; uniform vec2 uRes; uniform float uSat; uniform float uCon;
-      uniform float uPulse; uniform float uCold; uniform float uHeat; uniform float uHurt;
+      uniform float uPulse; uniform float uCold; uniform float uHeat; uniform float uHurt; uniform float uDeep;
       varying vec2 vUv;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       // AgX (Blender's / three's), approximated with the published polynomial
@@ -86,7 +86,7 @@ export function createPost(engine) {
         c.r = texture2D(tScene, uv - d * ca).r; c.g = texture2D(tScene, uv).g; c.b = texture2D(tScene, uv + d * ca).b;
         if (uCO > 0.2) { vec3 ghost = texture2D(tScene, uv + vec2(0.012 * sin(uTime * 0.6), 0.004) * uCO).rgb; c = mix(c, max(c, ghost), 0.35 * uCO); }
         c += texture2D(tBloom, uv).rgb * uBloom;
-        c *= uExp;
+        c *= uExp * (1.0 - uDeep * 0.6);   // deep in the woods: the canopy closes over, the light goes
         c = agx(c);
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
         c = mix(vec3(l), c, uSat * (1.0 - uCO * 0.45) * (1.0 - uHurt * 0.55) * (1.0 - uCold * 0.3) * (1.0 - uFear * 0.25));
@@ -94,7 +94,7 @@ export function createPost(engine) {
         c *= mix(vec3(1.0), vec3(1.1, 0.97, 0.84), uHeat);                  // heat: everything goes amber
         c = mix(c, c * vec3(1.05, 0.5, 0.45), uHurt * smoothstep(0.1, 0.4, r2) * (0.35 + 0.25 * uPulse));   // hurt: the edges bleed red, in time
         c = (c - 0.5) * uCon + 0.5;
-        float fv = uFear + thump * 0.35 + uHurt * 0.3; float vig = smoothstep(0.95, 0.25 - fv * 0.2, sqrt(r2) * (1.0 + fv * 0.6));
+        float fv = uFear + thump * 0.35 + uHurt * 0.3 + uDeep * 0.5; float vig = smoothstep(0.95, 0.25 - fv * 0.2, sqrt(r2) * (1.0 + fv * 0.6));
         c *= mix(0.55, 1.0, vig);
         float g = hash(vUv * uRes + fract(uTime * 13.1)) - 0.5;
         c += g * uGrain * (0.25 + 0.45 * (1.0 - l));
@@ -135,16 +135,16 @@ export function createPost(engine) {
       }
       const u = compMat.uniforms;
       u.tScene.value = main.texture; u.tBloom.value = prev; u.uBloom.value = P.bloom; u.uExp.value = P.exposure; u.uTime.value = P.time;
-      u.uGrain.value = P.grain; u.uCO.value = P.co; u.uFear.value = P.fear; u.uBlack.value = P.blackout; u.uPulse.value = P.pulse; u.uCold.value = P.cold; u.uHeat.value = P.heat; u.uHurt.value = P.hurt; u.uSat.value = P.saturation; u.uCon.value = P.contrast;
+      u.uGrain.value = P.grain; u.uCO.value = P.co; u.uFear.value = P.fear; u.uBlack.value = P.blackout; u.uPulse.value = P.pulse; u.uCold.value = P.cold; u.uHeat.value = P.heat; u.uHurt.value = P.hurt; u.uDeep.value = P.deep; u.uSat.value = P.saturation; u.uCon.value = P.contrast;
       pass(compMat, null);
     },
     // grade + tone map an arbitrary HDR target into an 8-bit canvas-ready target (used by photo capture)
     compositeTo(srcTarget, outTarget) {
-      const u = compMat.uniforms; const save = { b: u.uBloom.value, co: u.uCO.value, f: u.uFear.value, bl: u.uBlack.value, g: u.uGrain.value, pu: u.uPulse.value, cd: u.uCold.value, ht: u.uHeat.value, hu: u.uHurt.value };
-      u.uPulse.value = 0; u.uCold.value = 0; u.uHeat.value = 0; u.uHurt.value = 0;   // a photograph shows the world, not how you felt
+      const u = compMat.uniforms; const save = { b: u.uBloom.value, co: u.uCO.value, f: u.uFear.value, bl: u.uBlack.value, g: u.uGrain.value, pu: u.uPulse.value, cd: u.uCold.value, ht: u.uHeat.value, hu: u.uHurt.value, dp: u.uDeep.value };
+      u.uPulse.value = 0; u.uCold.value = 0; u.uHeat.value = 0; u.uHurt.value = 0; u.uDeep.value = 0;   // a photograph shows the world, not how you felt
       u.tScene.value = srcTarget.texture; u.tBloom.value = srcTarget.texture; u.uBloom.value = 0.0; u.uCO.value = 0; u.uFear.value = 0; u.uBlack.value = 0; u.uGrain.value = 0;
       pass(compMat, outTarget);
-      u.uBloom.value = save.b; u.uCO.value = save.co; u.uFear.value = save.f; u.uBlack.value = save.bl; u.uGrain.value = save.g; u.uPulse.value = save.pu; u.uCold.value = save.cd; u.uHeat.value = save.ht; u.uHurt.value = save.hu;
+      u.uBloom.value = save.b; u.uCO.value = save.co; u.uFear.value = save.f; u.uBlack.value = save.bl; u.uGrain.value = save.g; u.uPulse.value = save.pu; u.uCold.value = save.cd; u.uHeat.value = save.ht; u.uHurt.value = save.hu; u.uDeep.value = save.dp;
     },
   };
 }

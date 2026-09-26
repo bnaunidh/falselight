@@ -1,8 +1,8 @@
 // FALSE LIGHT — entities (posed static meshes, instant pose swaps), what-can-be-seen tests (engine.view),
 // line of sight (terrain + tower + tree trunks), and the crosshair interaction registry.
 import * as THREE from 'three';
-import { loadGLB } from './world.js?v=aec1a0d7';
-import { clamp } from './util.js?v=aec1a0d7';
+import { loadGLB } from './world.js?v=c8446c4c';
+import { clamp } from './util.js?v=c8446c4c';
 
 // ------------------------------------------------------------------ placeholder people (until the Blender characters land)
 function placeholderFigure(kind) {

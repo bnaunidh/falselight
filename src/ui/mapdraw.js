@@ -427,7 +427,7 @@ export function drawMap(canvas, data = {}) {
     cands.sort((a, b) => b.len - a.len);
     let n = 0; const placed = [];
     for (const c of cands) {
-      if (n >= 7) break;
+      if (n >= 2) break;   // (a couple of heights, not a spreadsheet)
       const m = c.ln[Math.floor(c.ln.length * 0.4)], sx = px(m[0]), sy = py(m[1]);
       if (sx < frame.x + 30 || sx > frame.x + frame.w - 30 || sy < frame.y + 20 || sy > frame.y + frame.h - 20) continue;
       if (placed.some(([x, y]) => Math.hypot(x - sx, y - sy) < 130)) continue;
@@ -460,8 +460,7 @@ export function drawMap(canvas, data = {}) {
   const segBy = (re) => segs.find((s) => re.test(s.name));
   const tstyle = { font: `italic ${Math.round(11 * k)}px ${SERIF}`, fill: C.trail, hw: 3.2 };
   const tn = segBy(/J2_to_trailhead|J1_to_creek/); if (tn) lineLabel(g, tn.points, view, 0.45, 'Trail No. 1411', tstyle);
-  const lp = segBy(/loop_J2_to_camp|loop/); if (lp) lineLabel(g, lp.points, view, 0.55, 'Camp Loop', tstyle);
-  const sp = segBy(/spur/); if (sp) lineLabel(g, sp.points, view, 0.6, 'Overlook Spur', tstyle);
+  // (the loop and the spur go unnamed: a paper map, not a guidebook)
   // places
   const labelFont = (b) => `${b ? 'bold ' : ''}${Math.round(12.5 * k)}px ${SERIF}`;
   for (const [key, p] of Object.entries(data.places || {})) {
@@ -521,7 +520,7 @@ export function drawMap(canvas, data = {}) {
     const tries = [[16, 13, 'left'], [16, -13, 'left'], [-16, 13, 'right'], [-16, -13, 'right'], [0, 24, 'center'], [0, -24, 'center']]
       .filter(([dx]) => (dx >= 0 ? x < frame.x + frame.w - 110 : x > frame.x + 110) || dx === 0);
     const pick = tries.find(([dx, dy, al]) => !overlaps(textBox(g, 'YOU ARE HERE', x + dx * k, y + dy * k, font, al))) || tries[0] || [16, 13, 'left'];
-    haloText(g, 'YOU ARE HERE', x + pick[0] * k, y + pick[1] * k, { font, fill: C.red, align: pick[2], hw: 3.5 });
+    void pick;   // no 'YOU ARE HERE': just the arrow, and only where the map knows the ground
   }
   g.restore();   // unclip
   // --- neatline + edge ticks every 100 m

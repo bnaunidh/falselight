@@ -301,7 +301,7 @@ export const UI = {
   title: 'FALSE LIGHT',
   subtitle: 'Tamarack Lookout · Silver Fork Ranger District · August 1983',
   // (the Controls card is written from the live key bindings: main.js controlsList)
-  death: { bear: 'You ran. It covered the ground between you before you\'d taken ten steps.', weeper: 'He found who he was looking for.', fall: 'You fell too far. Nobody came up the trail until morning.', generic: 'You didn\'t make it to first light.' },
+  death: { woods: 'You stood still in the dark, off the trail, too long. The steps behind you didn\'t stop.', cold: 'You lay down for a minute in the dark. The mountain kept you.', bear: 'You ran. It covered the ground between you before you\'d taken ten steps.', weeper: 'He found who he was looking for.', fall: 'You fell too far. Nobody came up the trail until morning.', generic: 'You didn\'t make it to first light.' },
 }
 
 /** CO makes the logbook subtly wrong. Deterministic per word so it doesn't flicker. */

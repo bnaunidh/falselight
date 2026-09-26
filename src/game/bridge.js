@@ -1,37 +1,38 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=aec1a0d7';
-import { Objectives } from './objectives.js?v=aec1a0d7';
-import { Radio } from './radio.js?v=aec1a0d7';
-import { Fuel, FUEL } from './fuel.js?v=aec1a0d7';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=aec1a0d7';
-import { Survival, SURV } from './survival.js?v=aec1a0d7';
-import { createItemsView } from './itemsView.js?v=aec1a0d7';
-import { createChill } from './chill.js?v=aec1a0d7';
-import { createPlume } from './smokePlume.js?v=aec1a0d7';
-import { FireFinder, spokenBearing } from './firefinder.js?v=aec1a0d7';
-import { Photos, classifyShot } from './photos.js?v=aec1a0d7';
-import { CO } from './co.js?v=aec1a0d7';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=aec1a0d7';
-import { OtherLookout } from './otherLookout.js?v=aec1a0d7';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=aec1a0d7';
-import { GuidedHiker } from './hikers.js?v=aec1a0d7';
-import { MorseKeyer, isSOS } from './morse.js?v=aec1a0d7';
-import { normalizeLayout } from './layout.js?v=aec1a0d7';
-import { createSaves } from './saves.js?v=aec1a0d7';
-import { createRng } from './rng.js?v=aec1a0d7';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=aec1a0d7';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=aec1a0d7';
-import * as S from './content/story.js?v=aec1a0d7';
-import { createDog, setDogName } from './dog.js?v=aec1a0d7';
-import { createWildlife } from './wildlife.js?v=aec1a0d7';
-import { Fear, registerFearSounds } from './fear.js?v=aec1a0d7';
-import { epilogue } from './content/ending.js?v=aec1a0d7';
-import { Director, sosLamp } from './director.js?v=aec1a0d7';
-import { createPhotoBoard } from './photoBoard.js?v=aec1a0d7';
-import { makeTent } from './tents.js?v=aec1a0d7';
-import { makeSpringFlow } from './spring.js?v=aec1a0d7';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=c8446c4c';
+import { Objectives } from './objectives.js?v=c8446c4c';
+import { Radio } from './radio.js?v=c8446c4c';
+import { Fuel, FUEL } from './fuel.js?v=c8446c4c';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=c8446c4c';
+import { Survival, SURV } from './survival.js?v=c8446c4c';
+import { createItemsView } from './itemsView.js?v=c8446c4c';
+import { createChill } from './chill.js?v=c8446c4c';
+import { createPlume } from './smokePlume.js?v=c8446c4c';
+import { FireFinder, spokenBearing } from './firefinder.js?v=c8446c4c';
+import { Photos, classifyShot } from './photos.js?v=c8446c4c';
+import { CO } from './co.js?v=c8446c4c';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=c8446c4c';
+import { OtherLookout } from './otherLookout.js?v=c8446c4c';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=c8446c4c';
+import { GuidedHiker } from './hikers.js?v=c8446c4c';
+import { MorseKeyer, isSOS } from './morse.js?v=c8446c4c';
+import { normalizeLayout } from './layout.js?v=c8446c4c';
+import { createSaves } from './saves.js?v=c8446c4c';
+import { createRng } from './rng.js?v=c8446c4c';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=c8446c4c';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=c8446c4c';
+import * as S from './content/story.js?v=c8446c4c';
+import { createDog, setDogName } from './dog.js?v=c8446c4c';
+import { createWildlife } from './wildlife.js?v=c8446c4c';
+import { Fear, registerFearSounds } from './fear.js?v=c8446c4c';
+import { epilogue } from './content/ending.js?v=c8446c4c';
+import { Director, sosLamp } from './director.js?v=c8446c4c';
+import { createPhotoBoard } from './photoBoard.js?v=c8446c4c';
+import { makeTent } from './tents.js?v=c8446c4c';
+import { makeSpringFlow } from './spring.js?v=c8446c4c';
+import { Follower } from './follower.js?v=c8446c4c';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -104,6 +105,8 @@ export class Game {
         windows: { n: an('IA_window_n', [0, 31.3, -2.05]), e: an('IA_window_e', [2.05, 31.3, 0]), s: an('IA_window_s', [0, 31.3, 2.05]), w: an('IA_window_w', [-2.05, 31.3, 0]) },
         treeLine: this.L.treeLine || [] }); }
     this.dirActions = this.makeDirectorActions();
+    // the deep woods at night: what walks behind you (src/game/follower.js)
+    this.follower = new Follower(); this.player().onStep = () => { this._stepped = true; };
 
     e.player.onLand = (drop, v) => this.onLand(drop, v);
     this.itemsReady = this.iv.load().then(() => { try { this.iv.buildSurfaces(); } catch (err) { console.warn('surfaces', err); } this.syncItems(); }).catch((err) => console.warn('items', err));
@@ -961,9 +964,12 @@ export class Game {
   openMap() {
     const W = this.e.world;
     const places = {}; for (const k of ['tower', 'trailhead', 'hikers_camp', 'burn_scar', 'spring', 'ravine_overlook', 'creek_bridge']) if (this.L.places[k]) places[k.replace('_', ' ')] = this.L.places[k];
-    this.openModal(() => this.ui.map({ segments: W.layout.trail ? W.layout.trail.segments : [], places, player: this.pos(), rect: W.rect, heightAt: W.heightAt,
+    // a paper map: no benches, and it can only show you where you are while you're on the ground it shows (the trail, the
+    // places). Off in the timber there's no arrow: you have the north arrow, the binoculars' bearing, and your own pencil.
+    const P = this.player(), mapped = (P.depth || 0) < 0.08 || P.onStructure;
+    this.openModal(() => this.ui.map({ segments: W.layout.trail ? W.layout.trail.segments : [], places, player: mapped ? this.pos() : null, rect: W.rect, heightAt: W.heightAt,
       creek: W.layout.creek && W.layout.creek.points, ravine: W.layout.ravine && W.layout.ravine.polygon,
-      spots: this.chill ? this.chill.spots : [], heading: this.player().yaw }, () => this.closedModal()));
+      spots: [], pencil: this.pencilMarks ? this.pencilMarks() : [], heading: P.yaw }, () => this.closedModal()));
   }
 
   inputs() {
@@ -1474,7 +1480,7 @@ export class Game {
     SL.power = this.fuel.power ? 1 - this.fuel.sputter * 0.7 : 0;
     e.lights.cabLamp.power = this.fuel.power ? 1 - this.fuel.sputter * (0.5 + 0.5 * Math.max(0, Math.sin(this.e.time.value * 23))) : 0.04;   // the cab lamp runs off the generator too: it browns out as the tank sputters, and dies with it
     e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, genSputter: this.fuel.sputter, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1),
-      forest: (this.wildlife && this.wildlife.silent) || e.time.value < (this._duckUntil || 0) ? 0 : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0,
+      forest: (this.wildlife && this.wildlife.silent) || e.time.value < (this._duckUntil || 0) ? 0 : (this.night ? 0.8 : 0.6) * (1 - (this._deep || 0) * (this.night ? 0.85 : 0.45)),   // deep in: the forest goes quiet radioStatic: this.inCab() ? 0.35 : 0,
       heater: this.co.heater ? 1 : 0, stove: this.coffee != null ? 1 : 0, coffee: this.coffee ?? 0, lamp: e.lights.cabLamp.on ? 1 : 0, clockTick: 1,
       inCab: this.inCab(), doorOpen: !this.flags.doorShut, windowsOpen: this.co.open });
     // the score follows what's happening (src/engine/music.js; changes are debounced inside, so asking every frame is fine)
@@ -1636,6 +1642,11 @@ export class Game {
         signals: this.hikers.filter((H) => H.rules.status === 'signalling').length, dog: d && d.tamed ? { pos: [d.position.x, d.position.y, d.position.z], tamed: true, name: this.flags.dogName || 'Juniper' } : null,
         holding: this.inv.activeItem ? this.inv.activeItem.kind : null, cold: this.co.cold }, this.dirActions);
       if (this._flick && now >= this._flick.until) { const f = this._flick; this._flick = null; if (f.lamp && !this.flags.lampOff) e.lights.cabLamp.on = true; if (f.torch && this.inv.inHands('flashlight')) e.lights.flashlight.on = true; }
+      { const Pl = this.player(), cam = e.camera, fw = cam.getWorldDirection(this._ffw || (this._ffw = new THREE.Vector3())), mv = e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right');
+        const lit = e.lights.flashlight.on || this.inv.items.some((i) => i.kind === 'lantern' && i.on && i.where === 'hand');
+        this.follower.update(dt, { t: e.time.value, night: this.night, depth: this.mode === 'walk' ? (Pl.depth || 0) : 0, busy: this.ui.modalOpen() || !!e.uiBlocking || this.state !== 'play' || !!this.resting,
+          stepped: !!this._stepped, moving: mv && this.mode === 'walk', lit, eye: [cam.position.x, cam.position.y, cam.position.z], fwd: [fw.x, fw.z], pos: [Pl.position.x, Pl.position.y, Pl.position.z], rain: e.sky.weather.rain > 0.3 }, this.followActions || (this.followActions = this.makeFollowActions()));
+        this._stepped = false; if (!this.follower.active) this.followFear = 0; }
       // walking the false light brings it home: its steps come up the stairs (about 20 game minutes later), then it knocks
       { const F = this.flags;
         if (F.falseWalked && (F.falseVisit || 0) < 2 && this.night && !this.director.ev) {
@@ -1667,9 +1678,10 @@ export class Game {
     this.ui.watch(e.input.isDown('watch'), fmtHour(this.clock.hour) + (this.clock.held ? '' : ''));
     // the path rule, said once
     const off = this.player().offTrail || 0;
-    if (off > 13 && !this._warnedOff) { this._warnedOff = true; this.ui.toast(this.night ? 'You can\'t see the trail anymore. Go back.' : 'The trail is behind you. Don\'t lose it.', 4); }
-    if (off < 6) this._warnedOff = false;
-    if (this.player().blockedByPath && !this.flags.toldPath) { this.flags.toldPath = true; this.ui.toast('The timber is too thick to go any further. Back to the trail.'); }
+    void off;
+    { const Pl = this.player(), why = Pl.blockedByPath ? Pl.blockedWhy : null, told = this.flags.toldEdge || (this.flags.toldEdge = {});
+      if (why && !told[why] && why !== 'steep') { told[why] = true;
+        this.ui.toast(why === 'ravine' ? 'The ground falls away into the ravine: thirty-five metres of air. Not that way.' : why === 'mountains' ? 'Past here the slope climbs into the mountains: loose rock, too steep to climb. This is the edge of your district.' : 'Young fir, packed so tight you can\'t get an arm through.', 4); } }
     // secret checkpoints: walking into the cab, and every two game hours
     const zoneNow = this.player().zone;
     if (this._lastZone === 'cab' && zoneNow !== 'cab' && this.phaseTime > 3) {
@@ -1732,6 +1744,18 @@ export class Game {
       this.eyeGlints.forEach((g, i) => { g.position.copy(hd).addScaledVector(d, 0.1).addScaledVector(sd, i ? 0.032 : -0.032); g.visible = true; }); }
     return { move: (p, f, ps) => { if (p) h.setPosition(V3(p)); if (f) h.face(V3(f)); if (ps) h.setPose(ps); },
       remove: () => { h.setVisible(false); h.busy = false; if (kind === 'face') for (const g of this.eyeGlints) g.visible = false; } };
+  }
+  /** How the thing behind you is heard (follower.js). */
+  makeFollowActions() {
+    const e = this.e, at = (p) => { const v = V3(p); v.y = e.world.heightAt(v.x, v.z) + 0.05; return v; };
+    return {
+      step: (p, v, wet) => { e.audio.play('footstep_dirt', { position: at(p), volume: 0.35 + 0.9 * v }); if (wet && e.audio.has('footstep_wet')) e.audio.play('footstep_wet', { position: at(p), volume: 0.4 * v }); },
+      breath: (p, v) => e.audio.play('breath_close', { position: at(p).add(new THREE.Vector3(0, 1.5, 0)), volume: v }),
+      flee: (p) => { e.audio.play('branch_snap', { position: at(p), volume: 1.2 }); for (let k = 1; k <= 5; k++) setTimeout(() => { if (this.state === 'play') e.audio.play('footstep_dirt', { position: at(p).add(new THREE.Vector3(0, 0, 0)), volume: 1 - k * 0.16 }); }, 120 + k * 170); this.fear.spike(0.6, 'woods'); this.scare({ shake: 0.25, seconds: 0.3 }); },
+      fear: (k) => { this.followFear = k; },
+      caught: () => { this.scare({ shake: 1, seconds: 0.5 }); this.die('woods'); },
+      dog: (p) => { const d = this.dog; if (d && d.tamed && d.position.distanceTo(this.player().position) < 15) e.audio.play('dog_growl', { position: d.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.7 }); },
+    };
   }
   /** The ONE interface the director acts through (src/game/director.js ACTIONS). */
   makeDirectorActions() {
@@ -1864,14 +1888,17 @@ export class Game {
   /** Everything the body put on the screen, gone: the heart, the tunnel, frost, sweat, the red. (New run, title, death screen.) */
   calmBody() {
     if (this.fear) this.fear.reset(); this.bodyHeat = 0; this.weeperFear = 0; this.bearFear = 0;
-    this.e.post.set({ pulse: 0, cold: 0, heat: 0, hurt: 0, fear: 0 }); if (this.ui && this.ui.bodyClear) this.ui.bodyClear();
+    this.e.post.set({ pulse: 0, cold: 0, heat: 0, hurt: 0, fear: 0, deep: 0 }); this._deep = 0; this.followFear = 0; if (this.follower) this.follower.reset(); if (this.ui && this.ui.bodyClear) this.ui.bodyClear();
   }
   /** Fear → the heart (heard + seen), and hot / cold / hurt → the screen. Every frame. */
   updateBody(dt, t) {
     const e = this.e, P = e.post.params, Pl = this.player(), F = this.fear;
     const lit = e.lights.flashlight.on || this.inv.items.some((i) => i.kind === 'lantern' && i.on && i.where === 'hand');
     const moving = e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right');
-    const threat = Math.max(e.lights.dread * 0.95, this.weeperFear || 0, (this.bearFear || 0), this.co ? Math.max(0, this.co.blood - 0.3) * 0.8 : 0);
+    const depth = this.mode === 'walk' ? (Pl.depth || 0) : 0;
+    this._deep = (this._deep || 0) + (depth - (this._deep || 0)) * Math.min(1, dt * 0.6);
+    P.deep = this._deep * (this.night ? 0.75 : 0.35);   // the canopy closes over: darker the deeper you go
+    const threat = Math.max(e.lights.dread * 0.95, this.weeperFear || 0, (this.bearFear || 0), this.co ? Math.max(0, this.co.blood - 0.3) * 0.8 : 0, this.followFear || 0, this._deep * (this.night ? 0.38 : 0.1));
     const evs = F.update(dt, { threat, dark: this.night && !this.inCab() && !lit ? 1 : 0, exertion: moving && e.input.isDown('jog') && Pl.stamina > 0.05 ? 1 : 0,
       health: this.health, calm: !!(this.sitting || this.resting) });
     if (this.state === 'play') for (const ev of evs) e.audio.play(ev.kind === 'lub' ? 'heart_lub' : ev.kind === 'dub' ? 'heart_dub' : ev.kind, { volume: ev.v });

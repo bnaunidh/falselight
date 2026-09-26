@@ -1,7 +1,7 @@
 // FALSE LIGHT — first-person player: walking/jogging, capsule vs COL_wall OBBs, ground from the heightfield and
 // raycasts onto COL_floor/COL_ramp (stairs climb smoothly), the trail-corridor rule, head bob, footsteps.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=aec1a0d7';
+import { clamp, damp } from './util.js?v=c8446c4c';
 
 const EYE = 1.65, RADIUS = 0.3, STEP = 0.5;
 
@@ -82,13 +82,17 @@ export function createPlayer(engine) {
     }
     return inside;
   }
+  // Free roam: the whole forest is yours. What stops you: the ravine (a 35 m cliff), the mountains at the edge of the map
+  // (steep, loose slopes a long way out), anything the game says is impassable (api.extraBlocked: the young-fir thicket),
+  // and slopes too steep to climb (in update). api.blockedWhy says which, for the one-line note.
+  const BORDER = 45;   // metres in from the heightfield's edge where the slopes turn into mountain
   function allowedXZ(x, z) {
     const w = W();
     const rav = w.layout && w.layout.ravine && w.layout.ravine.polygon;
-    if (rav && rav.length > 2 && inPoly(x, z, rav)) return false;        // the ravine: never
-    for (const zn of w.zones) if ((x - zn.x) ** 2 + (z - zn.z) ** 2 < zn.r * zn.r) return true;
-    if (Math.abs(x) < 7.5 && Math.abs(z) < 7.5) return true;           // the fenced tower base
-    return w.trail.nearest(x, z).dist <= FOREST_LIMIT;
+    if (rav && rav.length > 2 && inPoly(x, z, rav)) { api.blockedWhy = 'ravine'; return false; }
+    if (w.rect && (x < w.rect.min[0] + BORDER || x > w.rect.max[0] - BORDER || z < w.rect.min[1] + BORDER || z > w.rect.max[1] - BORDER)) { api.blockedWhy = 'mountains'; return false; }
+    if (api.extraBlocked && api.extraBlocked(x, z)) { api.blockedWhy = 'thicket'; return false; }
+    return true;
   }
   function pushOutTrunks(p) {   // tree trunks are solid once you're off the trail
     const w = W(); if (!w.trunkGrid) return;
@@ -157,12 +161,18 @@ export function createPlayer(engine) {
         pushOutWalls(pos);
         pushOutTrunks(pos);
         const g = groundAt(pos.x, pos.y, pos.z);
-        // the path rule: off-structure, stay inside the trail corridor or a place's zone
-        if (!api.freeRoam && !g.onStructure && !allowedXZ(pos.x, pos.z)) {
+        // the edges of the world (ravine, mountains, thicket): slide along them; if you somehow started outside, let you walk back in
+        if (!api.freeRoam && !g.onStructure && !allowedXZ(pos.x, pos.z) && allowedXZ(old.x, old.z)) {
           if (allowedXZ(old.x, pos.z)) pos.x = old.x;
           else if (allowedXZ(pos.x, old.z)) pos.z = old.z;
           else { pos.x = old.x; pos.z = old.z; }
           api.blockedByPath = 0.6;
+        }
+        // slopes: too steep to climb (the ground rising more than ~50° over half a metre) and you can't go up it
+        if (!g.onStructure && !api.freeRoam) {
+          const dx = pos.x - old.x, dz = pos.z - old.z, dl = Math.hypot(dx, dz);
+          if (dl > 1e-4) { const w = W(), ux = dx / dl, uz = dz / dl, rise = w.heightAt(pos.x + ux * 0.5, pos.z + uz * 0.5) - w.heightAt(pos.x, pos.z);
+            if (rise > 0.6) { pos.x = old.x; pos.z = old.z; api.blockedByPath = 0.6; api.blockedWhy = 'steep'; } }
         }
         const g2 = groundAt(pos.x, pos.y, pos.z);
         if (g2.y > pos.y + STEP + 0.05 && !g2.onStructure) { pos.x = old.x; pos.z = old.z; }   // too steep a step
@@ -177,6 +187,9 @@ export function createPlayer(engine) {
         }
         api.onStructure = g2.onStructure; api.surface = g2.surface; api.trail = g2.trail;
         api.offTrail = g2.onStructure ? 0 : (g2.trail ? g2.trail.dist : 0);
+        // how deep in the woods: 0 on the trail / in a place, 1 from ~140 m off it (the game makes it darker and worse)
+        { const off = api.offTrail || 0; let inZone = false; for (const zn of W().zones) if ((pos.x - zn.x) ** 2 + (pos.z - zn.z) ** 2 < zn.r * zn.r) { inZone = true; break; }
+          const k = inZone || g2.onStructure || Math.hypot(pos.x, pos.z) < 12 ? 0 : Math.max(0, Math.min(1, (off - 20) / 120)); api.depth = k * k * (3 - 2 * k); }
         const wy = !g2.onStructure && W().waterY ? W().waterY(pos.x, pos.z) : null;
         api.inWater = wy != null && wy > pos.y + 0.03;
         if (api.inWater) api.surface = 'water';
@@ -195,7 +208,7 @@ export function createPlayer(engine) {
         bob += dt * moving * 3.1; stepAcc += moving * dt;
         const stride = jog ? 1.25 : 0.78;
         if (stepAcc > stride) {
-          stepAcc = 0; engine.audio && engine.audio.footstep(api.surface, jog, api.carrying);
+          stepAcc = 0; engine.audio && engine.audio.footstep(api.surface, jog, api.carrying); if (api.onStep) api.onStep(jog);
           if (api.inWater && W().ripple) { const wy2 = W().waterY(pos.x, pos.z); if (wy2 != null) W().ripple(pos.x + Math.sin(bob) * 0.15, wy2, pos.z, jog ? 1.4 : 1); }
         }
       } else bob = damp(bob, Math.round(bob / Math.PI) * Math.PI, 4, dt);
