@@ -1,16 +1,36 @@
 {
  "version": 1,
- "generated": "2026-09-25T18:41:57",
+ "generated": "2026-09-25T21:18:20",
  "models": {
   "cab_interior": {
    "path": "models/cab_interior.glb",
    "bytes": 16357428,
    "mtime": 1790359453
   },
+  "char_bear": {
+   "path": "models/char_bear.glb",
+   "bytes": 1354772,
+   "mtime": 1790396159
+  },
+  "char_deer": {
+   "path": "models/char_deer.glb",
+   "bytes": 1375576,
+   "mtime": 1790395561
+  },
   "char_dog": {
    "path": "models/char_dog.glb",
    "bytes": 1551456,
    "mtime": 1790363265
+  },
+  "char_lost_hiker": {
+   "path": "models/char_lost_hiker.glb",
+   "bytes": 6583856,
+   "mtime": 1790393953
+  },
+  "char_lost_hiker_body": {
+   "path": "models/char_lost_hiker_body.glb",
+   "bytes": 4878836,
+   "mtime": 1790393977
   },
   "char_weeper": {
    "path": "models/char_weeper.glb",

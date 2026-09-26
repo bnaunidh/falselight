@@ -259,7 +259,7 @@ export const UI = {
     ['1 2 3 / wheel', 'switch hands'], ['Click', 'use what\'s in your hand'], ['G', 'set it down, anywhere (click to place)'], ['I', 'backpack'],
     ['C', 'camera'], ['B', 'binoculars (hold)'], ['L', 'flashlight'], ['Tab', 'logbook'], ['M', 'trail map'], ['T', 'watch (hold)'], ['Q', 'shake / turn a print over'], ['Esc', 'pause'],
   ],
-  death: { weeper: 'He found who he was looking for.', fall: 'You fell too far. Nobody came up the trail until morning.', generic: 'You didn\'t make it to first light.' },
+  death: { bear: 'It didn\'t stop short the third time.', weeper: 'He found who he was looking for.', fall: 'You fell too far. Nobody came up the trail until morning.', generic: 'You didn\'t make it to first light.' },
 }
 
 /** CO makes the logbook subtly wrong. Deterministic per word so it doesn't flicker. */

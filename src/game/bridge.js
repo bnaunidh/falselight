@@ -1,30 +1,31 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=6fdcb4f3';
-import { Objectives } from './objectives.js?v=6fdcb4f3';
-import { Radio } from './radio.js?v=6fdcb4f3';
-import { Fuel, FUEL } from './fuel.js?v=6fdcb4f3';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=6fdcb4f3';
-import { Survival, SURV } from './survival.js?v=6fdcb4f3';
-import { createItemsView } from './itemsView.js?v=6fdcb4f3';
-import { createChill } from './chill.js?v=6fdcb4f3';
-import { createPlume } from './smokePlume.js?v=6fdcb4f3';
-import { FireFinder, spokenBearing } from './firefinder.js?v=6fdcb4f3';
-import { Photos, classifyShot } from './photos.js?v=6fdcb4f3';
-import { CO } from './co.js?v=6fdcb4f3';
-import { Weeper, lookupChance } from './weeper.js?v=6fdcb4f3';
-import { OtherLookout } from './otherLookout.js?v=6fdcb4f3';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=6fdcb4f3';
-import { GuidedHiker } from './hikers.js?v=6fdcb4f3';
-import { MorseKeyer, isSOS } from './morse.js?v=6fdcb4f3';
-import { normalizeLayout } from './layout.js?v=6fdcb4f3';
-import { createSaves } from './saves.js?v=6fdcb4f3';
-import { createRng } from './rng.js?v=6fdcb4f3';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=6fdcb4f3';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=6fdcb4f3';
-import * as S from './content/story.js?v=6fdcb4f3';
-import { createDog, setDogName } from './dog.js?v=6fdcb4f3';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f9194dc8';
+import { Objectives } from './objectives.js?v=f9194dc8';
+import { Radio } from './radio.js?v=f9194dc8';
+import { Fuel, FUEL } from './fuel.js?v=f9194dc8';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=f9194dc8';
+import { Survival, SURV } from './survival.js?v=f9194dc8';
+import { createItemsView } from './itemsView.js?v=f9194dc8';
+import { createChill } from './chill.js?v=f9194dc8';
+import { createPlume } from './smokePlume.js?v=f9194dc8';
+import { FireFinder, spokenBearing } from './firefinder.js?v=f9194dc8';
+import { Photos, classifyShot } from './photos.js?v=f9194dc8';
+import { CO } from './co.js?v=f9194dc8';
+import { Weeper, lookupChance } from './weeper.js?v=f9194dc8';
+import { OtherLookout } from './otherLookout.js?v=f9194dc8';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f9194dc8';
+import { GuidedHiker } from './hikers.js?v=f9194dc8';
+import { MorseKeyer, isSOS } from './morse.js?v=f9194dc8';
+import { normalizeLayout } from './layout.js?v=f9194dc8';
+import { createSaves } from './saves.js?v=f9194dc8';
+import { createRng } from './rng.js?v=f9194dc8';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=f9194dc8';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=f9194dc8';
+import * as S from './content/story.js?v=f9194dc8';
+import { createDog, setDogName } from './dog.js?v=f9194dc8';
+import { createWildlife } from './wildlife.js?v=f9194dc8';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -112,6 +113,25 @@ export class Game {
       if (this._dogSave !== undefined) { if (this._dogSave) d.restore(this._dogSave); else d.reset(); this._dogSave = undefined; }
       return d;
     }).catch((err) => console.warn('dog', err));
+    // deer, the black bear, birds / owls / coyotes (src/game/wildlife.js + wildlifeBrain.js)
+    this.wildlife = null;
+    this.wildReady = createWildlife(e, {
+      isPlay: () => this.state === 'play',
+      night: () => !!this.clock && this.night,
+      dog: () => this.dog,
+      hurt: (amount, why) => this.hurt(amount, why),
+      fear: (amount) => { e.post.params.fear = Math.min(1, Math.max(e.post.params.fear, amount)); },
+      say: (text) => this.say([{ who: S.WHO.NOTE, text, note: true }]),
+      toast: (text, secs) => this.ui.toast(text, secs),
+      sfx: (name, pos, volume) => { if (e.audio.has(name)) e.audio.play(name, { position: pos, volume }); },
+      weeperNear: () => (this.weeper && this.weeperH && this.weeper.state !== 'gone' ? this.weeperH.position : null),
+      weeperTriggered: () => !!(this.weeper && this.weeper.triggered),
+      dogSwat: () => { const d = this.dog; if (d && d.tamed && d.brain.command('come')) d.brain.events.pop(); },   // she bolts back to you (the wildlife line says why)
+    }).then((w) => {
+      this.wildlife = w; if (window.__fl) window.__fl.wild = w;
+      if (this._wildSave !== undefined) { if (this._wildSave) w.restore(this._wildSave); else w.reset(); this._wildSave = undefined; }
+      return w;
+    }).catch((err) => console.warn('wildlife', err));
     e.onUpdate((dt, t) => this.update(dt, t));
     // benches and the catwalk chair: sit, look, let the time go by (src/game/chill.js)
     this.sitting = false;
@@ -212,7 +232,7 @@ export class Game {
     const P = this.e.player;
     return { phase: this.clock.phase, hour: this.clock.hour, flags: this.flags, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
       weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log, proofs: this.proofs, obj: this.obj.toJSON(),
-      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, chillSeen: this.chill ? this.chill.toJSON() : [], dog: this.dog ? this.dog.toJSON() : (this._dogSave || null),
+      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, chillSeen: this.chill ? this.chill.toJSON() : [], dog: this.dog ? this.dog.toJSON() : (this._dogSave || null), wildlife: this.wildlife ? this.wildlife.toJSON() : (this._wildSave || null),
       player: { pos: [P.position.x, P.position.y, P.position.z], yaw: P.yaw },
       hikers: (this.hikers || []).map((h) => ({ which: h.which, s: h.rules.s, off: h.rules.off, status: h.rules.status })),
       lost: (this.lostWatchers || []).map((w) => ({ idx: w.idx, steps: w.steps })) };
@@ -230,6 +250,7 @@ export class Game {
     this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = 0;
     setDogName(this.flags.dogName || 'Juniper');
     if (this.dog) { if (s.dog) this.dog.restore(s.dog); else this.dog.reset(); } else this._dogSave = s.dog || null;
+    if (this.wildlife) { if (s.wildlife) this.wildlife.restore(s.wildlife); else this.wildlife.reset(); } else this._wildSave = s.wildlife || null;
     if (this.chill) this.chill.load(s.chillSeen || []);
   }
   /** Secret checkpoints: silent saves of exactly where you are. Never during a chase (you'd respawn into it). */
@@ -246,7 +267,7 @@ export class Game {
   }
   persist() { this.saves.save({ ...(this.lastSaved || this.snapshot()), checkpoint: this.cpSnap || null }); }
   // ------------------------------------------------------------------ flow
-  newGame() { setDogName('Juniper'); if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.chill) this.chill.load([]); this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
+  newGame() { setDogName('Juniper'); if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.wildlife) this.wildlife.reset(); else this._wildSave = null; if (this.chill) this.chill.load([]); this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
   continueGame() {
     const s = this.saves.load(); if (!s) return this.newGame();
     this.lastSaved = { ...s }; delete this.lastSaved.checkpoint;
@@ -946,6 +967,14 @@ export class Game {
     this.openModal(render);
   }
   /** Fall damage. Under ~1.5 m you just thump down; a storey hurts and leaves you limping; ~8 m kills. */
+  /** Something hurt you that isn't a fall (the bear's swat). One blow never kills from above half health. */
+  hurt(amount, why = 'generic') {
+    if (this.state !== 'play') return;
+    const e = this.e, floor = this.health > 0.5 ? 0.05 : 0;
+    this.health = Math.max(floor, this.health - amount); this.hurtAt = e.time.value; this.limp = Math.min(1, this.limp + amount);
+    e.audio.sfx('cloth', { volume: 0.6 }); e.audio.sfx('knock_one', { volume: 0.5 });
+    if (this.health <= 0.001) this.die(why);
+  }
   onLand(drop) {
     if (this.state !== 'play') return;
     const e = this.e;
@@ -1016,7 +1045,7 @@ export class Game {
     if (!sigMode) this.signal.mode = false;
     SL.on = this.fuel.power && !!this.slLit && (sigMode ? e.input.isDown('signal') : true);
     SL.power = this.fuel.power ? 1 - this.fuel.sputter * 0.7 : 0;
-    e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1), forest: this.night ? 0.8 : 0.6, radioStatic: this.inCab() ? 0.35 : 0 });
+    e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1), forest: this.wildlife ? (this.night && !this.wildlife.silent ? 0.8 : 0) : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0 });
     for (const ev of this.keyer.update(t)) if (ev.kind === 'end') this.onMorseEnd(ev.v, t);
     // modes: camera placement
     const cam = e.camera;
@@ -1109,6 +1138,7 @@ export class Game {
     this.updateLost(dt, t);
     this.updateWeeper(dt, t);
     if (this.dog) this.dog.update(dt, t);
+    if (this.wildlife) this.wildlife.update(dt, t);
     // sitting down turns you to face what the seat looks out on
     if (this.sitting && this.chill && this.chill.sitting && this.chill.sitting !== this._sitFaced) {
       const sp = this.chill.spots.find((x) => x.id === this.chill.sitting);

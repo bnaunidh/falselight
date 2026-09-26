@@ -1,10 +1,11 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=6fdcb4f3';
-import { createUI } from './ui/ui.js?v=6fdcb4f3';
-import { Game } from './game/bridge.js?v=6fdcb4f3';
-import { createSaves } from './game/saves.js?v=6fdcb4f3';
-import { UI as WORDS } from './game/content/story.js?v=6fdcb4f3';
-import { ACTIONS, keyName } from './engine/input.js?v=6fdcb4f3';
+import { createEngine } from './engine/engine.js?v=f9194dc8';
+import { createUI } from './ui/ui.js?v=f9194dc8';
+import { Game } from './game/bridge.js?v=f9194dc8';
+import { createSaves } from './game/saves.js?v=f9194dc8';
+import { UI as WORDS } from './game/content/story.js?v=f9194dc8';
+import { ACTIONS, keyName } from './engine/input.js?v=f9194dc8';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=f9194dc8';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -18,6 +19,7 @@ engine.input.setBindings(settings.keys || {});   // your keys (Settings → Keys
 engine.input.sensitivity = 0.0022 * settings.sens;
 engine.audio.setVolume(+settings.volume);
 engine.audio.setMuted(!settings.sound || q.has('mute'));   // sound is OFF until the player turns it on in Settings
+registerAnimalSounds(engine.audio);   // birds, owl, coyotes, elk, deer, bear, dog (procedural)
 window.__fl = { engine, ui };
 engine.noRender = q.has('norender');   // headless logic tests: no GPU work per frame
 try {
