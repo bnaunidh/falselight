@@ -38,7 +38,7 @@ export const LINES = {
     Y('Copy. Stand by.'),
   ],
   smokeOk: (spoken, place) => [
-    Y(`Silver Fork, Tamarack. Smoke at ${spoken}. Small, white, laying down to the east. Looks like ${place}.`),
+    Y(`Silver Fork, Tamarack. Smoke at ${spoken}. Grey-brown, one column, leaning off to the east. Looks like ${place}.`),
     D(`${spoken[0].toUpperCase() + spoken.slice(1)}. Copy. That matches the pilot. Nice work, Tamarack. We\'ll get a crew on it.`),
     D('Silver Fork clear.'),
   ],
@@ -218,20 +218,20 @@ export const FINDS = {
 // ---------------------------------------------------------------- objectives (the logbook tracker)
 export const OBJECTIVES = {
   d1_walk:      { text: 'Walk up to the tower', hint: 'Follow the trail uphill from the lot. Map: M.' },
-  d1_climb:     { text: 'Climb to the cab', hint: 'The stairs go up inside the tower.' },
+  d1_climb:     { text: 'Climb to the cab', hint: 'Up the stairs under the tower, out through the hatch onto the catwalk, then in by the cab door (E).' },
   d1_radio:     { text: 'Radio in to Silver Fork', hint: 'The radio is on the desk. E to call.' },
   d1_rules:     { text: 'Read Tillman\'s rules', hint: 'A card taped to the fire finder, middle of the cab.' },
   d1_fuel:      { text: 'Carry a can of fuel up to the cab', hint: 'The cans are by the shed door at the base. E picks one up; carry it up and set it down anywhere up top with G. (Rule 2)' },
-  d1_smoke:     { text: 'Get an azimuth on the smoke to the east', hint: 'From the catwalk look east-northeast, around 070°: a brown-grey column over the far ridges (hold B for binoculars, it shows the bearing). Then the fire finder: A / D turns the ring, put the hair on the smoke, E to radio it.' },
+  d1_smoke:     { text: 'Get an azimuth on the smoke to the east', hint: 'From the catwalk look east-northeast, around 070°: a grey-brown column over the far ridges (B raises the binoculars from your pack and shows the bearing; B again lowers them). Then the fire finder: A / D turns the ring, put the hair on the smoke, E to radio it.' },
   d1_camera:    { text: 'Check the shelf by the south window', hint: 'Something is there that wasn\'t this morning.' },
   d1_generator: { text: 'Start the generator before dark', hint: 'In the shed at the base. The searchlight runs off it.' },
   d1_dusk:      { text: 'Wait for dark in the cab', hint: 'The searchlight is on the roof. F takes it from anywhere in the cab or on the catwalk.' },
   n1_fire:      { text: 'A glow to the northwest. Get an azimuth.', hint: 'Fire finder, then E to radio the bearing.' },
-  n1_answer:    { text: 'Someone is flashing SOS over the burn. Answer.', hint: 'Searchlight on the catwalk. Let them finish, then hold SPACE: ··· ——— ···' },
+  n1_answer:    { text: 'Someone is flashing SOS over the burn. Answer.', hint: 'F takes the searchlight (from the cab or the catwalk). Put the beam on their light, let them finish, then send SOS back with Space: tap-tap-tap, hold-hold-hold, tap-tap-tap.' },
   n1_guide:     { text: 'Walk them out to the trailhead', hint: 'Keep the beam on the trail just ahead of them. If they stop, find them again.' },
   n1_refuel:    { text: 'Fuel is low. Refuel the generator.', hint: 'Carry the can you left up top down to the shed. E at the generator pours it.', urgent: true },
   n1_dawn:      { text: 'Keep the light until first light', hint: 'Stay in the cab. Watch the horizon.' },
-  d2_camp:      { text: 'Find the hikers\' camp', hint: 'The west loop, past the junction at J2.' },
+  d2_camp:      { text: 'Find the hikers\' camp', hint: 'Take the Camp Loop west off Trail No. 1411, below the tower (M for the map).' },
   d2_overlook:  { text: 'Look over the ravine rail', hint: 'The short spur east of the tower.' },
   d2_photo:     { text: 'Photograph the man at the creek', hint: 'From the bridge. C for the camera. Don\'t look at his face. Not with the glasses.' },
   d2_send:      { text: 'Send the picture out', hint: 'Mailbox or fax at the trailhead. Or Walt — his truck is at the lot until 16:00.' },
@@ -254,11 +254,7 @@ export const PROOF_GOAL = 6
 export const UI = {
   title: 'FALSE LIGHT',
   subtitle: 'Tamarack Lookout · Silver Fork Ranger District · August 1983',
-  controls: [
-    ['WASD', 'walk'], ['Shift', 'jog'], ['Mouse', 'look'], ['E', 'use'], ['F', 'searchlight'], ['Space', 'shutter (hold)'],
-    ['1 2 3 / wheel', 'switch hands'], ['Click', 'use what\'s in your hand'], ['G', 'set it down, anywhere (click to place)'], ['I', 'backpack'],
-    ['C', 'camera'], ['B', 'binoculars (hold)'], ['L', 'flashlight'], ['Tab', 'logbook'], ['M', 'trail map'], ['T', 'watch (hold)'], ['Q', 'shake / turn a print over'], ['Esc', 'pause'],
-  ],
+  // (the Controls card is written from the live key bindings: main.js controlsList)
   death: { bear: 'You ran. It covered the ground between you before you\'d taken ten steps.', weeper: 'He found who he was looking for.', fall: 'You fell too far. Nobody came up the trail until morning.', generic: 'You didn\'t make it to first light.' },
 }
 

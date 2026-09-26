@@ -2,7 +2,7 @@
 // He stands facing the tower. He never moves while he is lit (beam, flashlight, flash, daylight)
 // and never while you are looking at him. Unlit and unobserved for a moment, he is one spot closer.
 // He advances along treeLine toward the gate; each night he may get a little further.
-import { dist2d } from './util.js?v=f7378e71'
+import { dist2d } from './util.js?v=b5a31e5b'
 
 export const LOST = { stepDelay: 2.6, nightCap: { night1: 0, night2: 4, night3: 5, night4: 7, night5: 8 } }
 

@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=f7378e71';
+import { drawMap } from './mapdraw.js?v=b5a31e5b';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -21,11 +21,12 @@ export function createUI(root = document.getElementById('ui')) {
   const hot = $('div', 'fl-hot', root), surv = $('div', 'fl-surv', root);
   let subTimer = 0, toastTimer = 0;
 
+  let rk = (t) => t; U.setRekey = (f) => { rk = f || ((t) => t); };   // show the player's own (rebound) keys
   U.tracker = (v, { date, hour } = {}) => {
     if (!v) { tracker.style.opacity = 0; return; }
     tracker.style.opacity = 1;
     tracker.innerHTML = `<div class="d">${esc(date || '')}</div>` +
-      (v.current ? `<div class="c${v.current.urgent ? ' u' : ''}">${esc(v.current.text)}</div><div class="h">${esc(v.current.hint || '')}</div>` : '<div class="c">—</div>') +
+      (v.current ? `<div class="c${v.current.urgent ? ' u' : ''}">${esc(rk(v.current.text))}</div><div class="h">${esc(rk(v.current.hint || ''))}</div>` : '<div class="c">—</div>') +
       (v.next ? `<div class="n">then: ${esc(v.next.text)}</div>` : '') +
       (v.done || []).slice(-2).map((d) => `<div class="x${d.failed ? ' f' : ''}">${esc(d.text)}</div>`).join('');
   };
@@ -33,7 +34,7 @@ export function createUI(root = document.getElementById('ui')) {
     subs.innerHTML = note ? `<span class="note">${esc(text)}</span>` : `<span class="who${radio ? ' r' : ''}">${esc(who)}</span> ${esc(text)}`;
     subs.style.opacity = 1; subTimer = dur;
   };
-  U.toast = (text, dur = 3.5) => { toast.textContent = text; toast.style.opacity = 1; toastTimer = dur; };
+  U.toast = (text, dur = 3.5) => { toast.textContent = rk(text); toast.style.opacity = 1; toastTimer = dur; };
   U.finder = (o) => {
     if (!o) { finder.style.display = 'none'; return; }
     finder.style.display = 'block';

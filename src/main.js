@@ -1,11 +1,11 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=f7378e71';
-import { createUI } from './ui/ui.js?v=f7378e71';
-import { Game } from './game/bridge.js?v=f7378e71';
-import { createSaves } from './game/saves.js?v=f7378e71';
-import { UI as WORDS } from './game/content/story.js?v=f7378e71';
-import { ACTIONS, keyName } from './engine/input.js?v=f7378e71';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=f7378e71';
+import { createEngine } from './engine/engine.js?v=b5a31e5b';
+import { createUI } from './ui/ui.js?v=b5a31e5b';
+import { Game } from './game/bridge.js?v=b5a31e5b';
+import { createSaves } from './game/saves.js?v=b5a31e5b';
+import { UI as WORDS } from './game/content/story.js?v=b5a31e5b';
+import { ACTIONS, keyName } from './engine/input.js?v=b5a31e5b';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=b5a31e5b';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -16,6 +16,7 @@ const ui = createUI();
 ui.loading(0, 'starting');
 const engine = await createEngine(canvas, { quality: q.get('q') || settings.quality });
 engine.input.setBindings(settings.keys || {});   // your keys (Settings → Keys)
+ui.setRekey((t) => engine.input.rekey(t));   // hints and prompts name the keys you actually use
 engine.input.sensitivity = 0.0022 * settings.sens;
 engine.audio.setVolume(+settings.volume);
 if (engine.audio.setMusicVolume) engine.audio.setMusicVolume(settings.music ?? 0.35);

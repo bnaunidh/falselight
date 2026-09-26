@@ -1,31 +1,31 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f7378e71';
-import { Objectives } from './objectives.js?v=f7378e71';
-import { Radio } from './radio.js?v=f7378e71';
-import { Fuel, FUEL } from './fuel.js?v=f7378e71';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=f7378e71';
-import { Survival, SURV } from './survival.js?v=f7378e71';
-import { createItemsView } from './itemsView.js?v=f7378e71';
-import { createChill } from './chill.js?v=f7378e71';
-import { createPlume } from './smokePlume.js?v=f7378e71';
-import { FireFinder, spokenBearing } from './firefinder.js?v=f7378e71';
-import { Photos, classifyShot } from './photos.js?v=f7378e71';
-import { CO } from './co.js?v=f7378e71';
-import { Weeper, lookupChance } from './weeper.js?v=f7378e71';
-import { OtherLookout } from './otherLookout.js?v=f7378e71';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f7378e71';
-import { GuidedHiker } from './hikers.js?v=f7378e71';
-import { MorseKeyer, isSOS } from './morse.js?v=f7378e71';
-import { normalizeLayout } from './layout.js?v=f7378e71';
-import { createSaves } from './saves.js?v=f7378e71';
-import { createRng } from './rng.js?v=f7378e71';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=f7378e71';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=f7378e71';
-import * as S from './content/story.js?v=f7378e71';
-import { createDog, setDogName } from './dog.js?v=f7378e71';
-import { createWildlife } from './wildlife.js?v=f7378e71';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=b5a31e5b';
+import { Objectives } from './objectives.js?v=b5a31e5b';
+import { Radio } from './radio.js?v=b5a31e5b';
+import { Fuel, FUEL } from './fuel.js?v=b5a31e5b';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=b5a31e5b';
+import { Survival, SURV } from './survival.js?v=b5a31e5b';
+import { createItemsView } from './itemsView.js?v=b5a31e5b';
+import { createChill } from './chill.js?v=b5a31e5b';
+import { createPlume } from './smokePlume.js?v=b5a31e5b';
+import { FireFinder, spokenBearing } from './firefinder.js?v=b5a31e5b';
+import { Photos, classifyShot } from './photos.js?v=b5a31e5b';
+import { CO } from './co.js?v=b5a31e5b';
+import { Weeper, lookupChance } from './weeper.js?v=b5a31e5b';
+import { OtherLookout } from './otherLookout.js?v=b5a31e5b';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=b5a31e5b';
+import { GuidedHiker } from './hikers.js?v=b5a31e5b';
+import { MorseKeyer, isSOS } from './morse.js?v=b5a31e5b';
+import { normalizeLayout } from './layout.js?v=b5a31e5b';
+import { createSaves } from './saves.js?v=b5a31e5b';
+import { createRng } from './rng.js?v=b5a31e5b';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=b5a31e5b';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=b5a31e5b';
+import * as S from './content/story.js?v=b5a31e5b';
+import { createDog, setDogName } from './dog.js?v=b5a31e5b';
+import { createWildlife } from './wildlife.js?v=b5a31e5b';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -378,6 +378,18 @@ export class Game {
   complete(id, note) { if (this.obj.complete(id, note)) { this.e.audio.play('paper', { volume: 0.4 }); if (id !== 'n1_guide' && id !== 'weeper_send') this.e.audio.music.sting('task'); this.refreshTracker(); setTimeout(() => this.checkpoint('task:' + id), 1500); } }
   add(id, extra) { if (!this.obj.has(id)) { this.obj.add(id, extra); this.refreshTracker(); } }
   inCab() { return this.player().zone === 'cab'; }
+  /** Night falls: never start it with no way to get power (a spare can in the shed), and say so if the light is dead. */
+  nightFuelCheck() {
+    const anyFuel = this.inv.items.some((i) => i.kind === 'fuel' && i.fill > 0.01);
+    if (!anyFuel && this.fuel.tank < 1.5) {
+      const g = this.anchor('IA_generator') || new THREE.Vector3(9.3, 0.7, 6.8);
+      this.inv.create('fuel', { pos: [g.x - 0.9, g.y, g.z + 0.9], rotY: 1.2, settle: true }); this.syncItems();
+      setTimeout(() => this.ui.toast('There\'s one last can of fuel in the shed, beside the generator.', 4), 8000);
+    }
+    if (!this.fuel.power) this.add(this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel', { urgent: true });
+  }
+  /** What ends the Weeper right now: send the print he's already in, or photograph him (and then send that). */
+  weeperTask() { const c = this.weeper.carrier; return c && c !== 'next' ? 'weeper_send' : 'weeper_photo'; }
   beamSpot() {
     const SL = this.e.lights.searchlight; if (!SL.on) return null;
     const o = SL.worldOrigin(), d = SL.worldDir(), p = new THREE.Vector3();
@@ -401,14 +413,15 @@ export class Game {
     const ph = this.clock.phase, f = this.flags;
     if (ev === 'start') {
       if (ph === 'day1') { this.add('d1_walk'); this.say(S.LINES.arrive); this.truckVisible = true; }
-      if (ph === 'night1') { this.say(S.LINES.night1Start); this.add('n1_dawn', { optional: true }); }
+      if (ph === 'night1') { this.say(S.LINES.night1Start); this.add('n1_dawn', { optional: true }); this.nightFuelCheck(); }
       if (ph === 'day2') { this.say(f.lostN1 ? S.LINES.day2Lost : S.LINES.day2Saved); this.add('d2_camp'); this.add('d2_overlook'); this.add('d2_photo'); this.add('d2_send'); this.truckVisible = true;
         if (!this.photos.hasCamera) this.photos.giveCamera(1);
+        { const cam = this.inv.items.find((i) => i.kind === 'camera'); if (cam && cam.where === 'world') { const r = this.inv.take(cam.id); if (!r.ok) Object.assign(cam, { where: 'pack', slot: this.inv.freePack() >= 0 ? this.inv.freePack() : 4, pos: null }); } else if (!cam) this.inv.create('camera', { where: 'pack', slot: this.inv.freePack() >= 0 ? this.inv.freePack() : 4 }); }
         const full = this.inv.items.filter((i) => i.kind === 'fuel' && i.fill > 0.01).length, fa = this.anchor('IA_fuel_cans') || new THREE.Vector3(7.05, 0.4, 7.9);
         for (let k = full; k < 3; k++) this.inv.create('fuel', { pos: [fa.x - 0.5 + k * 0.4, fa.y, fa.z + 0.6], rotY: k, settle: true });
         if (full < 3) setTimeout(() => this.ui.toast('Walt left fresh cans of fuel by the shed door.', 4), 6000);
         this.syncItems(); }
-      if (ph === 'night2') { this.say(S.LINES.night2Start); this.add('n2_dawn', { optional: true }); }
+      if (ph === 'night2') { this.say(S.LINES.night2Start); this.add('n2_dawn', { optional: true }); this.nightFuelCheck(); }
     }
   }
   scriptTick(dt) {
@@ -418,7 +431,7 @@ export class Game {
     if (ph === 'day1') {
       this.clock.addGate('rules', 13.0, () => done('d1_rules'));
       this.clock.addGate('smoke', 19.0, () => done('d1_smoke') && done('d1_fuel'));
-      this.clock.addGate('dusk', 20.45, () => done('d1_generator') && z === 'cab');
+      this.clock.addGate('dusk', 20.45, () => this.fuel.genOn && z === 'cab');
       if (!done('d1_walk') && (z === 'base' || z === 'stairs' || z === 'cab')) { this.complete('d1_walk'); this.add('d1_climb'); }
       if (this.obj.has('d1_fuel') && this.fuelUpTop()) this.complete('d1_fuel');
       if (done('d1_walk') && !done('d1_climb') && z === 'cab') { this.complete('d1_climb'); this.addLog(S.AUTO_LOG.arrived(this.hourText())); this.add('d1_radio'); }
@@ -427,11 +440,16 @@ export class Game {
       if (h >= 18.9 && done('d1_smoke')) this.once('camera', () => { this.flags.cameraOut = true; this.add('d1_camera', { optional: true }); });
       if (h >= 19.6) this.once('sob', () => { this.say(S.LINES.duskSob); });
       if (h >= 19.9) this.once('dusktask', () => this.add('d1_dusk'));
-      if (done('d1_generator') && z === 'cab' && h >= 20.2) this.complete('d1_dusk');
+      if (this.fuel.genOn && z === 'cab' && h >= 20.2) this.complete('d1_dusk');
+      if (h >= 18 && done('d1_generator') && !this.fuel.genOn && !done('d1_dusk')) { o.remove('d1_generator'); this.add('d1_generator', { urgent: true }); }   // it ran dry or you stopped it: dusk needs it running
       if (h > 12 && this.truckVisible && z !== 'trailhead') this.truckVisible = false;
     }
     if (ph === 'night1') {
       this.clock.addGate('hiker', 24.5, () => this.hikers.some((k) => k.rules.done && k.rules.kind === 'hiker'));
+      if (this.clock.held === 'hiker' && !this.fuel.power && !this.inv.items.some((i) => i.kind === 'fuel' && i.fill > 0.01)) {
+        this._darkHold = (this._darkHold || 0) + dt;
+        if (this._darkHold > 240) { const H = this.hikers.find((k) => k.rules.kind === 'hiker' && !k.rules.done); if (H) { H.rules.status = 'out'; this.say([{ who: S.WHO.NOTE, note: true, text: 'Down on the ridge the little light starts moving again, slowly, on its own. Then it\'s gone into the trees.' }]); } this._darkHold = 0; }
+      } else this._darkHold = 0;
       if (h >= 21.3) this.once('glow1', () => { this.say(S.LINES.glowN1); this.add('n1_fire'); this.showFire('Hatchet Peak', true); });
       if (h >= 22.4) this.once('sos1', () => { this.spawnHiker('night1'); this.say(S.LINES.sosN1); this.add('n1_answer'); });
       if (h >= 26.0) this.once('gate', () => { this.e.audio.play('gate_rattle', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.2 }); this.say(S.LINES.gateRattle); f.gateRattled = true; this.addLog('0200 — gate. Wind.'); });
@@ -440,8 +458,9 @@ export class Game {
     if (ph === 'day2') {
       this.clock.addGate('dusk2', 20.45, () => z === 'cab' && this.fuel.genOn);
       if (h >= 14.0) this.once('fuel2', () => { this.add('d2_fuel'); this.add('d2_generator'); });
-      if (h >= 19.5) this.once('dusk2', () => this.add('d2_dusk'));
-      if (this.fuelUpTop()) this.complete('d2_fuel');
+      if (h >= 19.5) this.once('dusk2', () => { this.add('d2_dusk', { urgent: true }); for (const id of ['d2_fuel', 'd2_generator']) { const x = o.get && o.get(id); if (x && !x.done) x.urgent = true; } this.refreshTracker(); });
+      if (o.has('d2_fuel') && this.fuelUpTop()) this.complete('d2_fuel');
+      if (h >= 19.5 && done('d2_generator') && !this.fuel.genOn && !done('d2_dusk')) { o.remove('d2_generator'); this.add('d2_generator', { urgent: true }); }
       if (this.fuel.genOn && h >= 14) this.complete('d2_generator');
       if (z === 'cab' && h >= 20.2 && this.fuel.genOn) this.complete('d2_dusk');
       if (h >= 11.0 && !done('d2_photo')) this.once('nudge', () => this.say(S.LINES.day2Nudge));
@@ -569,7 +588,7 @@ export class Game {
       if (ev === 'lookup') { /* pose shows it */ }
       if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); e.audio.play('heart', { volume: 1 }); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); }
       if (ev === 'scream') this.say(S.LINES.weeperScream);
-      if (ev === 'coming') { this.say(S.LINES.weeperComing); this.add('weeper_photo'); }
+      if (ev === 'coming') { this.say(S.LINES.weeperComing); this.add(this.weeperTask()); }
       if (ev === 'stairs') { this.say(S.LINES.weeperStairs); }
       if (ev === 'door') { e.audio.play('knock', { position: V3(ctx.trapdoor), volume: 1.5 }); }
       if (ev === 'caught') this.die('weeper');
@@ -597,7 +616,7 @@ export class Game {
     const fear = Math.max(W.triggered ? Math.max(0.25, 1 - near / 120) : 0, this.bearFear || 0);
     e.post.params.fear += (fear - e.post.params.fear) * Math.min(1, dt * 1.5);
     if (W.triggered || (this.bearFear || 0) > 0.5) { this.heartT = (this.heartT || 0) - dt; if (this.heartT <= 0) { e.audio.play('heart', { volume: 0.4 + fear }); this.heartT = 1.4 - fear * 0.8; } }
-    if (W.triggered && !W.carrier) this.add('weeper_photo');
+    if (W.triggered) this.add(this.weeperTask());
   }
 
   // ------------------------------------------------------------------ photos
@@ -674,7 +693,7 @@ export class Game {
       if (can && this.fuel.tank < FUEL.capacity - 0.05) {
         const pour = Math.min(FUEL.capacity - this.fuel.tank, FUEL.can * can.fill);
         this.fuel.tank += pour; this.fuel.wasLow = this.fuel.frac < FUEL.low; can.fill = Math.max(0, can.fill - pour / FUEL.can); if (can.fill < 0.01) can.fill = 0;
-        e.audio.play('fuel_pour'); this.addLog(S.AUTO_LOG.refuel(this.hourText())); this.complete('n1_refuel'); this.complete('n2_refuel'); this.flags.refueledOnce = true;
+        e.audio.play('fuel_pour'); this.addLog(S.AUTO_LOG.refuel(this.hourText())); { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.night && this.obj.has(rid) && !this.obj.isDone(rid)) this.complete(rid); } this.flags.refueledOnce = true;
         this.ui.toast(can.fill > 0 ? `Tank full. About ${Math.round(can.fill * FUEL.can * 10) / 10} L left in the can.${this.fuel.genOn ? '' : ' Now start it (E).'}` : `Tank at ${this.fuel.tank.toFixed(1)} L. The can is empty: set it down anywhere (G).${this.fuel.genOn ? '' : ' Now start it (E).'}`, 3.5);
         this.refreshHotbar();
       }
@@ -1055,7 +1074,7 @@ export class Game {
     const SL = e.lights.searchlight;
     const beamOn = this.mode === 'searchlight' ? this.slLit : this.slLit && !this.leftOff;
     for (const ev of this.fuel.tick(dt, SL.on)) {
-      if (ev === 'low') { this.say(S.LINES.fuelLow); if (this.night) this.add(this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel', { urgent: true }); }
+      if (ev === 'low') { this.say(S.LINES.fuelLow); if (this.night) { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true }); } }
       if (ev === 'empty') { this.say(S.LINES.fuelEmpty); e.audio.play('generator_stop'); }
     }
     const sigMode = this.signal.mode && t - this.signal.last < 2.4;

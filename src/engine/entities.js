@@ -1,8 +1,8 @@
 // FALSE LIGHT — entities (posed static meshes, instant pose swaps), what-can-be-seen tests (engine.view),
 // line of sight (terrain + tower + tree trunks), and the crosshair interaction registry.
 import * as THREE from 'three';
-import { loadGLB } from './world.js?v=f7378e71';
-import { clamp } from './util.js?v=f7378e71';
+import { loadGLB } from './world.js?v=b5a31e5b';
+import { clamp } from './util.js?v=b5a31e5b';
 
 // ------------------------------------------------------------------ placeholder people (until the Blender characters land)
 function placeholderFigure(kind) {
@@ -199,7 +199,7 @@ export function createInteract(engine) {
       }
       api.current = best;
       const show = best && engine.input.locked && !engine.uiBlocking;
-      el.style.opacity = show ? 1 : 0; if (best) el.textContent = typeof best.label === 'function' ? best.label() : best.label;
+      el.style.opacity = show ? 1 : 0; if (best) { const lb = typeof best.label === 'function' ? best.label() : best.label; el.textContent = engine.input.rekey ? engine.input.rekey(lb) : lb; }
       dot.style.background = show ? 'rgba(255,236,200,.95)' : 'rgba(235,228,212,.45)';
     },
     use() { const t = api.current; if (t && t.onUse) { t.onUse(); return true; } return false; },

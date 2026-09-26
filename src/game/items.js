@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=f7378e71'
+import { clamp } from './util.js?v=b5a31e5b'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5

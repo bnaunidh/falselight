@@ -13,6 +13,8 @@ export const DEFAULT_BINDS = {
   flashlight: ['KeyL'], binoculars: ['KeyB'], camera: ['KeyC'], flip: ['KeyQ'], searchlight: ['KeyF'], signal: ['Space'],
   logbook: ['Tab'], map: ['KeyM'], watch: ['KeyT'], pause: ['KeyP'],
 };
+// default key letters as they appear in hints and prompts -> the action they stand for (see rekey)
+const REKEY = [['E', 'interact'], ['G', 'place'], ['B', 'binoculars'], ['F', 'searchlight'], ['M', 'map'], ['C', 'camera'], ['U', 'use'], ['I', 'inventory'], ['L', 'flashlight'], ['T', 'watch'], ['Q', 'flip'], ['Tab', 'logbook'], ['SPACE', 'signal'], ['Space', 'signal']];
 /** A key code as a person would name it. */
 export function keyName(code) {
   if (!code) return '—';
@@ -59,6 +61,17 @@ export function createInput(canvas) {
     press(a, ms = 0) { down.add(a); api.emit(a, true); if (ms) setTimeout(() => { down.delete(a); api.emit(a, false); }, ms); },
     release(a) { down.delete(a); api.emit(a, false); },
     injectMouse(dx, dy) { mdx += dx; mdy += dy; },
+    /** Swap default key letters in player-facing text for the keys you've rebound ("E — Open the door" → "R — Open the door"). */
+    rekey(text) {
+      if (!text || !api.binds) return text;
+      let out = String(text);
+      for (const [tok, act] of REKEY) {
+        const def = (DEFAULT_BINDS[act] || [])[0], cur = (api.binds[act] || [])[0];
+        if (!cur || cur === def) continue;
+        out = out.replace(new RegExp('(^|[\\s(·/])' + tok + '(?=$|[\\s)·—,.:;/])', 'g'), '$1' + keyName(cur));
+      }
+      return out;
+    },
   };
   api.setBindings({});
   const onKey = (e, isDown) => {
