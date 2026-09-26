@@ -1,16 +1,16 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
-import { createInput } from './input.js?v=d0e3d680';
-import { createWorld } from './world.js?v=d0e3d680';
-import { createPlayer } from './player.js?v=d0e3d680';
-import { createSky } from './sky.js?v=d0e3d680';
-import { createLights } from './lights.js?v=d0e3d680';
-import { createPost } from './post.js?v=d0e3d680';
-import { createEntities, createView, createInteract } from './entities.js?v=d0e3d680';
-import { createAudio } from './audio.js?v=d0e3d680';
-import { createPhoto } from './photo.js?v=d0e3d680';
-import { createMountains } from './mountains.js?v=d0e3d680';
-import { tryJSON } from './util.js?v=d0e3d680';
+import { createInput } from './input.js?v=f7378e71';
+import { createWorld } from './world.js?v=f7378e71';
+import { createPlayer } from './player.js?v=f7378e71';
+import { createSky } from './sky.js?v=f7378e71';
+import { createLights } from './lights.js?v=f7378e71';
+import { createPost } from './post.js?v=f7378e71';
+import { createEntities, createView, createInteract } from './entities.js?v=f7378e71';
+import { createAudio } from './audio.js?v=f7378e71';
+import { createPhoto } from './photo.js?v=f7378e71';
+import { createMountains } from './mountains.js?v=f7378e71';
+import { tryJSON } from './util.js?v=f7378e71';
 
 export const QUALITY = {
   low: { pr: 0.75, prMin: 0.5, msaa: false, aniso: 4, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },

@@ -13,8 +13,8 @@
 //   wild.animals: [{ id, kind: 'deer'|'bear', role, root, position: Vector3, act, state }] · wild.nearestDeer(pos, maxDist)
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { loadGLB } from '../engine/world.js?v=d0e3d680';
-import { WildlifeBrain, WILD, resolvePlaces } from './wildlifeBrain.js?v=d0e3d680';
+import { loadGLB } from '../engine/world.js?v=f7378e71';
+import { WildlifeBrain, WILD, resolvePlaces } from './wildlifeBrain.js?v=f7378e71';
 
 const CLIPS = { deer: ['idle', 'walk', 'run', 'graze', 'alert'], bear: ['idle', 'walk', 'run', 'rear', 'huff', 'forage'] };
 const POSE = { deer: { graze: 1, alert: 1 }, bear: { rear: 1, huff: 1, forage: 1 } };   // clips the brain's `act` picks when standing

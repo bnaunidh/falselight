@@ -3,7 +3,7 @@
 //   Watch him too long and the sobbing stops; a moment later he lifts his head. Look away.
 //   Seen: the sob becomes a scream and he comes (in daylight he waits for dark). Nothing stops him.
 //   The only way out: send the photograph away. Whoever looks at it next is the one he wants.
-import { dist, lerp3, clamp } from './util.js?v=d0e3d680'
+import { dist, lerp3, clamp } from './util.js?v=f7378e71'
 
 export const WEEPER = {
   watchToHush: 5.0,      // seconds of continuous watching before the sobbing stops
@@ -70,6 +70,9 @@ export class Weeper {
     const watching = !!(c.inFrustum && !c.occluded && (c.onScreen ?? 0) > 0.0005 && (c.distance ?? 0) < range)
     this.cool = Math.max(0, this.cool - dt)
     switch (this.state) {
+      case 'gone':   // sent away: back on his rock, silent, looking at nothing (somebody else is looking at the picture now)
+        this.pos = ctx.rock
+        break
       case 'sitting':
         this.pos = ctx.rock
         if (watching && this.cool <= 0) this.watch += dt * (ctx.binoculars ? 2 : 1); else this.watch = Math.max(0, this.watch - dt * 2)

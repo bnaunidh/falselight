@@ -1,31 +1,31 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=d0e3d680';
-import { Objectives } from './objectives.js?v=d0e3d680';
-import { Radio } from './radio.js?v=d0e3d680';
-import { Fuel, FUEL } from './fuel.js?v=d0e3d680';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=d0e3d680';
-import { Survival, SURV } from './survival.js?v=d0e3d680';
-import { createItemsView } from './itemsView.js?v=d0e3d680';
-import { createChill } from './chill.js?v=d0e3d680';
-import { createPlume } from './smokePlume.js?v=d0e3d680';
-import { FireFinder, spokenBearing } from './firefinder.js?v=d0e3d680';
-import { Photos, classifyShot } from './photos.js?v=d0e3d680';
-import { CO } from './co.js?v=d0e3d680';
-import { Weeper, lookupChance } from './weeper.js?v=d0e3d680';
-import { OtherLookout } from './otherLookout.js?v=d0e3d680';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=d0e3d680';
-import { GuidedHiker } from './hikers.js?v=d0e3d680';
-import { MorseKeyer, isSOS } from './morse.js?v=d0e3d680';
-import { normalizeLayout } from './layout.js?v=d0e3d680';
-import { createSaves } from './saves.js?v=d0e3d680';
-import { createRng } from './rng.js?v=d0e3d680';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=d0e3d680';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=d0e3d680';
-import * as S from './content/story.js?v=d0e3d680';
-import { createDog, setDogName } from './dog.js?v=d0e3d680';
-import { createWildlife } from './wildlife.js?v=d0e3d680';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f7378e71';
+import { Objectives } from './objectives.js?v=f7378e71';
+import { Radio } from './radio.js?v=f7378e71';
+import { Fuel, FUEL } from './fuel.js?v=f7378e71';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=f7378e71';
+import { Survival, SURV } from './survival.js?v=f7378e71';
+import { createItemsView } from './itemsView.js?v=f7378e71';
+import { createChill } from './chill.js?v=f7378e71';
+import { createPlume } from './smokePlume.js?v=f7378e71';
+import { FireFinder, spokenBearing } from './firefinder.js?v=f7378e71';
+import { Photos, classifyShot } from './photos.js?v=f7378e71';
+import { CO } from './co.js?v=f7378e71';
+import { Weeper, lookupChance } from './weeper.js?v=f7378e71';
+import { OtherLookout } from './otherLookout.js?v=f7378e71';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f7378e71';
+import { GuidedHiker } from './hikers.js?v=f7378e71';
+import { MorseKeyer, isSOS } from './morse.js?v=f7378e71';
+import { normalizeLayout } from './layout.js?v=f7378e71';
+import { createSaves } from './saves.js?v=f7378e71';
+import { createRng } from './rng.js?v=f7378e71';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=f7378e71';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=f7378e71';
+import * as S from './content/story.js?v=f7378e71';
+import { createDog, setDogName } from './dog.js?v=f7378e71';
+import { createWildlife } from './wildlife.js?v=f7378e71';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -193,6 +193,7 @@ export class Game {
 
   // ------------------------------------------------------------------ the rules instances
   fresh(phase = 'day1') {
+    this.coffee = null;
     this.clock = new Clock(phase);
     this.obj = new Objectives(S.OBJECTIVES);
     this.radio = new Radio();
@@ -232,8 +233,8 @@ export class Game {
   }
   snapshot() {
     const P = this.e.player;
-    return { phase: this.clock.phase, hour: this.clock.hour, flags: this.flags, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
-      weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log, proofs: this.proofs, obj: this.obj.toJSON(),
+    return { phase: this.clock.phase, hour: this.clock.hour, flags: { ...this.flags }, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
+      weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log.map((x) => ({ ...x })), proofs: this.proofs, obj: this.obj.toJSON(),
       fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, chillSeen: this.chill ? this.chill.toJSON() : [], dog: this.dog ? this.dog.toJSON() : (this._dogSave || null), wildlife: this.wildlife ? this.wildlife.toJSON() : (this._wildSave || null),
       player: { pos: [P.position.x, P.position.y, P.position.z], yaw: P.yaw },
       hikers: (this.hikers || []).map((h) => ({ which: h.which, s: h.rules.s, off: h.rules.off, status: h.rules.status })),
@@ -248,7 +249,7 @@ export class Game {
     this.clearWorldEntities();
     this.fresh(s.phase);
     this.flags = { rulesTo: 5, ...s.flags }; this.fuel = new Fuel(s.fuel); this.photos = new Photos(s.photos); this.co = new CO(s.co);
-    this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = s.log || []; this.proofs = s.proofs || 0;
+    this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = (s.log || []).map((x) => ({ ...x })); this.proofs = s.proofs || 0;
     this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = 0;
     setDogName(this.flags.dogName || 'Juniper');
     if (this.dog) { if (s.dog) this.dog.restore(s.dog); else this.dog.reset(); } else this._dogSave = s.dog || null;
@@ -285,6 +286,7 @@ export class Game {
   startPhase(phase, restored = false, cp = null) {
     this._cpHour = null; this._lastZone = null;
     const e = this.e;
+    e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); if (this.photos) this.photos.close(); this.ui.print(null);
     if (!restored || !this.clock || this.clock.phase !== phase) this.clock = new Clock(phase);
     this.obj = new Objectives(S.OBJECTIVES); this.radio = new Radio();
     this.fired = new Set(); this.phaseTime = 0; this.state = 'play';
@@ -300,7 +302,7 @@ export class Game {
     if (['coming', 'stairs', 'door', 'hunting'].includes(this.weeper.state)) { this.weeper.state = 'screaming'; this.weeper.timer = 0; this.weeper.progress = 0; }
     const sky = e.sky;
     sky.setWeather(phase === 'night2' ? { rain: 0.15, wind: 0.55, fog: 0.35, lightning: 0.012 } : phase === 'night1' ? { rain: 0, wind: 0.35, fog: 0.3, lightning: 0 } : phase === 'day2' ? { rain: 0.25, wind: 0.4, fog: 0.5, lightning: 0 } : { rain: 0, wind: 0.3, fog: 0.3, lightning: 0 });
-    e.lights.cabLamp.on = isNight(phase);
+    e.lights.cabLamp.on = isNight(phase) && !this.flags.lampOff;
     const P = this.player();
     if (phase === 'day1') { P.teleport(this.anchor('SP_trailhead') || 'SP_stair_foot'); P.lookAt(V3(this.L.places.trailhead || [22, -32, 380]).add(new THREE.Vector3(-8, 1.5, -40))); }
     else if (phase === 'day2' || phase === 'end') { P.teleport(this.anchor('SP_cab_bed') || new THREE.Vector3(-1, 30, -0.7)); P.lookAt(new THREE.Vector3(0, 31.4, 3)); }
@@ -316,6 +318,7 @@ export class Game {
         r.status = ['answered', 'walking', 'straying'].includes(h.status) ? 'waiting' : h.status;
       }
       if ((cp.lost || []).length) { this.spawnLost(); cp.lost.forEach((l, k) => { const w = this.lostWatchers[k]; if (w) { w.idx = l.idx; w.steps = l.steps || 0; w.ent.setPosition(V3(w.pos)); } }); }
+      for (const f of this.activeFires()) this.showFire(f.name, true);   // the smoke / glow the open task is about
       this.cpSnap = cp;
       this.refreshTracker();
       return;
@@ -336,7 +339,7 @@ export class Game {
     this.state = 'transition';
   }
   finish() {
-    this.state = 'end'; this.e.input.unlock(); this.e.audio.music.setMood('title', 8);
+    this.state = 'end'; this.e.uiBlocking = false; if (this.ui.modalOpen()) this.ui.closeModal(); this.e.input.unlock(); this.e.audio.music.setMood('title', 8);
     const sent = this.photos.prints.filter((p) => p.sent).length;
     this.ui.screen('end', { text: 'Grey in the east. Somewhere below, the truck is coming up the road.',
       detail: `End of the first two nights. Proof sent: ${this.proofs} of ${S.PROOF_GOAL}. Prints taken: ${this.photos.prints.length} (${sent} sent). ${this.flags.lostN1 ? 'You lost Lyle Pruitt.' : 'Lyle Pruitt made it to the lot.'} Nights three to seven are still being built.`,
@@ -344,7 +347,7 @@ export class Game {
   }
   die(kind) {
     if (this.state !== 'play') return;
-    this.state = 'dead'; this.exitMode(); this.e.audio.play('scream', { volume: 1 }); this.e.audio.music.sting('death');
+    this.state = 'dead'; if (this.ui.modalOpen()) this.ui.closeModal(); this.e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); this.exitMode(); this.e.audio.play('scream', { volume: 1 }); this.e.audio.music.sting('death');
     this.e.post.set({ blackout: 1 }); this.e.input.unlock();
     setTimeout(() => this.ui.screen('death', { text: S.UI.death[kind] || S.UI.death.generic, onAction: (a) => { this.ui.closeModal(); this.e.post.set({ blackout: 0, fear: 0 }); if (a === 'retry') this.retry(); else this.onTitle && this.onTitle(); } }), 1400);
   }
@@ -422,7 +425,7 @@ export class Game {
       if (h >= 13.0 && done('d1_rules')) this.once('smokeCall', () => { this.say(S.LINES.smokeCall); this.add('d1_smoke'); this.showFire('Cold Creek Basin', true); });
       if (done('d1_smoke') || h >= 16) this.once('genTask', () => this.add('d1_generator'));
       if (h >= 18.9 && done('d1_smoke')) this.once('camera', () => { this.flags.cameraOut = true; this.add('d1_camera', { optional: true }); });
-      if (h >= 19.6) this.once('sob', () => { this.say(S.LINES.duskSob); this.sobOn = true; });
+      if (h >= 19.6) this.once('sob', () => { this.say(S.LINES.duskSob); });
       if (h >= 19.9) this.once('dusktask', () => this.add('d1_dusk'));
       if (done('d1_generator') && z === 'cab' && h >= 20.2) this.complete('d1_dusk');
       if (h > 12 && this.truckVisible && z !== 'trailhead') this.truckVisible = false;
@@ -578,13 +581,13 @@ export class Game {
       const p = V3(W.pos);
       if (['coming', 'hunting'].includes(W.state)) p.y = e.world.heightAt(p.x, p.z);
       h.setPosition(p);
-      if (W.state !== 'sitting' && W.state !== 'hush') h.face(e.camera.position);
+      if (!['sitting', 'hush', 'gone'].includes(W.state)) h.face(e.camera.position);
     }
     h.setVisible(!['stairs', 'door', 'gone'].includes(W.state) || W.state === 'gone');
     // sound
     const snd = W.state === 'gone' ? 'silent' : W.sound;
     this.sobT = (this.sobT || 0) - dt;
-    if (this.sobT <= 0 && (this.sobOn || this.clock.phase !== 'day1')) {
+    if (this.sobT <= 0 && (this.fired.has('sob') || this.clock.phase !== 'day1')) {
       if (snd === 'sob') { e.audio.play('sob', { position: h.position.clone().add(new THREE.Vector3(0, 1.2, 0)), volume: 1.4 }); this.sobT = 4.5 + Math.random() * 3; }
       else if (snd === 'scream') { e.audio.play('scream', { position: h.position.clone().add(new THREE.Vector3(0, 1.5, 0)), volume: 1.8 }); this.sobT = 2.4 + Math.random(); }
       else this.sobT = 1;
@@ -691,7 +694,7 @@ export class Game {
       const f = this.flags.lostN1 ? S.FINDS.body : S.FINDS.noBody;
       if (this.flags.lostN1 && !this.bodyEnt) { const ov = V3(this.L.places.ravine_overlook); this.bodyEnt = e.entities.spawn('lost_hiker_body', { position: new THREE.Vector3(ov.x + 22, e.world.heightAt(ov.x + 22, ov.z + 4), ov.z + 4), pose: 'body' }); }
       this.player().lookAt(V3(this.L.places.ravine_overlook).add(new THREE.Vector3(24, -30, 4)), 1.2);
-      setTimeout(() => this.openModal(() => this.ui.note(f.title, f.text, () => { this.closedModal(); this.complete('d2_overlook'); })), 1400);
+      setTimeout(() => { if (this.state !== 'play' || this.ui.modalOpen()) return; this.openModal(() => this.ui.note(f.title, f.text, () => { this.closedModal(); this.complete('d2_overlook'); })); }, 1400);
     }, () => this.clock.phase === 'day2');
     reg('rest', 'IA_bed', 'E — Lie down and rest (let the hours pass)', () => {
       if (this.clock.held) { const c = this.obj.current(); this.ui.toast('You can\'t sleep yet.' + (c ? ' ' + this.obj.text(c) + '.' : ''), 3); return; }
@@ -781,7 +784,7 @@ export class Game {
     });
     In.onAction('pause', (d) => {
       if (!d) return;
-      if (this.ui.modalOpen()) { this.ui.closeModal(); return; }
+      if (this.ui.modalOpen()) { if (this.ui.canClose()) this.ui.closeModal(); return; }   // title / death / end have no 'back': Esc does nothing there
       if (this.escape()) return;
       if (this.state === 'play') this.onPause && this.onPause();
     });
@@ -797,7 +800,7 @@ export class Game {
     In.onAction('logbook', (d) => { if (!d || this.state !== 'play') return; if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openLogbook(); });
     In.onAction('map', (d) => { if (!d || this.state !== 'play') return; if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openMap(); });
     In.onAction('camera', (d) => {
-      if (!d || this.state !== 'play' || this.mode !== 'walk') return;
+      if (!d || this.state !== 'play' || this.mode !== 'walk' || this.ui.modalOpen()) return;
       if (this.holding) { this.holding = null; this.photos.close(); this.ui.print(null); return; }
       this.toggleCamera();
     });
@@ -811,7 +814,7 @@ export class Game {
     In.onAction('primary', usePrimary);
     In.onAction('use', usePrimary);
     In.onAction('secondary', (d) => { if (d && this.placing) this.cancelPlace(); });
-    for (let i = 0; i < HAND_SLOTS; i++) In.onAction('slot' + (i + 1), (d) => { if (d && this.state === 'play' && this.mode === 'walk') this.selectSlot(i); });
+    for (let i = 0; i < HAND_SLOTS; i++) In.onAction('slot' + (i + 1), (d) => { if (d && this.state === 'play' && this.mode === 'walk' && !this.ui.modalOpen()) this.selectSlot(i); });
     In.onAction('place', (d) => {
       if (!d || this.state !== 'play' || this.mode !== 'walk' || this.ui.modalOpen()) return;
       if (this.placing) this.confirmPlace(); else this.beginPlace();
@@ -822,7 +825,7 @@ export class Game {
       const r = this.photos.flipOrShake();
       if (r === 'flipped') { e.audio.play('paper', { volume: 0.5 }); }
     });
-    In.onAction('flashlight', (d) => { if (d && this.state === 'play') this.toggleFlashlight(); });
+    In.onAction('flashlight', (d) => { if (d && this.state === 'play' && !this.ui.modalOpen()) this.toggleFlashlight(); });
     In.onAction('binoculars', (d) => {
       if (this.state !== 'play' || this.mode !== 'walk' || this.ui.modalOpen()) { this.binocular = false; return; }
       const now = e.time.value;
@@ -1187,6 +1190,10 @@ export class Game {
     if (this.player().blockedByPath && !this.flags.toldPath) { this.flags.toldPath = true; this.ui.toast('The timber is too thick to go any further. Back to the trail.'); }
     // secret checkpoints: walking into the cab, and every two game hours
     const zoneNow = this.player().zone;
+    if (this._lastZone === 'cab' && zoneNow !== 'cab' && this.phaseTime > 3) {
+      if (this.clock.phase === 'night1' && this.flags.refueledOnce) this.flags.leftCabAfterRefuel = true;
+      if (this.clock.phase === 'night2') this.flags.leftCabNight2 = true;
+    }
     if (zoneNow === 'cab' && this._lastZone !== 'cab' && this.phaseTime > 3) this.checkpoint('cab');
     this._lastZone = zoneNow;
     const half = Math.floor(this.clock.hour * 2);   // time checkpoints: every :00 and :30 on the game clock

@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=d0e3d680';
+import { drawMap } from './mapdraw.js?v=f7378e71';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -86,6 +86,7 @@ export function createUI(root = document.getElementById('ui')) {
   // ---------------- modal pages (logbook, map, notes, lists, screens)
   let modalClose = null;
   U.modalOpen = () => modal.style.display === 'block';
+  U.canClose = () => !!modalClose;   // a screen with a way back (Esc = back); title / death / end have none
   U.closeModal = () => { if (!U.modalOpen()) return; modal.style.display = 'none'; modal.innerHTML = ''; const c = modalClose; modalClose = null; c && c(); };
   function openModal(html, cls, onClose) { modal.className = 'fl-modal ' + (cls || ''); modal.innerHTML = html; modal.style.display = 'block'; modalClose = onClose || null; return modal; }
   /** A one-line answer (naming the dog). onDone(value) — Enter or the button; Esc keeps the default. */
@@ -152,8 +153,9 @@ export function createUI(root = document.getElementById('ui')) {
     if (kind === 'controls') {
       const m = openModal(`<div class="paper controls2"><h2>Controls</h2><div class="kgrid">${o.controls.map(([k, v]) => `<div><kbd>${esc(k)}</kbd><span>${esc(v)}</span></div>`).join('')}</div>
         <p class="note2">The searchlight is on the cab roof: work it from the cab or the catwalk. Hold the Morse key while you're on it to flash: <b>··· ——— ···</b>. Every key can be changed in Settings → Keys.</p>
-        <div class="menu"><button data-a="back">Back</button></div></div>`, 'center');
-      m.querySelector('[data-a=back]').onclick = () => o.onBack();
+        <div class="menu"><button data-a="back">Back</button></div></div>`, 'center', () => { if (!left) { left = true; o.onBack(); } });
+      let left = false;
+      m.querySelector('[data-a=back]').onclick = () => { if (!left) { left = true; o.onBack(); } };
       return;
     }
     if (kind === 'settings') {
@@ -165,10 +167,11 @@ export function createUI(root = document.getElementById('ui')) {
         <label>Music <input data-k="music" type="range" min="0" max="1" step="0.05" value="${o.music ?? 0.35}"></label>
         <button class="keysbtn" data-a="keys">Keys… <em>rebind any control</em></button>
         <label>Full screen <select data-k="fullscreen"><option value="on" ${o.fullscreen !== false ? 'selected' : ''}>on (Esc works in menus)</option><option value="off" ${o.fullscreen === false ? 'selected' : ''}>off</option></select></label>
-        <button data-a="done">Done</button></div>`, 'center');
+        <button data-a="done">Done</button></div>`, 'center', () => { if (!left) { left = true; o.onDone(read()); } });
+      let left = false;
       const read = () => { const v = {}; m.querySelectorAll('[data-k]').forEach((i) => v[i.dataset.k] = i.value); return v; };
-      m.querySelector('[data-a=done]').onclick = () => o.onDone(read());
-      m.querySelector('[data-a=keys]').onclick = () => o.onKeys && o.onKeys(read());
+      m.querySelector('[data-a=done]').onclick = () => { if (!left) { left = true; o.onDone(read()); } };
+      m.querySelector('[data-a=keys]').onclick = () => { if (!left && o.onKeys) { left = true; o.onKeys(read()); } };
       return;
     }
     if (kind === 'keys') {   // o: { actions: [[id, label]], binds: {id: [codes]}, getBinds(), keyName, onSet(id, code), onReset(), onBack() }
@@ -183,10 +186,11 @@ export function createUI(root = document.getElementById('ui')) {
       };
       window.addEventListener('keydown', onKey, true);
       const m = openModal(`<div class="paper keys"><h2>Keys</h2><p class="kh">Click a control, then press the key you want. Esc cancels. Esc always pauses.</p><div class="klist"></div>
-        <div class="menu"><button data-a="reset">Reset to defaults</button><button data-a="back">Done</button></div></div>`, 'center', () => window.removeEventListener('keydown', onKey, true));
+        <div class="menu"><button data-a="reset">Reset to defaults</button><button data-a="back">Done</button></div></div>`, 'center', () => { window.removeEventListener('keydown', onKey, true); if (!left) { left = true; o.onBack(); } });
+      let left = false;
       list = m.querySelector('.klist');
       m.querySelector('[data-a=reset]').onclick = () => { o.onReset(); o.binds = o.getBinds(); waiting = null; render(); };
-      m.querySelector('[data-a=back]').onclick = () => o.onBack();
+      m.querySelector('[data-a=back]').onclick = () => { if (!left) { left = true; o.onBack(); } };
       render();
       return;
     }

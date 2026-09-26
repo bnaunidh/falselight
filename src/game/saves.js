@@ -12,17 +12,19 @@ export function createSaves(storage = null) {
   let st = storage
   if (!st) { try { st = globalThis.localStorage || null } catch { st = null } }
   const mem = memoryStorage()
-  const get = (k) => { try { return st ? st.getItem(k) : mem.getItem(k) } catch { return mem.getItem(k) } }
+  const stale = new Set()   // keys whose newest value only made it into memory (storage full): read those from memory
+  const get = (k) => { if (stale.has(k)) return mem.getItem(k); try { return st ? st.getItem(k) : mem.getItem(k) } catch { return mem.getItem(k) } }
   const set = (k, v) => {
-    try { if (st) { st.setItem(k, v); return true } } catch { /* quota or blocked */ }
-    mem.setItem(k, v); return false
+    try { if (st) { st.setItem(k, v); stale.delete(k); return true } } catch { /* quota or blocked */ }
+    mem.setItem(k, v); if (st) stale.add(k); return false
   }
+  const noImages = (ph) => { if (ph && Array.isArray(ph.prints)) ph.prints = ph.prints.map((p) => ({ ...p, dataURL: null })) }
   return {
     save(data) {
       const json = JSON.stringify({ ...data, savedAt: Date.now() })
       if (set(KEY, json)) return true
-      // too big (photos): retry without images
-      try { const slim = JSON.parse(json); if (slim.photos) slim.photos.prints = slim.photos.prints.map((p) => ({ ...p, dataURL: null })); return set(KEY, JSON.stringify(slim)) } catch { return false }
+      // too big (the prints are JPEGs): retry without the images, in the save AND its checkpoint
+      try { const slim = JSON.parse(json); noImages(slim.photos); if (slim.checkpoint) noImages(slim.checkpoint.photos); return set(KEY, JSON.stringify(slim)) } catch { return false }
     },
     load() { try { const s = get(KEY); return s ? JSON.parse(s) : null } catch { return null } },
     has() { return !!this.load() },

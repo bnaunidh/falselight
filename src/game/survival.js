@@ -1,6 +1,6 @@
 // Body and weather: air temperature (°F, the lookout is a 1983 Forest Service post), wind chill, the cab's own air,
 // thirst and hunger. Pure. Rates are per GAME hour, so resting on the bed costs water and food like real hours do.
-import { clamp } from './util.js?v=d0e3d680'
+import { clamp } from './util.js?v=f7378e71'
 
 export const SURV = {
   thirst: 1 / 16,       // a full water meter lasts 16 game hours
@@ -71,5 +71,5 @@ export class Survival {
   drink(amount) { this.water = clamp(this.water + amount) }
   eat(amount) { this.food = clamp(this.food + amount) }
   get icon() { return this.warming || this.warmth > 0.3 || this.feelsF >= 66 ? 'fire' : this.feelsF < 40 ? 'snow' : 'therm' }
-  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warmth: this.warmth, warned: this.warned } }
+  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warmth: this.warmth, warned: { ...this.warned } } }
 }
