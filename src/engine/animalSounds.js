@@ -8,7 +8,7 @@
 // and stopped on a schedule, and when the last one has ended every node the call made is disconnected.
 // Pure module (no three.js, no DOM): tests/animalSounds.test.mjs runs it on a strict WebAudio mock + renderer.
 //
-//   import { registerAnimalSounds } from './engine/animalSounds.js?v=b5a31e5b';
+//   import { registerAnimalSounds } from './engine/animalSounds.js?v=239df90c';
 //   registerAnimalSounds(engine.audio);                  // once, after createAudio()
 //   engine.audio.play('owl', { position: new THREE.Vector3(x, y, z), volume: 1 });
 // volume: 1 = a close call (see LEVEL for the peaks); clamped to 16, 0 / negative / NaN = silent (nothing is made).

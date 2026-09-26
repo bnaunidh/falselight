@@ -1,11 +1,12 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=b5a31e5b';
-import { createUI } from './ui/ui.js?v=b5a31e5b';
-import { Game } from './game/bridge.js?v=b5a31e5b';
-import { createSaves } from './game/saves.js?v=b5a31e5b';
-import { UI as WORDS } from './game/content/story.js?v=b5a31e5b';
-import { ACTIONS, keyName } from './engine/input.js?v=b5a31e5b';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=b5a31e5b';
+import { createEngine } from './engine/engine.js?v=239df90c';
+import { createUI } from './ui/ui.js?v=239df90c';
+import { Game } from './game/bridge.js?v=239df90c';
+import { createSaves } from './game/saves.js?v=239df90c';
+import { UI as WORDS } from './game/content/story.js?v=239df90c';
+import { ACTIONS, keyName } from './engine/input.js?v=239df90c';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=239df90c';
+import { paintCabMaps } from './ui/cabMaps.js?v=239df90c';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -32,6 +33,7 @@ try {
 const game = new Game(engine, ui);
 game.init();
 ui.loading(0.97, 'gear'); await game.itemsReady;
+try { paintCabMaps(engine, { spots: game.chill ? game.chill.spots : [] }); } catch (err) { console.warn('cab maps', err); }   // the wall trail map + the fire finder's disc, drawn to match the world
 window.__fl.game = game;
 ui.loading(null);
 engine.sky.setTime(20.2); engine.sky.setWeather({ fog: 0.45, rain: 0, wind: 0.4 });

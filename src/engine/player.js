@@ -1,7 +1,7 @@
 // FALSE LIGHT — first-person player: walking/jogging, capsule vs COL_wall OBBs, ground from the heightfield and
 // raycasts onto COL_floor/COL_ramp (stairs climb smoothly), the trail-corridor rule, head bob, footsteps.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=b5a31e5b';
+import { clamp, damp } from './util.js?v=239df90c';
 
 const EYE = 1.65, RADIUS = 0.3, STEP = 0.5;
 
@@ -126,7 +126,8 @@ export function createPlayer(engine) {
     update(dt) {
       if (!obbs) buildColliders();
       // look
-      const [mx, my] = input.consumeMouse();
+      // while something else holds the view (the searchlight) the mouse is theirs: leave it for them (lights.update reads it next)
+      const [mx, my] = api.lookLocked && !lookTween ? [0, 0] : input.consumeMouse();
       if (lookTween) {
         lookTween.t += dt; const k = clamp(lookTween.t / lookTween.d, 0, 1), e = k * k * (3 - 2 * k);
         yaw = lookTween.y0 + (lookTween.y1 - lookTween.y0) * e; pitch = lookTween.p0 + (lookTween.p1 - lookTween.p0) * e;

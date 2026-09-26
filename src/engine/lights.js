@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=b5a31e5b';
+import { clamp, damp } from './util.js?v=239df90c';
 
 // The searchlight beam: light scattered by haze inside the cone. Each pixel the cone covers gets ONE fragment (front faces
 // from outside, back faces from inside) and works out analytically how much beam its view ray crosses: the ray's closest
@@ -122,7 +122,7 @@ export function createLights(engine) {
       if (SL.operating) {
         const [mx, my] = engine.input.consumeMouse();
         SL.setAim(SL.yaw - mx * 0.0012, SL.pitch - my * 0.0012);
-      }
+      } else if (engine.player && engine.player.lookLocked) engine.input.consumeMouse();   // the fire finder etc.: drop it, so the view doesn't jump when you step back
       applyAim();
       origin.updateWorldMatrix(true, false);
       const o = SL.worldOrigin(), d = SL.worldDir();
@@ -144,6 +144,10 @@ export function createLights(engine) {
       flash.intensity = FL.on ? 130 * (0.5 + 0.5 * FL.battery) : 0; flash.shadow.autoUpdate = FL.on;
       LAMP.flicker = damp(LAMP.flicker, 0, 3, dt);
       lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) : 0;
+      // the bulb itself glows only while the lamp is on (it stayed lit, 'a different on', when you pulled the chain)
+      if (!LAMP.bulbs) { LAMP.bulbs = []; scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && /cab_bulb/i.test(m.name || '') && !LAMP.bulbs.includes(m)) { m.userData.emis = m.emissiveIntensity ?? 1; LAMP.bulbs.push(m); } }); }
+      const bk = lamp.intensity / 3.2;
+      for (const m of LAMP.bulbs) { const v = m.userData.emis * bk; if (Math.abs(m.emissiveIntensity - v) > 1e-3) m.emissiveIntensity = v; }
       cfT += dt; cf.intensity = cfT < 0.05 ? 2600 : cfT < 0.25 ? 2600 * Math.exp(-(cfT - 0.05) * 22) : 0;
     },
   };
