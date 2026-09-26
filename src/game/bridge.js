@@ -1,35 +1,36 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=37301ca4';
-import { Objectives } from './objectives.js?v=37301ca4';
-import { Radio } from './radio.js?v=37301ca4';
-import { Fuel, FUEL } from './fuel.js?v=37301ca4';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=37301ca4';
-import { Survival, SURV } from './survival.js?v=37301ca4';
-import { createItemsView } from './itemsView.js?v=37301ca4';
-import { createChill } from './chill.js?v=37301ca4';
-import { createPlume } from './smokePlume.js?v=37301ca4';
-import { FireFinder, spokenBearing } from './firefinder.js?v=37301ca4';
-import { Photos, classifyShot } from './photos.js?v=37301ca4';
-import { CO } from './co.js?v=37301ca4';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=37301ca4';
-import { OtherLookout } from './otherLookout.js?v=37301ca4';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=37301ca4';
-import { GuidedHiker } from './hikers.js?v=37301ca4';
-import { MorseKeyer, isSOS } from './morse.js?v=37301ca4';
-import { normalizeLayout } from './layout.js?v=37301ca4';
-import { createSaves } from './saves.js?v=37301ca4';
-import { createRng } from './rng.js?v=37301ca4';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=37301ca4';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=37301ca4';
-import * as S from './content/story.js?v=37301ca4';
-import { createDog, setDogName } from './dog.js?v=37301ca4';
-import { createWildlife } from './wildlife.js?v=37301ca4';
-import { Fear, registerFearSounds } from './fear.js?v=37301ca4';
-import { epilogue } from './content/ending.js?v=37301ca4';
-import { Director, sosLamp } from './director.js?v=37301ca4';
-import { createPhotoBoard } from './photoBoard.js?v=37301ca4';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=1fafa2b9';
+import { Objectives } from './objectives.js?v=1fafa2b9';
+import { Radio } from './radio.js?v=1fafa2b9';
+import { Fuel, FUEL } from './fuel.js?v=1fafa2b9';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=1fafa2b9';
+import { Survival, SURV } from './survival.js?v=1fafa2b9';
+import { createItemsView } from './itemsView.js?v=1fafa2b9';
+import { createChill } from './chill.js?v=1fafa2b9';
+import { createPlume } from './smokePlume.js?v=1fafa2b9';
+import { FireFinder, spokenBearing } from './firefinder.js?v=1fafa2b9';
+import { Photos, classifyShot } from './photos.js?v=1fafa2b9';
+import { CO } from './co.js?v=1fafa2b9';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=1fafa2b9';
+import { OtherLookout } from './otherLookout.js?v=1fafa2b9';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=1fafa2b9';
+import { GuidedHiker } from './hikers.js?v=1fafa2b9';
+import { MorseKeyer, isSOS } from './morse.js?v=1fafa2b9';
+import { normalizeLayout } from './layout.js?v=1fafa2b9';
+import { createSaves } from './saves.js?v=1fafa2b9';
+import { createRng } from './rng.js?v=1fafa2b9';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=1fafa2b9';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=1fafa2b9';
+import * as S from './content/story.js?v=1fafa2b9';
+import { createDog, setDogName } from './dog.js?v=1fafa2b9';
+import { createWildlife } from './wildlife.js?v=1fafa2b9';
+import { Fear, registerFearSounds } from './fear.js?v=1fafa2b9';
+import { epilogue } from './content/ending.js?v=1fafa2b9';
+import { Director, sosLamp } from './director.js?v=1fafa2b9';
+import { createPhotoBoard } from './photoBoard.js?v=1fafa2b9';
+import { makeTent } from './tents.js?v=1fafa2b9';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -328,6 +329,14 @@ export class Game {
     if (this.bodyEnt) { this.bodyEnt.remove(); this.bodyEnt = null; }
     this.exitMode(); this.holding = null;
     this.placing = null; this.syncItems();
+    this.campTents(); this.buildTents();
+    if (!this.flags.tentGiven) {   // saves from before the emergency tent: you get one (a free hand or the pack, else at your feet)
+      this.flags.tentGiven = true;
+      if (!this.inv.items.some((i) => i.kind === 'tent' && i.where !== 'world')) {
+        const Pl = this.player(), it = this.inv.create('tent', { where: 'world', pos: [Pl.position.x - Math.sin(Pl.yaw) * 0.8, Pl.position.y + 0.3, Pl.position.z - Math.cos(Pl.yaw) * 0.8], uses: 3, settle: true });
+        if (!this.inv.take(it.id).ok) this.ui.toast('An emergency tent (three pitches) is on the ground in front of you.', 3.5); this.syncItems();
+      }
+    }
     if (!restored) this.health = Math.max(this.health ?? 1, 0.85);   // a night's sleep (or a day's) mends most of it
     if (!restored) this.dogFetch();
     if (!restored && !isNight(phase) && phase !== 'day1' && this.surv) this.surv.fatigue.sleep(2, 1);   // the 05:30 -> 07:30 you got in bed
@@ -1133,6 +1142,76 @@ export class Game {
     }
     if (back.length) { this.syncItems(); setTimeout(() => { if (this.state === 'play') this.ui.toast(`${this.flags.dogName || 'Juniper'} has been busy: your ${back.slice(0, 3).join(', ')}${back.length > 3 ? '…' : ''} ${back.length > 1 ? 'are' : 'is'} inside the cab door.`, 4.5); }, 7000); }
   }
+  // ------------------------------------------------------------------ tents
+  /** Pitch the emergency tent from your hand: outside, on ground that's flat enough, two metres in front of you, door to you. */
+  pitchTent(it) {
+    const e = this.e, P = this.player(), W = e.world;
+    if ((it.uses ?? 3) <= 0) { this.ui.toast('It\'s done: the poles are bent and the fly is torn through. It won\'t pitch again.', 3.5); return; }
+    if (P.onStructure || ['cab', 'catwalk', 'stairs', 'base'].includes(P.zone)) { this.ui.toast('Not here. Somewhere on the ground, outside.', 2.5); return; }
+    const fw = new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)), c = P.position.clone().addScaledVector(fw, 2.1);
+    const rotY = Math.atan2(-fw.x, -fw.z), hs = [];   // the door (+Z) faces back at you
+    for (const [dx, dz] of [[-0.8, -1.1], [0.8, -1.1], [-0.8, 1.1], [0.8, 1.1], [0, 0]]) { const x = c.x + dx * Math.cos(rotY) + dz * Math.sin(rotY), z = c.z - dx * Math.sin(rotY) + dz * Math.cos(rotY); hs.push(W.heightAt(x, z)); }
+    if (Math.max(...hs) - Math.min(...hs) > 0.55) { this.ui.toast('Too steep to pitch it here. Find a flatter spot.', 2.5); return; }
+    if (W.waterY && W.waterY(c.x, c.z) != null) { this.ui.toast('Not in the creek.', 2); return; }
+    const T = { id: it.id, pos: [c.x, Math.min(...hs) + 0.02, c.z], rotY, uses: (it.uses ?? 3) - 1 };
+    (this.flags.pitched || (this.flags.pitched = [])).push(T);
+    this.inv.remove(it.id); this.syncItems(); this.refreshHotbar(); this.buildTents();
+    e.audio.sfx('cloth', { volume: 0.5 }); setTimeout(() => e.audio.sfx('knock_one', { volume: 0.2 }), 500);
+    this.ui.toast(T.uses > 0 ? `Pitched. ${T.uses} more pitch${T.uses === 1 ? '' : 'es'} in it after this. E at the door to crawl in.` : 'Pitched, for the last time: the poles won\'t take another. E at the door to crawl in.', 3.5);
+  }
+  /** (Re)build the pitched tents (meshes, a collider each, 'crawl in' + 'take it down'): after pitching, packing up, or loading. */
+  buildTents() {
+    const e = this.e, I = e.interact;
+    for (const o of this._tentObjs || []) { e.scene.remove(o.g); const i = e.world.colliders.indexOf(o.col); if (i >= 0) e.world.colliders.splice(i, 1); o.offs.forEach((f) => f()); }
+    this._tentObjs = [];
+    (this.flags.pitched || []).forEach((T, k) => {
+      const g = makeTent(); g.position.set(T.pos[0], T.pos[1], T.pos[2]); g.rotation.y = T.rotY; e.scene.add(g); g.updateMatrixWorld(true);
+      const cm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.0, 2.0), new THREE.MeshBasicMaterial({ visible: false })); cm.visible = false; cm.position.set(0, 0.5, 0); g.add(cm); cm.updateWorldMatrix(true, false);
+      const col = { name: 'COL_wall_tent' + k, type: 'wall', mesh: cm, enabled: true }; e.world.colliders.push(col);
+      const toW = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(g.matrixWorld);
+      const offs = [
+        I.register({ id: 'tent:in:' + k, anchor: toW(0, 0.55, 1.05), radius: 0.55, reach: 2.4, label: 'E — Crawl in and sleep (sheltered)', enabled: () => this.state === 'play' && this.mode === 'walk' && !this.resting, onUse: () => this.sleepInTent(T, g) }),
+        I.register({ id: 'tent:down:' + k, anchor: toW(0, 0.95, -1.05), radius: 0.5, reach: 2.4, label: 'E — Take the tent down', enabled: () => this.state === 'play' && this.mode === 'walk' && !this.resting, onUse: () => this.strikeTent(T) }),
+      ];
+      this._tentObjs.push({ g, col, offs });
+    });
+    const P = this.player(); if (P.rebuildColliders) P.rebuildColliders();
+  }
+  sleepInTent(T, g) {
+    if (this.clock.held) { const c = this.obj.current(); this.ui.toast('You can\'t sleep yet.' + (c ? ' ' + this.obj.text(c) + '.' : ''), 3); return; }
+    this.resting = true; this.restIn = T; this.restObjN = this.obj.list.length; this.clock.speed = 14; this.ui.toast('You crawl in and zip the door. Out of the wind. (W to get up)', 3);
+    const head = new THREE.Vector3(0, 0.22, -0.55).applyMatrix4(g.matrixWorld), look = new THREE.Vector3(0, 1.4, 0.2).applyMatrix4(g.matrixWorld);
+    this._lie = { k: this._lie ? this._lie.k : 0, head, t: 0 };
+    const Pl = this.player(), eye = Pl.position.clone().add(new THREE.Vector3(0, 1.65, 0)); Pl.lookAt(eye.add(look.clone().sub(head)), 1.1);
+  }
+  strikeTent(T) {
+    const list = this.flags.pitched || [], i = list.indexOf(T); if (i < 0) return;
+    list.splice(i, 1); this.buildTents(); this.e.audio.sfx('cloth', { volume: 0.5 });
+    if (T.uses <= 0) { this.ui.toast('You pull the stakes. The poles are bent past using and the fly is torn: you leave it rolled up in the brush.', 4); return; }
+    const it = this.inv.create('tent', { where: 'world', pos: [...T.pos], rotY: T.rotY, uses: T.uses, settle: true }); it.leftAt = this.absHour();
+    const r = this.inv.take(it.id); this.syncItems(); this.refreshHotbar();
+    this.ui.toast(r.ok ? `Packed up (${T.uses} pitch${T.uses === 1 ? '' : 'es'} left).` : 'Packed up. Your hands and pack are full: it\'s on the ground here.', 3);
+  }
+  /** The hikers' camp: what's left of it. One tent still up (sagging), one down, a slash through its side. */
+  campTents() {
+    if (this._campTents) return; this._campTents = [];
+    const e = this.e, W = e.world, c = this.L.places && (this.L.places.hikers_camp || null); if (!c) return;
+    const cp = c.position || c, spots = [];
+    for (let a = 0; a < 16 && spots.length < 2; a++) {
+      const ang = a * 2.39, r = 5 + (a % 3) * 1.5, x = cp[0] + Math.cos(ang) * r, z = cp[2] + Math.sin(ang) * r;
+      if (W.trail && W.trail.nearest(x, z).dist < 3.2) continue;
+      if (spots.some((q) => Math.hypot(q[0] - x, q[2] - z) < 4)) continue;
+      const hs = [[-0.8, -1.1], [0.8, -1.1], [-0.8, 1.1], [0.8, 1.1]].map(([dx, dz]) => W.heightAt(x + dx, z + dz)); if (Math.max(...hs) - Math.min(...hs) > 0.5) continue;
+      if ((W.trunks || []).some((t) => Math.hypot(t[0] - x, t[1] - z) < t[2] + 1.6)) continue;
+      spots.push([x, Math.min(...hs) + 0.02, z]);
+    }
+    spots.forEach((p, i) => {
+      const g = makeTent(i ? { collapsed: true, torn: true, tint: 0xd8c9a8 } : { tint: 0xbfc6a8 }); g.position.set(p[0], p[1], p[2]); g.rotation.y = Math.atan2(cp[0] - p[0], cp[2] - p[2]) + (i ? 0.9 : 0); e.scene.add(g); g.updateMatrixWorld(true);
+      const cm = new THREE.Mesh(new THREE.BoxGeometry(1.4, i ? 0.5 : 1.0, 2.0), new THREE.MeshBasicMaterial({ visible: false })); cm.visible = false; cm.position.y = 0.4; g.add(cm); cm.updateWorldMatrix(true, false);
+      W.colliders.push({ name: 'COL_wall_camptent' + i, type: 'wall', mesh: cm, enabled: true }); this._campTents.push(g);
+    });
+    const P = this.player(); if (P.rebuildColliders) P.rebuildColliders();
+  }
   /** Q held = winding up (the meter under the crosshair), released = the throw. The longer you hold, the farther (up to ~1.1 s). */
   throwKey(d) {
     const e = this.e, now = e.time.value, it = this.inv.activeItem;
@@ -1246,6 +1325,7 @@ export class Game {
       this.refreshHotbar();
     }
     else if (it.kind === 'lantern') this.toggleLantern(it);
+    else if (it.kind === 'tent') this.pitchTent(it);
   }
   openPack() {
     const render = () => this.ui.pack({
@@ -1332,7 +1412,7 @@ export class Game {
     e.sky.setTime(dayHour(this.clock.hour));
     // radio
     if (this.resting && (this.obj.list.length !== this.restObjN || this.radio.busy || e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right') || this.clock.held)) {
-      this.resting = false; this.clock.speed = 1; e.post.set({ blackout: 0 });
+      this.resting = false; this.restIn = null; this.clock.speed = 1; e.post.set({ blackout: 0 });
       const Pl = this.player(); Pl.lookAt(new THREE.Vector3(Pl.position.x - Math.sin(Pl.yaw) * 4, Pl.position.y + 1.6, Pl.position.z - Math.cos(Pl.yaw) * 4), 0.8);   // sit up and look ahead
     }
     for (const ev of this.radio.tick(dt)) {
@@ -1455,7 +1535,7 @@ export class Game {
     const Pl = this.player(), wx = e.sky.weather, ha = this.anchor('IA_heater');
     for (const ev of this.surv.tick(Math.max(0, hTo - hFrom), { hour: dayHour(this.clock.hour), y: Pl.position.y, zone: Pl.zone, rain: wx.rain, fog: wx.fog, wind: wx.wind,
       heater: this.co.heater, open: this.co.open, inWater: !!Pl.inWater, jog: e.input.isDown('jog') && Pl.stamina > 0.05, night: this.night,
-      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood })) {
+      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood, shelter: !!this.restIn })) {
       if (ev === 'thirsty') this.ui.toast('Your mouth is dry. Drink something: the canteen, or the spring.', 4);
       if (/^tired[123]$/.test(ev) || ev === 'rested') this.say(S.LINES[ev]);
       if (ev === 'crash') this.say(S.LINES.coffeeCrash);

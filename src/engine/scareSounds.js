@@ -9,7 +9,7 @@
 // schedule, and when the last one has ended every node the call made is disconnected. A recipe that throws plays nothing
 // (warned once) instead of taking the frame down. Pure module (no three.js, no DOM): tests/scareSounds.test.mjs.
 //
-//   import { registerScareSounds } from './engine/scareSounds.js?v=37301ca4';
+//   import { registerScareSounds } from './engine/scareSounds.js?v=1fafa2b9';
 //   registerScareSounds(engine.audio);          // once, after createAudio() (and after registerAnimalSounds)
 // volume 1 = close (LEVEL below calibrates each so its median peak lands where it should); the engine's panner is inverse-
 // distance (ref 3 m), so the stair steps from 25 m below want ~1-1.5 and a knock at the door 1.2.

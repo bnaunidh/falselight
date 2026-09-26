@@ -1,13 +1,13 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=37301ca4';
-import { createUI } from './ui/ui.js?v=37301ca4';
-import { Game } from './game/bridge.js?v=37301ca4';
-import { createSaves } from './game/saves.js?v=37301ca4';
-import { UI as WORDS } from './game/content/story.js?v=37301ca4';
-import { ACTIONS, keyName } from './engine/input.js?v=37301ca4';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=37301ca4';
-import { registerScareSounds } from './engine/scareSounds.js?v=37301ca4';
-import { paintCabMaps } from './ui/cabMaps.js?v=37301ca4';
+import { createEngine } from './engine/engine.js?v=1fafa2b9';
+import { createUI } from './ui/ui.js?v=1fafa2b9';
+import { Game } from './game/bridge.js?v=1fafa2b9';
+import { createSaves } from './game/saves.js?v=1fafa2b9';
+import { UI as WORDS } from './game/content/story.js?v=1fafa2b9';
+import { ACTIONS, keyName } from './engine/input.js?v=1fafa2b9';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=1fafa2b9';
+import { registerScareSounds } from './engine/scareSounds.js?v=1fafa2b9';
+import { paintCabMaps } from './ui/cabMaps.js?v=1fafa2b9';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);

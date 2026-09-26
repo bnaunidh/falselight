@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=37301ca4';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=1fafa2b9';
 
 const loader = new GLTFLoader();
 // Glass you can see: at a glancing angle a pane goes silver with reflection (Fresnel), so a shut window reads as glass and

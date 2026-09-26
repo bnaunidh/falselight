@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=37301ca4'
+import { clamp } from './util.js?v=1fafa2b9'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -12,7 +12,8 @@ export const KINDS = {
   camera:     { name: 'Instant camera', model: 'prop_instant_camera', pack: true },
   binoculars: { name: 'Binoculars', model: 'prop_binoculars', pack: true },
   canteen:    { name: 'Canteen', model: 'prop_canteen', pack: true },
-  food:       { name: 'Tin of beans', model: 'prop_food_tin', pack: true, stack: 6 },   // tins stack: up to six in one slot (it.n)
+  food:       { name: 'Tin of beans', model: 'prop_food_tin', pack: true, stack: 6 },
+  tent:       { name: 'Emergency tent', proc: 'tentBag', pack: true },   // a two-man A-frame in a stuff sack: pitch it anywhere outside, three times (it.uses)   // tins stack: up to six in one slot (it.n)
   // the cab's own things: move them, shelve them, take them with you
   clock:      { name: 'Alarm clock', model: 'prop_alarm_clock', pack: true, scale: 0.72 },
   pot:        { name: 'Coffee pot', model: 'prop_pot_enamel', pack: false, scale: 0.78 },
@@ -30,8 +31,9 @@ export const CAB_ITEMS = [
   ['oldcan', [0.45, 30.4, -1.875], 0.3], ['oldcan', [0.59, 30.4, -1.875], 1.9], ['oldcan', [-1.73, 30.55, 1.865], 0.8],
   ['lantern', [-1.15, 31.0, 1.865], 2.9], ['lantern', [8.3, 1.62, 5.72], 1.2],   // one on the cab's south shelf, one on the shed shelf
   ['pills', [0.89, 31.3, -1.87], 0.5, 2, { n: PILLS.full }],   // beside the tins on the north shelf
+  ['tent', [-1.62, 30.1, 1.55], 0.2, 3, { uses: 3 }], ['tent', [-1.62, 30.1, 1.3], 0.35, 3, { uses: 3 }],   // two spares in the corner by the south shelf
 ]
-const CAB_V = 2
+const CAB_V = 3
 export const CANTEEN_SIPS = 4
 
 export class Inventory {
@@ -54,6 +56,7 @@ export class Inventory {
     inv.create('binoculars', { where: 'pack', slot: 1 })
     inv.create('canteen', { where: 'pack', slot: 2, fill: 1 })
     inv.create('food', { where: 'pack', slot: 3 })
+    inv.create('tent', { where: 'pack', slot: 4, uses: 3 })   // yours: for emergencies (shelter, a few hours' sleep out there)
     for (const p of where.fuel || []) inv.create('fuel', { where: 'world', pos: p, rotY: Math.random() * 6.28, fill: 1 })
     for (const p of where.food || []) inv.create('food', { where: 'world', pos: p, rotY: Math.random() * 6.28 })
     inv.addCabItems()
@@ -132,6 +135,7 @@ export class Inventory {
     if (it.kind === 'canteen') return k.name + (it.fill > 0 ? ` (${Math.round(it.fill * CANTEEN_SIPS)}/${CANTEEN_SIPS})` : ' (empty)')
     if (it.kind === 'lantern') return k.name + (it.on ? ' (lit)' : '')
     if (it.kind === 'pills') return k.name + (it.n > 0 ? ` (${it.n} left)` : ' (empty)')
+    if (it.kind === 'tent') { const u = it.uses ?? 3; return k.name + (u > 0 ? ` (${u} pitch${u === 1 ? '' : 'es'} left)` : ' (worn out)') }
     if (k.stack && (it.n || 1) > 1) return k.name + ` ×${it.n}`
     return k.name
   }
