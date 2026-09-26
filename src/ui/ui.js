@@ -1,8 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=eef1304c';
-import { createOverlays } from './overlays.js?v=eef1304c';
+import { drawMap } from './mapdraw.js?v=8c08f3c9';
+import { createOverlays } from './overlays.js?v=8c08f3c9';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -90,7 +90,7 @@ export function createUI(root = document.getElementById('ui')) {
       <div class="hint">${o.resolving ? '<b>Q — TURN IT OVER</b>' : o.faceDown ? 'Face-down · Q to turn it over' : dev < 1 ? 'Developing… Q to shake it · C to put it away' : 'C to put it away · Tab: logbook › photos'}</div>`;
   };
   U.watch = (on, text) => { watch.style.opacity = on ? 1 : 0; if (on) watch.textContent = text; };
-  U.fade = (v) => { fade.style.opacity = v; };
+  U.fade = (v, text) => { fade.style.opacity = v; fade.innerHTML = text ? `<div class="card">${text}</div>` : ''; };   // text: a chapter card while it's dark (the night ends, the day begins)
 
   // ---------------- modal pages (logbook, map, notes, lists, screens)
   let modalClose = null;
@@ -157,7 +157,11 @@ export function createUI(root = document.getElementById('ui')) {
           <span class="t2-credit">Built in Blender · textures & scans from Poly Haven and Blender Studio (CC0)</span>
         </div>
       </div>`, 'full clear');
-      m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => o.onAction(b.dataset.a));
+      m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => {
+        const a = b.dataset.a, risky = (a === 'new' && o.canContinue) || a === 'retry';   // these throw away progress: ask twice
+        if (risky && !b.dataset.sure) { b.dataset.sure = '1'; const sp = b.querySelector('span') || b; sp.textContent = a === 'new' ? 'Erase your season? Click again' : 'Back to the start of this ' + (o.what || 'night') + '? Click again'; setTimeout(() => { delete b.dataset.sure; }, 4000); return; }
+        o.onAction(a);
+      });
       return;
     }
     if (kind === 'controls') {
@@ -208,7 +212,11 @@ export function createUI(root = document.getElementById('ui')) {
     }
     if (kind === 'pause') {
       const m = openModal(`<div class="paper pause"><h2>Paused</h2><div class="menu"><button data-a="resume">Resume</button><button data-a="settings">Settings</button><button data-a="retry">Restart this ${esc(o.what || 'night')}</button><button data-a="title">Title</button></div></div>`, 'center', o.onClose);
-      m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => o.onAction(b.dataset.a));
+      m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => {
+        const a = b.dataset.a, risky = (a === 'new' && o.canContinue) || a === 'retry';   // these throw away progress: ask twice
+        if (risky && !b.dataset.sure) { b.dataset.sure = '1'; const sp = b.querySelector('span') || b; sp.textContent = a === 'new' ? 'Erase your season? Click again' : 'Back to the start of this ' + (o.what || 'night') + '? Click again'; setTimeout(() => { delete b.dataset.sure; }, 4000); return; }
+        o.onAction(a);
+      });
       return;
     }
     if (kind === 'death' || kind === 'end') {
@@ -301,6 +309,9 @@ export function createUI(root = document.getElementById('ui')) {
       <div class="close">I / Esc</div></div>`, 'center', onClose);
     m.querySelectorAll('button.cell').forEach((b) => b.onclick = () => onPick(b.dataset.w, +b.dataset.i));
   };
+  // the throw: a small meter under the crosshair while Q is held
+  const chg = $('div', 'fl-charge', root, '<i></i>');
+  U.charge = (k) => { if (k == null) { chg.style.opacity = '0'; return; } chg.style.opacity = '1'; chg.firstChild.style.width = Math.round(k * 100) + '%'; };
   U.hideHUD = (b) => { root.classList.toggle('nohud', !!b); };
   U.body = (o) => body.update(o); U.bodyClear = () => body.clear(); U.bodyState = () => body.state;
   return U;

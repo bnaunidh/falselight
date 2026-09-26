@@ -13,7 +13,7 @@
 //   level       0 rested … 1 wrecked: what you FEEL (debt − coffee + sedation + woozy). Symptoms, speed, the HUD.
 //   halluLevel  what your head does with it: level, pressed down hard by the pill. The director's hallucinations run on it.
 //   rest        1 − level: the HUD's sleep ring (1 = rested, like water / food).
-import { clamp, smooth } from './util.js?v=eef1304c'
+import { clamp, smooth } from './util.js?v=8c08f3c9'
 
 export const FAT = {
   wreck: 18,          // game hours awake: rested (0) → wrecked (1)

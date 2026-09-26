@@ -4,7 +4,7 @@ export const ACTIONS = [
   ['forward', 'Walk forward'], ['back', 'Walk back'], ['left', 'Step left'], ['right', 'Step right'], ['jog', 'Jog'],
   ['interact', 'Interact · pick up'], ['use', 'Use what\'s in your hand'], ['place', 'Set it down'], ['inventory', 'Backpack'],
   ['slot1', 'Hand 1'], ['slot2', 'Hand 2'], ['slot3', 'Hand 3'],
-  ['flashlight', 'Flashlight'], ['binoculars', 'Binoculars'], ['camera', 'Camera'], ['flip', 'Shake / turn a photo'],
+  ['flashlight', 'Flashlight'], ['binoculars', 'Binoculars'], ['camera', 'Camera'], ['flip', 'Throw (hold) · shake / turn a photo'],
   ['searchlight', 'Searchlight'], ['signal', 'Flash Morse (on the searchlight)'], ['logbook', 'Logbook'], ['map', 'Trail map'], ['watch', 'Watch (hold)'], ['pause', 'Pause'],
 ];
 export const DEFAULT_BINDS = {

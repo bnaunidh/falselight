@@ -248,3 +248,9 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .fl-hot .slot em{position:absolute;right:4px;bottom:3px;font:600 12px/1 var(--type);font-style:normal;color:#f1e6c8;text-shadow:0 1px 2px #000}
 
 .fl-surv .ring.w.sick{color:#8fcf5a}.fl-surv .ring.w.sick .ic svg{filter:drop-shadow(0 0 3px rgba(140,210,90,.6))}
+
+.fl-charge{position:fixed;left:50%;top:calc(50% + 16px);width:54px;height:4px;margin-left:-27px;border-radius:2px;background:rgba(0,0,0,.45);opacity:0;transition:opacity .12s;pointer-events:none;z-index:21}
+.fl-charge i{display:block;height:100%;width:0;border-radius:2px;background:#f1e6c8}
+
+.fl-fade .card{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#e9e0c9;font:italic 20px/1.4 Georgia,serif;text-align:center;animation:fl-epi 1.2s ease-out both}
+.fl-fade .card b{font:600 13px/1 var(--type);letter-spacing:.2em;text-transform:uppercase;font-style:normal;color:#d8b36a}
