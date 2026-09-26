@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=b81b31af'
+import { clamp } from './util.js?v=7c0235c6'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -18,10 +18,9 @@ export const KINDS = {
   pot:        { name: 'Coffee pot', model: 'prop_pot_enamel', pack: false, scale: 0.78 },
   oldcan:     { name: 'Rusted can', model: 'prop_can_rusted', pack: true, scale: 0.8 },
   lantern:    { name: 'Hurricane lantern', model: 'prop_lantern', pack: false, light: true },
-  // Tillman's prescription, left on the cab shelf: chlorpromazine 25 mg (src/game/fatigue.js pill()). No bottle model yet:
-  // the food tin at 0.55 (4.7 x 6.2 cm), amber with a white rim, no lettering (itemsView: tint + plain). TODO a real
-  // prop_pill_bottle (amber vial, white cap, a typed pharmacy label).
-  pills:      { name: 'Pill bottle', model: 'prop_food_tin', pack: true, scale: 0.55, tint: 0x9a5418, plain: true },
+  // Tillman's prescription, left on the cab shelf: chlorpromazine 25 mg (src/game/fatigue.js pill()): an amber pharmacy vial,
+  // white ridged cap, a typed Cascade Pharmacy label (prop_pill_bottle, props_custom.py).
+  pills:      { name: 'Pill bottle', model: 'prop_pill_bottle', pack: true },
 }
 export const PILLS = { full: 6, label: 'R. TILLMAN · CHLORPROMAZINE 25 MG · TAKE ONE AS DIRECTED · MAY CAUSE DROWSINESS' }
 /** Where the cab's movable things start (three coords; settled onto whatever is under them). [kind, pos, rotY, since (the

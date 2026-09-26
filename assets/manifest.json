@@ -132,6 +132,11 @@
    "bytes": 1206056,
    "mtime": 1790225197
   },
+  "prop_pill_bottle": {
+   "path": "models/prop_pill_bottle.glb",
+   "bytes": 95364,
+   "mtime": 1790452353
+  },
   "prop_pot_enamel": {
    "path": "models/prop_pot_enamel.glb",
    "bytes": 294820,

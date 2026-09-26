@@ -11,7 +11,7 @@
 // Not a collider, not a raycast target, no shadows, fog:false (it does its own), frustumCulled off (it rings the camera).
 // A second, tiny draw (the night band, below) paints a clean sky over the rocky hill baked into the night HDRI.
 import * as THREE from 'three';
-import { buildMountains, skyBandTable, MOUNTAINS } from './mountainsShape.js?v=b81b31af';
+import { buildMountains, skyBandTable, MOUNTAINS } from './mountainsShape.js?v=7c0235c6';
 
 const VS = /* glsl */`
 attribute vec4 aInfo;

@@ -2,8 +2,8 @@
 // (the same USFS topo sheet M opens, "you are here" at the tower) and the Osborne fire finder's map disc (azimuth ring,
 // range rings, the fire ridges and the volcanoes at their real bearings). Both replace blank / stale Blender textures.
 import * as THREE from 'three';
-import { drawMap } from './mapdraw.js?v=b81b31af';
-import { MOUNTAINS } from '../engine/mountainsShape.js?v=b81b31af';
+import { drawMap } from './mapdraw.js?v=7c0235c6';
+import { MOUNTAINS } from '../engine/mountainsShape.js?v=7c0235c6';
 
 const SERIF = '"Century Schoolbook","New Century Schoolbook","Georgia","Times New Roman",serif';
 const DEG = Math.PI / 180;
