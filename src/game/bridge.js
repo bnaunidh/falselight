@@ -1,34 +1,34 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=5f57277c';
-import { Objectives } from './objectives.js?v=5f57277c';
-import { Radio } from './radio.js?v=5f57277c';
-import { Fuel, FUEL } from './fuel.js?v=5f57277c';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=5f57277c';
-import { Survival, SURV } from './survival.js?v=5f57277c';
-import { createItemsView } from './itemsView.js?v=5f57277c';
-import { createChill } from './chill.js?v=5f57277c';
-import { createPlume } from './smokePlume.js?v=5f57277c';
-import { FireFinder, spokenBearing } from './firefinder.js?v=5f57277c';
-import { Photos, classifyShot } from './photos.js?v=5f57277c';
-import { CO } from './co.js?v=5f57277c';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=5f57277c';
-import { OtherLookout } from './otherLookout.js?v=5f57277c';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=5f57277c';
-import { GuidedHiker } from './hikers.js?v=5f57277c';
-import { MorseKeyer, isSOS } from './morse.js?v=5f57277c';
-import { normalizeLayout } from './layout.js?v=5f57277c';
-import { createSaves } from './saves.js?v=5f57277c';
-import { createRng } from './rng.js?v=5f57277c';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=5f57277c';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=5f57277c';
-import * as S from './content/story.js?v=5f57277c';
-import { createDog, setDogName } from './dog.js?v=5f57277c';
-import { createWildlife } from './wildlife.js?v=5f57277c';
-import { Fear, registerFearSounds } from './fear.js?v=5f57277c';
-import { epilogue } from './content/ending.js?v=5f57277c';
-import { Director, sosLamp } from './director.js?v=5f57277c';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f815e1db';
+import { Objectives } from './objectives.js?v=f815e1db';
+import { Radio } from './radio.js?v=f815e1db';
+import { Fuel, FUEL } from './fuel.js?v=f815e1db';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=f815e1db';
+import { Survival, SURV } from './survival.js?v=f815e1db';
+import { createItemsView } from './itemsView.js?v=f815e1db';
+import { createChill } from './chill.js?v=f815e1db';
+import { createPlume } from './smokePlume.js?v=f815e1db';
+import { FireFinder, spokenBearing } from './firefinder.js?v=f815e1db';
+import { Photos, classifyShot } from './photos.js?v=f815e1db';
+import { CO } from './co.js?v=f815e1db';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=f815e1db';
+import { OtherLookout } from './otherLookout.js?v=f815e1db';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f815e1db';
+import { GuidedHiker } from './hikers.js?v=f815e1db';
+import { MorseKeyer, isSOS } from './morse.js?v=f815e1db';
+import { normalizeLayout } from './layout.js?v=f815e1db';
+import { createSaves } from './saves.js?v=f815e1db';
+import { createRng } from './rng.js?v=f815e1db';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=f815e1db';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=f815e1db';
+import * as S from './content/story.js?v=f815e1db';
+import { createDog, setDogName } from './dog.js?v=f815e1db';
+import { createWildlife } from './wildlife.js?v=f815e1db';
+import { Fear, registerFearSounds } from './fear.js?v=f815e1db';
+import { epilogue } from './content/ending.js?v=f815e1db';
+import { Director, sosLamp } from './director.js?v=f815e1db';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -1011,7 +1011,7 @@ export class Game {
     this.player().carrying = this.inv.carryingHeavy ? 'fuel' : null;
     this.refreshHotbar();
   }
-  slotView(it) { return it ? { icon: this.iv.icons[it.kind] || '', label: this.inv.label(it), short: KINDS[it.kind].name, fill: it.kind === 'canteen' || it.kind === 'fuel' ? it.fill : it.kind === 'pills' ? (it.n || 0) / PILLS.full : null } : null; }
+  slotView(it) { return it ? { icon: this.iv.icons[it.kind] || '', label: this.inv.label(it), short: KINDS[it.kind].name, fill: it.kind === 'canteen' || it.kind === 'fuel' ? it.fill : it.kind === 'pills' ? (it.n || 0) / PILLS.full : null, count: KINDS[it.kind].stack && (it.n || 1) > 1 ? it.n : null } : null; }
   fatigueHUD() { return this.surv ? this.surv.fatigue.rest : null; }
   refreshHotbar() {
     if (!this.inv) return;
@@ -1030,7 +1030,8 @@ export class Game {
     if (it.kind === 'camera' && !this.photos.hasCamera) {
       this.photos.giveCamera(1); this.flags.hasCamera = true; this.say(S.LINES.cameraFound); this.complete('d1_camera');
       this.ui.toast(r.to === 'pack' ? 'Into the pack. C raises the camera.' : 'C raises the camera · click takes a picture.', 4);
-    } else if (r.to === 'pack') this.ui.toast(`Your hands are full: the ${this.inv.label(it).toLowerCase()} goes in your pack. I to get it out.`, 3.5);
+    } else if (r.merged) this.ui.toast(`${KINDS[it.kind].name}s: ${r.n} now.`, 1.8);
+    else if (r.to === 'pack') this.ui.toast(`Your hands are full: the ${this.inv.label(it).toLowerCase()} goes in your pack. I to get it out.`, 3.5);
     if (it.kind === 'backpack') this.ui.toast(`Pack on. ${this.inv.items.filter((i) => i.where === 'pack').length} things in it · I to look.`, 2.5);
     if (it.kind === 'pills' && !this.flags.pillsFound) { this.flags.pillsFound = true; this.say(S.LINES.pillFound); }
     this.syncItems();
@@ -1110,12 +1111,12 @@ export class Game {
     if (it.kind === 'binoculars') { if (down) { this.binocular = !this.binocular; this.binocAt = this.e.time.value; } return; }
     if (!down) return;
     if (it.kind === 'canteen') {
-      if (this.inv.sip(it)) { this.surv.drink(SURV.sip); this.ui.toast(it.fill > 0 ? 'Cold, tinny water.' : 'That\'s the last of it. The spring will fill it.', 2.2); this.e.audio.sfx('cloth', { volume: 0.2 }); }
+      if (this.inv.sip(it)) { this.surv.drink(SURV.sip); if (!(it.fill > 0)) this.ui.toast('That\'s the last of it. The spring will fill it.', 2.2); this.e.audio.play('drink', { volume: 0.9 }); }
       else this.ui.toast('The canteen is empty. Fill it at the spring.', 2.5);
       this.refreshHotbar();
     } else if (it.kind === 'food') {
-      this.surv.eat(SURV.meal); this.inv.remove(it.id); this.e.audio.sfx('metal', { volume: 0.25 });
-      this.ui.toast(this.surv.food > 0.9 ? 'Cold pork and beans. You\'re full.' : 'Cold pork and beans, straight from the tin.', 2.5); this.syncItems();
+      this.surv.eat(SURV.meal); this.inv.useOne(it); this.e.audio.play('eat', { volume: 0.9 });
+      if (this.surv.food > 0.9) this.ui.toast('You\'re full.', 2); this.syncItems();
     } else if (it.kind === 'flashlight') this.toggleFlashlight();
     else if (it.kind === 'camera') this.toggleCamera();
     else if (it.kind === 'fuel') this.ui.toast(it.fill > 0.01 ? 'Pour it at the generator in the shed (E). G sets it down anywhere.' : 'Empty. G sets it down.', 3);
@@ -1135,7 +1136,7 @@ export class Game {
   openPack() {
     const render = () => this.ui.pack({
       hands: [0, 1, 2].map((i) => this.slotView(this.inv.hand(i))), pack: Array.from({ length: PACK_SLOTS }, (_, i) => this.slotView(this.inv.packSlot(i))),
-      worn: this.inv.wearingPack, active: this.inv.active, stats: { water: this.surv.water, food: this.surv.food },
+      worn: this.inv.wearingPack, active: this.inv.active, stats: { water: this.surv.water, food: this.surv.food }, prints: this.photos.prints.length,
     }, (where, i) => {
       const it = where === 'hand' ? this.inv.hand(i) : this.inv.packSlot(i);
       if (!it) { if (where === 'hand') this.inv.select(i); render(); this.refreshHotbar(); return; }

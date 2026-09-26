@@ -2,7 +2,7 @@
 // with LODs + wind, the tower (colliders, anchors), placed props. Everything optional degrades to placeholders.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=5f57277c';
+import { fetchBuffer, fetchJSON, tryJSON, assetURL, loadImageBitmap, clamp, smoothstep, fbm, hash2 } from './util.js?v=f815e1db';
 
 const loader = new GLTFLoader();
 // Glass you can see: at a glancing angle a pane goes silver with reflection (Fresnel), so a shut window reads as glass and
@@ -280,35 +280,37 @@ class VegSet {
       return m.compose(this._p, this._q, this._s);
     });
   }
+  // LOD by distance with slack (it doesn't flip back and forth on the line), and when a tree does change level the two
+  // versions dissolve into each other over ~0.7 s instead of popping (the fade is driven per frame by tick()).
   update(cam, force) {
-    const cx = cam.x, cz = cam.z;
+    const cx = cam.x, cz = cam.z, n = this.inst.length;
+    if (!this.cur) { this.cur = new Int8Array(n).fill(-1); this.from = new Int8Array(n); this.tr = new Float32Array(n).fill(1); }
     const counts = this.meshes.map(() => 0);
-    const R = this.ranges, nL = this.meshes.length;
+    const R = this.ranges, nL = this.meshes.length, cur = this.cur, from = this.from, tr = this.tr;
+    const lastL = R.findIndex((r) => r == null); const top = lastL < 0 ? Math.min(nL, R.length) : Math.min(nL, lastL);   // LODs with a range
+    const slots = this.fading = [];
     const push = (li, i, f) => {
-      if (li >= nL) return;
+      if (li >= nL || li >= top) return -1;
       const k = counts[li]++;
       for (const im of this.meshes[li]) {
         this._m.multiplyMatrices(this.base[i], im.userData.part);
         im.setMatrixAt(k, this._m);
         im.geometry.attributes.instFade.array[k] = f;
       }
+      return k;
     };
-    for (let i = 0; i < this.inst.length; i++) {
+    for (let i = 0; i < n; i++) {
       const p = this.inst[i];
       const d = Math.sqrt((p[0] - cx) ** 2 + (p[2] - cz) ** 2);
-      // find the LOD band and whether we're inside a crossfade zone around its outer edge
-      let placed = false;
-      for (let li = 0; li < nL && !placed; li++) {
-        const lo = li ? R[li - 1] : 0, hi = R[li]; if (hi == null) break;
-        const B = Math.max(1.5, hi * 0.022);                    // fade band half-width grows with distance (kept narrow: a wide band leaves whole stands of trees stippled into pixel noise)
-        if (d < hi - B) { push(li, i, 1); placed = true; }
-        else if (d < hi + B) {
-          const t = (d - (hi - B)) / (2 * B);
-          push(li, i, 1 - t);                                   // outgoing: keeps dither < 1-t
-          if (li + 1 < nL && R[li + 1] != null) push(li + 1, i, -t);   // incoming: keeps dither >= 1-t (complementary)
-          placed = true;
-        }
+      let want = top; for (let li = 0; li < top; li++) if (d < R[li]) { want = li; break; }
+      const c = cur[i];
+      if (c < 0) { cur[i] = want; tr[i] = 1; }
+      else if (want !== c) {
+        const edge = R[Math.min(want, c)], H = Math.max(2, edge * 0.035);
+        if (Math.abs(d - edge) > H && tr[i] >= 1) { from[i] = c; cur[i] = want; tr[i] = 0; }   // past the slack: start the dissolve
       }
+      if (tr[i] >= 1) push(cur[i], i, 1);
+      else { const a = push(from[i], i, 1 - tr[i]), b = push(cur[i], i, -tr[i]); slots.push(i, from[i], a, cur[i], b); }
     }
     this.meshes.forEach((parts, li) => parts.forEach((im) => {
       im.count = counts[li];
@@ -317,6 +319,20 @@ class VegSet {
       a.needsUpdate = true; fa.needsUpdate = true;
     }));
     return counts;
+  }
+  /** Per frame: advance the dissolves in progress (only the few trees changing level are touched). */
+  tick(dt) {
+    const S = this.fading; if (!S || !S.length) return;
+    const tr = this.tr, dirty = new Set();
+    for (let j = 0; j < S.length; j += 5) {
+      const i = S[j]; if (tr[i] >= 1) continue;
+      tr[i] = Math.min(1, tr[i] + dt / 0.7);
+      const t = tr[i], lo = S[j + 1], ko = S[j + 2], li = S[j + 3], ki = S[j + 4];
+      if (ko >= 0) for (const im of this.meshes[lo]) { im.geometry.attributes.instFade.array[ko] = 1 - t; dirty.add(im); }
+      if (ki >= 0) for (const im of this.meshes[li]) { im.geometry.attributes.instFade.array[ki] = -t; dirty.add(im); }
+    }
+    for (const im of dirty) { const fa = im.geometry.attributes.instFade; if (fa.clearUpdateRanges) fa.clearUpdateRanges(); fa.needsUpdate = true; }
+    if (![...Array(S.length / 5).keys()].some((q) => tr[S[q * 5]] < 1)) this.fading = null;
   }
 }
 
@@ -704,6 +720,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}) {
       for (const c of chunks) { const d = Math.hypot(c.x - cam.x, c.z - cam.z); const near = d < engine.quality.terrainLod0; c.lod0.visible = near; c.lod1.visible = !near; }
       W._vegQueue = W.vegSets.slice();
     }
+    for (const v of W.vegSets) if (v.fading) v.tick(dt);   // trees mid-dissolve between detail levels
     if (W._vegQueue && W._vegQueue.length) {   // at most two sets per frame: no single frame does the whole forest
       for (let k = 0; k < 2 && W._vegQueue.length; k++) { const v = W._vegQueue.shift(); v.update(cam); }
     }

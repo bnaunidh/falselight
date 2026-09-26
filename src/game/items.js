@@ -1,7 +1,7 @@
 // Items and the inventory. Pure (no three.js): what you carry and where everything is.
 // Three hand slots (keys 1-3). The backpack takes one of them while you carry it and holds five small things;
 // set it down and its five slots stay with it. Anything can be set down anywhere (G) and picked back up (E).
-import { clamp } from './util.js?v=5f57277c'
+import { clamp } from './util.js?v=f815e1db'
 
 export const HAND_SLOTS = 3
 export const PACK_SLOTS = 5
@@ -12,7 +12,7 @@ export const KINDS = {
   camera:     { name: 'Instant camera', model: 'prop_instant_camera', pack: true },
   binoculars: { name: 'Binoculars', model: 'prop_binoculars', pack: true },
   canteen:    { name: 'Canteen', model: 'prop_canteen', pack: true },
-  food:       { name: 'Tin of beans', model: 'prop_food_tin', pack: true },
+  food:       { name: 'Tin of beans', model: 'prop_food_tin', pack: true, stack: 6 },   // tins stack: up to six in one slot (it.n)
   // the cab's own things: move them, shelve them, take them with you
   clock:      { name: 'Alarm clock', model: 'prop_alarm_clock', pack: true, scale: 0.72 },
   pot:        { name: 'Coffee pot', model: 'prop_pot_enamel', pack: false, scale: 0.78 },
@@ -79,6 +79,15 @@ export class Inventory {
   /** Pick a world item up: hands first (the active slot if it's empty), the pack for small things when your hands are full. */
   take(id) {
     const it = this.get(id); if (!it || it.where !== 'world') return { ok: false, why: 'gone' }
+    const cap = KINDS[it.kind] && KINDS[it.kind].stack
+    if (cap) {   // onto a stack you're already carrying (hands first, then the pack)
+      const st = this.items.find((o) => o !== it && o.kind === it.kind && (o.where === 'hand' || (o.where === 'pack' && this.wearingPack)) && (o.n || 1) < cap)
+      if (st) {
+        const room = cap - (st.n || 1), give = Math.min(room, it.n || 1); st.n = (st.n || 1) + give
+        if ((it.n || 1) - give > 0) it.n = (it.n || 1) - give; else this.remove(it.id)
+        return { ok: true, to: st.where, merged: true, n: st.n }
+      }
+    }
     const h = this.freeHand()
     if (h >= 0) { Object.assign(it, { where: 'hand', slot: h, pos: null, hook: null }); this.active = h; return { ok: true, to: 'hand' } }
     const p = KINDS[it.kind].pack ? this.freePack() : -1
@@ -111,6 +120,8 @@ export class Inventory {
     const r = this.unstow(p.id); return r.ok ? { ok: true, item: p, fromPack: true } : r
   }
   remove(id) { this.items = this.items.filter((i) => i.id !== id) }
+  /** Use one from a stack (a tin eaten): the item goes when the last one does. */
+  useOne(it) { if ((it.n || 1) > 1) it.n--; else this.remove(it.id) }
   /** One pill out of the bottle (false when it's empty). */
   takePill(it) { if (!it || it.kind !== 'pills' || !(it.n > 0)) return false; it.n--; return true }
   sip(it) { if (!it || it.kind !== 'canteen' || it.fill <= 0) return false; it.fill = clamp(it.fill - 1 / CANTEEN_SIPS); if (it.fill < 1e-3) it.fill = 0; return true }
@@ -121,6 +132,7 @@ export class Inventory {
     if (it.kind === 'canteen') return k.name + (it.fill > 0 ? ` (${Math.round(it.fill * CANTEEN_SIPS)}/${CANTEEN_SIPS})` : ' (empty)')
     if (it.kind === 'lantern') return k.name + (it.on ? ' (lit)' : '')
     if (it.kind === 'pills') return k.name + (it.n > 0 ? ` (${it.n} left)` : ' (empty)')
+    if (k.stack && (it.n || 1) > 1) return k.name + ` ×${it.n}`
     return k.name
   }
   toJSON() { return { items: this.items.map((i) => ({ ...i })), active: this.active, nextId: this.nextId, cabV: this.cabV } }

@@ -2,7 +2,7 @@
 // stuttering, a hallucination, a jump: each pushes it up; it drops slowly (your heart doesn't settle the moment the thing is
 // gone). The heart is the readout: ~64 bpm resting, climbing past 170 when something is on you, audible from about a
 // third of the way up, a lub-dub whose gap tightens as it races; ragged breathing near the top. Pure logic + two tiny synths.
-import { clamp } from './util.js?v=5f57277c'
+import { clamp } from './util.js?v=f815e1db'
 
 export const FEAR = {
   rest: 64, max: 188,        // bpm
@@ -71,4 +71,18 @@ export function registerFearSounds(audio) {
   audio.addSynth('heart_dub', (d, v, H) => { H.tone(d, { f: 56, f1: 34, a: 0.004, d: 0.11, v: 0.5 * v }); H.burst(d, { type: 'lowpass', f: 110, Q: 0.7, a: 0.003, d: 0.06, v: 0.35 * v, brown: true }); return 0.2 })
   audio.addSynth('breath_in', (d, v, H) => { H.burst(d, { type: 'bandpass', f: 1500, Q: 0.9, a: 0.22, d: 0.45, v: 0.09 * v }); H.burst(d, { type: 'bandpass', f: 3200, Q: 1.4, a: 0.2, d: 0.35, v: 0.04 * v }); return 0.7 })
   audio.addSynth('breath_out', (d, v, H) => { H.burst(d, { type: 'bandpass', f: 650, Q: 0.7, a: 0.04, d: 0.6, v: 0.11 * v }); return 0.7 })
+  // eating and drinking: the metal parts are recordings (the canteen's cap, a spoon in the tin); the swallow is a soft
+  // low 'glk' (a short, falling, muffled pulse) and chewing a few damp, muffled crunches, kept well under the recordings
+  const gulp = (d, v, H, t) => { H.tone(d, { f: 210, f1: 120, a: 0.004, d: 0.07, v: 0.22 * v, t }); H.burst(d, { type: 'lowpass', f: 420, Q: 0.8, a: 0.003, d: 0.06, v: 0.18 * v, brown: true, t }) }
+  const chew = (d, v, H, t) => { H.burst(d, { type: 'bandpass', f: 700 + Math.random() * 300, Q: 1.3, a: 0.01, d: 0.09, v: 0.06 * v, t }); H.burst(d, { type: 'lowpass', f: 260, Q: 0.7, a: 0.006, d: 0.07, v: 0.1 * v, brown: true, t }) }
+  audio.addSynth('drink', (d, v, H) => {
+    const t = H.ctx.currentTime; H.sample('cap_click', d, 0.5 * v, 1, t)
+    for (let i = 0; i < 3; i++) gulp(d, v, H, t + 0.55 + i * (0.42 + Math.random() * 0.08))
+    H.sample('cap_click', d, 0.35 * v, 1.08, t + 2.0); return 2.3
+  })
+  audio.addSynth('eat', (d, v, H) => {
+    const t = H.ctx.currentTime; H.sample('tin_spoon', d, 0.35 * v, 1.15, t); H.sample('tin_spoon', d, 0.25 * v, 1.25, t + 0.5)
+    for (let i = 0; i < 6; i++) chew(d, v, H, t + 0.95 + i * 0.3 + Math.random() * 0.05)
+    gulp(d, 0.8 * v, H, t + 2.9); return 3.2
+  })
 }

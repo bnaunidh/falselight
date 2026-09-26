@@ -55,8 +55,8 @@
 //   movePlayer(pos, lookPos)           put you there (only if it's somewhere you could stand) → bool
 //   moveCabItem(kind, pos, rotY)       move one of the cab's things (it must be lying in the cab) → bool
 //   dogReact(kind, pos)                'growl' | 'whimper', toward pos → bool (false: no tamed dog close)
-import { clamp, lerp, smooth, dist, dist2d, lerp3 } from './util.js?v=5f57277c'
-import { LINES } from './content/story.js?v=5f57277c'
+import { clamp, lerp, smooth, dist, dist2d, lerp3 } from './util.js?v=f815e1db'
+import { LINES } from './content/story.js?v=f815e1db'
 
 export const DIR = {
   minGap: 20,                 // s: no two events start closer than this, whatever they are
@@ -69,7 +69,7 @@ export const DIR = {
   halluGap: [165, 35],        // s between hallucinations, at mild … at wrecked
   microAt: 0.68, microGap: [160, 45],         // microsleeps: level, s between them (at microAt … at 1)
   collapseAt: 0.97, collapseHold: 45,         // wrecked this long (s, real) and you go down
-  blinkAt: 0.35, yawnAt: 0.45, driftAt: 0.55, nodAt: 0.75,
+  blinkAt: 2, yawnAt: 0.45, driftAt: 0.55, nodAt: 0.75,   // (blinkAt 2 = never: the user didn't like the tired blinks)
 }
 const CHASE = new Set(['coming', 'stairs', 'door', 'hunting'])
 const R = (rng, a, b) => a + (b - a) * rng()
@@ -707,7 +707,7 @@ export class Director {
       // yawns
       if (L >= DIR.yawnAt) {
         if (t >= this.yawnAt) {
-          if (this.yawnAt > 0) { this.play('yawn', null, 0.7); this.lidSym = [[t + 0.8, 0], [t + 1.3, 0.45], [t + 2.2, 0.45], [t + 2.8, 0]] }   // eyes squeezed, watering
+          if (this.yawnAt > 0) this.play('yawn', null, 0.7)   // (no eye-squeeze: no blinks)
           this.yawnAt = t + lerp(150, 50, clamp((L - DIR.yawnAt) / (1 - DIR.yawnAt))) * this.r(0.7, 1.3)
         }
       } else this.yawnAt = t + 20

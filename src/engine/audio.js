@@ -9,7 +9,7 @@
 // while muted the AudioContext is suspended (after the master fades out): no audio-thread work, no one-shots, no warm-up,
 // no sample downloads, the score's scheduler stopped. Every master / per-play gain change is ramped.
 import * as THREE from 'three';
-import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=5f57277c';
+import { createMusic, pickMood, MUSIC_DEFAULT_VOLUME, makeIR, toBuffer, rng, bqc, bqRun, addPartial, fadeEdges, normPeak, dcBlock, peakOf } from './music.js?v=f815e1db';
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -338,6 +338,7 @@ export function createAudio(engine, opts = {}) {
     wood_thud: ['impactWood_medium_000', 'impactWood_medium_001', 'impactWood_medium_002', 'impactWood_medium_003', 'impactWood_medium_004'],
     glass_tap: ['impactGlass_light_000', 'impactGlass_light_001', 'impactGlass_light_002', 'impactGlass_light_003', 'impactGlass_light_004'],
     body_soft: ['impactSoft_heavy_000', 'impactSoft_heavy_001', 'impactSoft_heavy_002', 'impactSoft_heavy_003', 'impactSoft_heavy_004'],
+    tin_spoon: ['metalPot1', 'metalPot2', 'metalPot3'], cap_click: ['metalClick'],   // eating from the tin, the canteen's cap
   };
   const samples = {};
   let samplesLoading = false;

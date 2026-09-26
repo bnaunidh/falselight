@@ -1,8 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=5f57277c';
-import { createOverlays } from './overlays.js?v=5f57277c';
+import { drawMap } from './mapdraw.js?v=f815e1db';
+import { createOverlays } from './overlays.js?v=f815e1db';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -242,9 +242,9 @@ export function createUI(root = document.getElementById('ui')) {
   };
   U.hotbar = (o) => {
     if (!o) { hot.style.display = 'none'; return; }
-    const key = JSON.stringify([o.slots.map((s) => s && [s.label, s.icon.length, s.fill != null ? Math.round(s.fill * 20) : -1]), o.active, o.label, o.pack]);
+    const key = JSON.stringify([o.slots.map((s) => s && [s.label, s.icon.length, s.fill != null ? Math.round(s.fill * 20) : -1, s.count]), o.active, o.label, o.pack]);
     hot.style.display = 'flex'; if (hot._k === key) return; hot._k = key;
-    hot.innerHTML = `<div class="lbl">${esc(o.label || '')}</div><div class="row">` + o.slots.map((s, i) => `<div class="slot${i === o.active ? ' on' : ''}${s ? '' : ' empty'}"><b>${i + 1}</b>${s ? (s.icon ? `<img src="${s.icon}" alt="">` : `<span>${esc(s.short)}</span>`) : ''}${s && s.fill != null ? `<i><u style="width:${Math.round(s.fill * 100)}%"></u></i>` : ''}</div>`).join('') + `</div><div class="pk">${esc(o.pack || '')}</div>`;
+    hot.innerHTML = `<div class="lbl">${esc(o.label || '')}</div><div class="row">` + o.slots.map((s, i) => `<div class="slot${i === o.active ? ' on' : ''}${s ? '' : ' empty'}"><b>${i + 1}</b>${s ? (s.icon ? `<img src="${s.icon}" alt="">` : `<span>${esc(s.short)}</span>`) : ''}${s && s.fill != null ? `<i><u style="width:${Math.round(s.fill * 100)}%"></u></i>` : ''}${s && s.count ? `<em>×${s.count}</em>` : ''}</div>`).join('') + `</div><div class="pk">${esc(o.pack || '')}</div>`;
   };
   // the body, minimal: the temperature you feel, then small rings (water, food, health, sleep) that only speak up when
   // they need to; the heart ring beats at your real heart rate. Built once; updates only touch attributes.
@@ -295,6 +295,7 @@ export function createUI(root = document.getElementById('ui')) {
     const m = openModal(`<div class="paper packsheet"><h2>What you're carrying</h2>
       <h3>Hands</h3><div class="row">${d.hands.map((s, i) => cell(s, 'hand', i, i === d.active)).join('')}</div>
       <h3>Backpack</h3>${d.worn ? `<div class="row">${d.pack.map((s, i) => cell(s, 'pack', i)).join('')}</div>` : '<p class="off">You set the pack down somewhere. Its five slots are with it: go back for it (E).</p>'}
+      ${d.prints ? `<p class="tip">Your prints (${d.prints}) are together in the logbook: Tab → Photos. They don't take a slot.</p>` : ''}
       <p class="tip">Click a thing to move it between your hands and the pack. In the world: <b>G</b> sets what's in your hand down anywhere, <b>E</b> picks things up, <b>click</b> uses it (drink, eat, light).</p>
       <div class="close">I / Esc</div></div>`, 'center', onClose);
     m.querySelectorAll('button.cell').forEach((b) => b.onclick = () => onPick(b.dataset.w, +b.dataset.i));
