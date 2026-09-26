@@ -1,8 +1,8 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=1e6e737b';
-import { createOverlays } from './overlays.js?v=1e6e737b';
+import { drawMap } from './mapdraw.js?v=d110de6c';
+import { createOverlays } from './overlays.js?v=d110de6c';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -280,7 +280,10 @@ export function createUI(root = document.getElementById('ui')) {
     }
     // the heart ring beats with you (the CSS animation's period = one beat); only re-set when the rate moves
     const bpm = Math.round((o.bpm || 64) / 4) * 4;
-    if (bpm !== sv.last.bpm) { sv.rings.h.el.style.setProperty('--beat', (60 / bpm).toFixed(3) + 's'); sv.last.bpm = bpm; }
+    if (bpm !== sv.last.bpm) {   // change the beat's RATE, not its duration: keeps its place in the beat, so no jump
+      const svg = sv.rings.h.el.querySelector('.ic svg'), an = svg && svg.getAnimations ? svg.getAnimations()[0] : null;
+      if (an && an.updatePlaybackRate) an.updatePlaybackRate(bpm / 60); sv.last.bpm = bpm;
+    }
     sv.rings.h.el.classList.toggle('racing', (o.bpm || 64) > 100); if ((o.bpm || 64) > 100) loud = true;
     // quiet when everything's fine: it fades back after a few seconds of nothing changing
     const now = performance.now(); if (loud) sv.calmAt = now + 5000;

@@ -1,13 +1,13 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=1e6e737b';
-import { createUI } from './ui/ui.js?v=1e6e737b';
-import { Game } from './game/bridge.js?v=1e6e737b';
-import { createSaves } from './game/saves.js?v=1e6e737b';
-import { UI as WORDS } from './game/content/story.js?v=1e6e737b';
-import { ACTIONS, keyName } from './engine/input.js?v=1e6e737b';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=1e6e737b';
-import { registerScareSounds } from './engine/scareSounds.js?v=1e6e737b';
-import { paintCabMaps } from './ui/cabMaps.js?v=1e6e737b';
+import { createEngine } from './engine/engine.js?v=d110de6c';
+import { createUI } from './ui/ui.js?v=d110de6c';
+import { Game } from './game/bridge.js?v=d110de6c';
+import { createSaves } from './game/saves.js?v=d110de6c';
+import { UI as WORDS } from './game/content/story.js?v=d110de6c';
+import { ACTIONS, keyName } from './engine/input.js?v=d110de6c';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=d110de6c';
+import { registerScareSounds } from './engine/scareSounds.js?v=d110de6c';
+import { paintCabMaps } from './ui/cabMaps.js?v=d110de6c';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
@@ -50,6 +50,7 @@ function continueLabel() {
 function title() {
   engine.audio.music.setMood('title', 4);
   game.state = 'title'; engine.input.unlock(); ui.hideHUD(true); ui.tracker(null);
+  if (game.calmBody) game.calmBody();   // no frost / red / heartbeat left over on the title screen
   engine.sky.setTime(20.9); engine.sky.setWeather({ fog: 0.5, rain: 0, wind: 0.45, lightning: 0 });
   engine.lights.cabLamp.on = true;
   ui.screen('title', { canContinue: saves.has(), continueLabel: continueLabel(), sound: settings.sound, onAction: (a) => {

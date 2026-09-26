@@ -1,7 +1,7 @@
 // FALSE LIGHT — Thursday morning: the epilogue. Everything you did (or didn't) on the two nights decides what the truck finds,
 // what the district believes, who else pays for it, and the last line. Plain data in, text out.
 
-/** st: { proofs, goal, savedN1, lostN1, falseWalked, gateOpenedByIt, faceSent, faceKept, dogName (null if never tamed),
+/** st: { proofs, goal, savedN1, lostN1, falseWalked, gateOpenedByIt, faceSent, faceKept, faceSeen, dogName (null if never tamed),
  *        prints, sent, treeSeen } → { text, paras: [..], last, detail, grade } */
 export function epilogue(st) {
   const P = []
@@ -17,11 +17,12 @@ export function epilogue(st) {
   else if (st.gateOpenedByIt) P.push('The gate at the foot of the stairs is standing open. You remember shutting it.')
   // his face
   if (st.faceSent) P.push('The man who looked at the picture of his face doesn\'t come in to work on Thursday. His wife tells the district he went out to the car in the night and just sat in it, facing the trees.')
+  else if (st.faceSeen) P.push('You looked at the print. You know you did. Somewhere past the first switchback the driver asks why you keep checking the side mirror, and you don\'t have an answer he\'d want.')
   else if (st.faceKept) P.push('One print is still in your pack, face-down. You haven\'t turned it over. You keep thinking about turning it over.')
   // her
   if (st.dogName) P.push(`${st.dogName} won't get into the truck until you do. All the way down the switchbacks she watches the tree line and doesn't blink.`)
   // the last line: what's still out there
-  const last = st.faceKept ? 'Somewhere down by the creek, very quietly, somebody starts to cry.'
+  const last = st.faceKept || st.faceSeen ? 'Somewhere down by the creek, very quietly, somebody starts to cry.'
     : st.falseWalked ? 'Tonight someone else will sit in the tower. Tonight the light will be on the ridge again, flashing very evenly.'
     : st.treeSeen ? 'In the side mirror, at the edge of the trees, someone is standing very still, facing the road.'
     : 'In the rear-view mirror the tower\'s windows are dark. Then one of them isn\'t.'

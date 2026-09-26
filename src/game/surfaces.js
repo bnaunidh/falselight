@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 const CELL = 1.0;
-const MOVING = /^(FL_sash|FL_cab_door|FL_searchlight|FL_firefinder_ring|FL_shutter)/;   // they move: never part of the static grid
+const MOVING = /^(FL_sash|FL_cab_door|FL_gate|FL_searchlight|FL_firefinder_ring|FL_shutter)/;   // they move: never part of the static grid
 
 export function createSurfaces() {
   let tri = new Float32Array(0), nrm = new Float32Array(0), count = 0;

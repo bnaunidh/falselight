@@ -90,10 +90,13 @@ export function createOverlays(root) {
   const L = {};
   const layer = (name, paint) => {
     if (L[name]) return L[name];
-    const el = document.createElement('div'); el.className = 'fl-body-' + name; host.appendChild(el);
-    const cv = paint(); el.style.backgroundImage = `url(${cv.toDataURL('image/png')})`;   // an <img>-like layer the compositor keeps
-    return (L[name] = { el, o: -1, s: -1 });
+    const el = paint(); el.className = 'fl-body-' + name; el.style.opacity = '0'; host.appendChild(el);   // the painted canvas IS the layer (no PNG encode / decode)
+    return (L[name] = { el, o: 0, s: -1 });
   };
+  const PAINT = { cold: paintFrost, heat: paintSweat, hurt: paintHurt };
+  // paint all three while the game is idle, one per idle slot, so the first freeze / fever / wound never hitches a frame
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+  ['hurt', 'cold', 'heat'].forEach((k, i) => setTimeout(() => idle(() => layer(k, PAINT[k]), { timeout: 4000 }), 1500 + i * 700));
   const set = (l, o, s = 1) => {
     if (Math.abs(o - l.o) > 0.008 || (o === 0 && l.o !== 0)) { l.el.style.opacity = o.toFixed(3); l.o = o; }
     if (Math.abs(s - l.s) > 0.002) { l.el.style.transform = `scale(${s.toFixed(4)})`; l.s = s; }

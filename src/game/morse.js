@@ -27,8 +27,8 @@ export class MorseKeyer {
   }
   down(t) {
     if (this.isDown) return
-    if (this.ended) { this.reset() }
-    if (this.presses.length && t - this.tUp > 2.6) this.presses = []   // a long pause: a fresh attempt
+    if (this.ended) { const P = this.presses, tu = this.tUp; this.reset(); if (t - tu <= 2.6) { this.presses = P; this.tUp = tu } }   // a letter ending isn't the attempt ending
+    if (this.presses.length && (t - this.tUp > 2.6 || this.presses.length >= 9)) this.presses = []   // a long pause, or nine already judged: a fresh attempt
     this.update(t)
     this.isDown = true; this.tDown = t
   }
@@ -63,14 +63,18 @@ export class MorseKeyer {
   }
   /** The attempt so far as dots and dashes, classified against YOUR tempo: your first press is a dot, anything clearly
    *  longer than your dots is a dash (the fixed 0.32 s cut-off made SOS hard to key). */
-  marks() {
-    const P = this.presses; if (!P.length) return []
-    const dots = P.slice(0, 3).map((p) => p.d), base = Math.min(...dots)
-    const thr = Math.max(0.2, Math.min(0.6, base * 1.7))
-    return P.map((p, i) => (i < 3 ? '.' : p.d > thr ? '-' : '.'))
+  marks() {   // the same rule as sosShape(): green in all nine means it WILL be answered
+    const d = this.presses.slice(0, 9).map((p) => p.d); if (!d.length) return []
+    const sMax = Math.max(...d.slice(0, 3)), longs = d.slice(3, 6), lMin = longs.length ? Math.min(...longs) : Infinity
+    return d.map((x, i) => (i < 3 ? '.' : i < 6 ? (x > sMax * 1.35 && x >= 0.18 ? '-' : '.') : (x * 1.35 < lMin ? '.' : '-')))
   }
-  /** Dot/dash cut-off for the hold meter right now (seconds). */
-  threshold() { const P = this.presses; return P.length ? Math.max(0.2, Math.min(0.6, Math.min(...P.slice(0, 3).map((p) => p.d)) * 1.7)) : 0.32 }
+  /** Where 'short' ends and 'long' begins for the NEXT press (seconds): the hold meter's mark. */
+  threshold() {
+    const d = this.presses.slice(0, 9).map((p) => p.d), n = d.length
+    if (n < 3) return n ? Math.max(0.2, Math.max(...d) * 1.35) : 0.32
+    if (n < 6) return Math.max(0.18, Math.max(...d.slice(0, 3)) * 1.35)
+    return Math.min(...d.slice(3, 6)) / 1.35
+  }
   /** Did the last nine presses make S O S? Three short, three clearly longer, three short: relative, so any steady hand works. */
   sosShape() {
     const P = this.presses; if (P.length < 9) return false

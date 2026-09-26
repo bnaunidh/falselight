@@ -1,34 +1,34 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=1e6e737b';
-import { Objectives } from './objectives.js?v=1e6e737b';
-import { Radio } from './radio.js?v=1e6e737b';
-import { Fuel, FUEL } from './fuel.js?v=1e6e737b';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=1e6e737b';
-import { Survival, SURV } from './survival.js?v=1e6e737b';
-import { createItemsView } from './itemsView.js?v=1e6e737b';
-import { createChill } from './chill.js?v=1e6e737b';
-import { createPlume } from './smokePlume.js?v=1e6e737b';
-import { FireFinder, spokenBearing } from './firefinder.js?v=1e6e737b';
-import { Photos, classifyShot } from './photos.js?v=1e6e737b';
-import { CO } from './co.js?v=1e6e737b';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=1e6e737b';
-import { OtherLookout } from './otherLookout.js?v=1e6e737b';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=1e6e737b';
-import { GuidedHiker } from './hikers.js?v=1e6e737b';
-import { MorseKeyer, isSOS } from './morse.js?v=1e6e737b';
-import { normalizeLayout } from './layout.js?v=1e6e737b';
-import { createSaves } from './saves.js?v=1e6e737b';
-import { createRng } from './rng.js?v=1e6e737b';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=1e6e737b';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=1e6e737b';
-import * as S from './content/story.js?v=1e6e737b';
-import { createDog, setDogName } from './dog.js?v=1e6e737b';
-import { createWildlife } from './wildlife.js?v=1e6e737b';
-import { Fear, registerFearSounds } from './fear.js?v=1e6e737b';
-import { epilogue } from './content/ending.js?v=1e6e737b';
-import { Director, sosLamp } from './director.js?v=1e6e737b';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=d110de6c';
+import { Objectives } from './objectives.js?v=d110de6c';
+import { Radio } from './radio.js?v=d110de6c';
+import { Fuel, FUEL } from './fuel.js?v=d110de6c';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=d110de6c';
+import { Survival, SURV } from './survival.js?v=d110de6c';
+import { createItemsView } from './itemsView.js?v=d110de6c';
+import { createChill } from './chill.js?v=d110de6c';
+import { createPlume } from './smokePlume.js?v=d110de6c';
+import { FireFinder, spokenBearing } from './firefinder.js?v=d110de6c';
+import { Photos, classifyShot } from './photos.js?v=d110de6c';
+import { CO } from './co.js?v=d110de6c';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=d110de6c';
+import { OtherLookout } from './otherLookout.js?v=d110de6c';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=d110de6c';
+import { GuidedHiker } from './hikers.js?v=d110de6c';
+import { MorseKeyer, isSOS } from './morse.js?v=d110de6c';
+import { normalizeLayout } from './layout.js?v=d110de6c';
+import { createSaves } from './saves.js?v=d110de6c';
+import { createRng } from './rng.js?v=d110de6c';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=d110de6c';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d110de6c';
+import * as S from './content/story.js?v=d110de6c';
+import { createDog, setDogName } from './dog.js?v=d110de6c';
+import { createWildlife } from './wildlife.js?v=d110de6c';
+import { Fear, registerFearSounds } from './fear.js?v=d110de6c';
+import { epilogue } from './content/ending.js?v=d110de6c';
+import { Director, sosLamp } from './director.js?v=d110de6c';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -123,8 +123,7 @@ export class Game {
       onDogWarn: (info) => {
         if (this._dogStare && this.e.time.value < this._dogStare.until) return;   // the director's growl says it
         if (!info || info.playerDistance > 30) return;   // she froze somewhere you couldn't see it
-        this._dogWarns = (this._dogWarns || 0) + 1;
-        if (this._dogWarns > 2 && !this.weeper.triggered) return;
+        if (this._threatKind === 'weeper' && !this.weeper.triggered) { this._dogWarns = (this._dogWarns || 0) + 1; if (this._dogWarns > 2) return; }   // (the one on the rock: a few times, then she just watches him)
         // no narration: you hear her (a low growl, a bark if it's close) and see her hackles and her stare
         const dp = this.dog && this.dog.position; if (!dp) return;
         e.audio.play(info.distance < 18 ? 'dog_bark' : 'dog_growl', { position: dp.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 1 });
@@ -216,6 +215,8 @@ export class Game {
 
   // ------------------------------------------------------------------ the rules instances
   fresh(phase = 'day1') {
+    this.calmBody();   // a new run starts with a quiet heart and a clean screen
+    this._dogWarns = 0;
     this.coffee = null;
     this.clock = new Clock(phase);
     this.obj = new Objectives(S.OBJECTIVES);
@@ -309,7 +310,7 @@ export class Game {
     this.restartPhase();
   }
   startPhase(phase, restored = false, cp = null) {
-    if (this.director) this.director.clear(this.dirActions); this._flick = null; this._duckUntil = 0;
+    if (this.director) this.director.clear(this.dirActions); this._flick = null; this._duckUntil = 0; this._dogWarns = 0;
     this._cpHour = null; this._lastZone = null; this.quietUntil = 0; this.stairN = 0; this._glimpseT = 0;
     const e = this.e;
     e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); if (this.photos) this.photos.close(); this.ui.print(null);
@@ -369,16 +370,16 @@ export class Game {
     this.state = 'end'; this.e.uiBlocking = false; if (this.ui.modalOpen()) this.ui.closeModal(); this.e.input.unlock(); this.e.audio.music.setMood('title', 8);
     const pr = this.photos.prints, sent = pr.filter((p) => p.sent).length;
     const E = epilogue({ proofs: this.proofs, goal: S.PROOF_GOAL, savedN1: !!this.flags.savedN1, lostN1: !!this.flags.lostN1, falseWalked: !!this.flags.falseWalked,
-      gateOpenedByIt: !!this.flags.gateOpenedByIt, faceSent: pr.some((p) => p.forbidden && p.sent), faceKept: pr.some((p) => p.forbidden && !p.sent),
+      gateOpenedByIt: !!this.flags.gateOpenedByIt, faceSent: pr.some((p) => p.forbidden && p.sent), faceKept: pr.some((p) => p.forbidden && !p.sent && !p.seen), faceSeen: pr.some((p) => p.forbidden && !p.sent && p.seen),
       dogName: this.dog && this.dog.tamed ? (this.flags.dogName || 'Juniper') : null, prints: pr.length, sent, treeSeen: !!this.flags.treeSeen });
     this.ui.screen('end', { text: E.text, paras: E.paras, last: E.last, detail: E.detail,
-      onAction: (a) => { this.ui.closeModal(); this.onTitle && this.onTitle(); } });
+      onAction: (a) => { this.ui.closeModal(); this.calmBody(); this.onTitle && this.onTitle(); } });
   }
   die(kind) {
     if (this.state !== 'play') return;
     this.state = 'dead'; if (this.director) this.director.clear(this.dirActions); if (this.ui.modalOpen()) this.ui.closeModal(); this.e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); this.exitMode(); this.e.audio.play('scream', { volume: 1 }); this.e.audio.music.sting('death');
     this.e.post.set({ blackout: 1 }); this.e.input.unlock();
-    setTimeout(() => this.ui.screen('death', { text: S.UI.death[kind] || S.UI.death.generic, onAction: (a) => { this.ui.closeModal(); this.e.post.set({ blackout: 0, fear: 0 }); if (a === 'retry') this.retry(); else this.onTitle && this.onTitle(); } }), 1400);
+    setTimeout(() => this.ui.screen('death', { text: S.UI.death[kind] || S.UI.death.generic, onAction: (a) => { this.ui.closeModal(); this.e.post.set({ blackout: 0, fear: 0 }); this.calmBody(); if (a === 'retry') this.retry(); else this.onTitle && this.onTitle(); } }), 1400);
   }
 
   // ------------------------------------------------------------------ helpers
@@ -594,6 +595,7 @@ export class Game {
   keySignal(d) {
     if (this.mode !== 'searchlight') return;
     const e = this.e, t = e.time.value;
+    this.signal.down = !!d;
     if (d) { this.signal.mode = true; this.signal.last = t; this.keyer.down(t); e.audio.play('morse_click', { volume: 0.5 }); return; }
     this.signal.last = t; this.keyer.up(t); e.audio.play('morse_click', { volume: 0.35 });
     if (this.keyer.sosShape()) { this.keyer.clearAttempt(); this.answerSOS(t); }
@@ -791,7 +793,7 @@ export class Game {
     }, () => true, 0.7);
     reg('searchlight', 'IA_searchlight', 'E — Take the searchlight', () => this.enterSearchlight(), () => true, 0.7);
     // the cab's walls: what's inside the cab is used from inside, what's out on the catwalk from outside (the door and the lamp on the roof: both)
-    const BOTH = new Set(['door', 'searchlight']);
+    const BOTH = new Set(['door', 'searchlight', 'dog:call']);
     I.canReach = (t, pos) => { if (BOTH.has(t.id) || pos.y < 28.5) return true; return (Math.abs(pos.x) < 2.1 && Math.abs(pos.z) < 2.1) === this.inCab(); };
     const fullCan = () => this.inv.inHands('fuel', (i) => i.fill > 0.01);
     const tankTxt = () => `tank ${this.fuel.tank.toFixed(1)} of ${FUEL.capacity} L`;
@@ -869,7 +871,7 @@ export class Game {
   }
   exitMode() {
     const p = this.player && this.e.player ? this.e.player : null; if (!p) return;
-    if (this.mode === 'searchlight') { this.e.lights.searchlight.operating = false; }
+    if (this.mode === 'searchlight') { this.e.lights.searchlight.operating = false; if (this.keyer && this.keyer.isDown) this.keyer.up(this.e.time.value); this.signal.mode = false; this.signal.down = false; }
     if (this.mode === 'finder' || this.mode === 'searchlight') {
       const a = this.mode === 'finder' ? (this.anchor('IA_firefinder') || new THREE.Vector3(0.3, 30, -0.15)) : (this.anchor('IA_searchlight') || new THREE.Vector3(2, 30, 2));
       p.position.set(a.x + (this.mode === 'finder' ? -0.6 : 0), 30.0, a.z + (this.mode === 'finder' ? 0.3 : 0));
@@ -1084,7 +1086,7 @@ export class Game {
   toggleFlashlight() {
     if (this._flick) { this.e.audio.play('morse_click', { volume: 0.3 }); return; }   // the lights are dead: the switch just clicks
     const FL = this.e.lights.flashlight;
-    if (FL.placed && !this.inv.inHands('flashlight')) { const it = this.inv.items.find((i) => i.kind === 'flashlight' && i.where === 'world'); if (it) it.on = false; FL.on = false; this.e.audio.play('morse_click', { volume: 0.3 }); return; }
+    if (FL.placed && !this.inv.inHands('flashlight') && FL.placed.pos.distanceTo(this.player().position) < 3) { const it = this.inv.items.find((i) => i.kind === 'flashlight' && i.where === 'world'); if (it) it.on = false; FL.on = false; this.e.audio.play('morse_click', { volume: 0.3 }); return; }
     if (!FL.on) {
       const f = this.inv.find('flashlight');
       if (!f) { this.ui.toast('You don\'t have the flashlight with you.', 2.5); return; }
@@ -1223,7 +1225,7 @@ export class Game {
     }
     const sigMode = this.signal.mode && t - this.signal.last < 2.4;
     if (!sigMode) this.signal.mode = false;
-    SL.on = this.fuel.power && !!this.slLit && (sigMode ? e.input.isDown('signal') : true);
+    SL.on = this.fuel.power && !!this.slLit && (sigMode ? !!this.signal.down : true);   // keying: lit while the shutter's held (Space or the mouse)
     SL.power = this.fuel.power ? 1 - this.fuel.sputter * 0.7 : 0;
     e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, genSputter: this.fuel.sputter, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1),
       forest: (this.wildlife && this.wildlife.silent) || e.time.value < (this._duckUntil || 0) ? 0 : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0,
@@ -1241,12 +1243,19 @@ export class Game {
       cam.position.copy(o).addScaledVector(d, -0.95).add(this._slUp || (this._slUp = new THREE.Vector3(0, 0.66, 0)));   // over the lamp's shoulder: the housing sits low in the view
       cam.lookAt(o.clone().addScaledVector(d, 60));
       const tgt = this.hikers.find((H) => H.rules.status === 'signalling'), onIt = !!this.sosTarget(t);
-      if (tgt && !onIt && this.fuel.power) {   // within ~14 degrees the lamp drifts onto their light (a heavy lamp settles where you point it)
+      // the lock-on: once you've stopped moving the lamp (0.4 s), within ~14 degrees it settles onto their light at a slow,
+      // fixed rate (a heavy lamp coming to rest), right onto it, not to the edge. A sweep never gets caught: moving wins.
+      if (this._slAim && (Math.abs(SL.yaw - this._slAim[0]) > 1e-5 || Math.abs(SL.pitch - this._slAim[1]) > 1e-5)) this._slMovedAt = t;
+      if (tgt && this.fuel.power && t - (this._slMovedAt ?? -9) > 0.4) {
         const lp = V3(tgt.rules.lampPos(t)), a = lp.clone().sub(o).angleTo(d);
-        if (a < THREE.MathUtils.degToRad(14)) { const y0 = SL.yaw, p0 = SL.pitch; SL.aimAt(lp); const dy = Math.atan2(Math.sin(SL.yaw - y0), Math.cos(SL.yaw - y0)); SL.setAim(y0 + dy * Math.min(1, dt * 2.5), p0 + (SL.pitch - p0) * Math.min(1, dt * 2.5)); }
+        if (a > THREE.MathUtils.degToRad(0.6) && a < THREE.MathUtils.degToRad(14)) {
+          const y0 = SL.yaw, p0 = SL.pitch; SL.aimAt(lp); const dy = Math.atan2(Math.sin(SL.yaw - y0), Math.cos(SL.yaw - y0)), k = Math.min(1, (0.12 * dt) / a);
+          SL.setAim(y0 + dy * k, p0 + (SL.pitch - p0) * k);
+        }
       }
+      this._slAim = [SL.yaw, SL.pitch];
       const held = this.keyer.isDown ? t - this.keyer.tDown : 0;
-      this.ui.searchlight({ fuel: this.fuel.frac, morse: this.keyer.display(), power: this.fuel.power, sos: { show: !!tgt || this.keyer.presses.length > 0, marks: this.keyer.marks(), hold: held, thr: this.keyer.threshold(), onTarget: onIt, keying: this.keyer.isDown } });
+      this.ui.searchlight({ fuel: this.fuel.frac, morse: this.keyer.display(), power: this.fuel.power, sos: { show: !!tgt || this.keyer.isDown || (this.keyer.presses.length > 0 && t - this.keyer.tUp < 2.6), marks: this.keyer.marks(), hold: held, thr: this.keyer.threshold(), onTarget: onIt, keying: this.keyer.isDown } });
     } else if (this.mode === 'finder') {
       let dir = 0; if (e.input.isDown('left')) dir -= 1; if (e.input.isDown('right')) dir += 1;
       this.finder.step(dt, dir, e.input.isDown('jog'), this.co.cold);
@@ -1281,7 +1290,7 @@ export class Game {
     if (this._doorCol) this._doorCol.enabled = !!this.flags.doorShut && this._doorA < 0.15;
     this.updateGate(dt);
     // coffee on the stove
-    if (this.coffee != null && this.coffee < 1) { this.coffee = Math.min(1, this.coffee + dt / 25); if (this.coffee >= 1) e.audio.play('knock_one', { position: this.anchor('IA_stove') || undefined, volume: 0.15 }); }
+    if (this.coffee != null && this.coffee < 1) { this.coffee = Math.min(1, this.coffee + dt / 25); if (this.coffee >= 1) e.audio.sfx('knock_one', { position: this.anchor('IA_stove') || undefined, volume: 0.15 }); }
     // the camera on the south shelf appears at dusk on day 1 (a real item: E picks it up)
     if (this.flags.cameraOut && !this.photos.hasCamera && this.iv.templates.camera && !this.inv.items.some((i) => i.kind === 'camera')) {
       const a = this.anchor('IA_camera_shelf') || new THREE.Vector3(-0.62, 30.9, 1.865);
@@ -1328,11 +1337,8 @@ export class Game {
           const r = ti.rotY || 0, dir = ti.hook ? new THREE.Vector3(Math.sin(r) * 0.4, -1, Math.cos(r) * 0.4).normalize() : new THREE.Vector3(Math.sin(r), -0.04, Math.cos(r)).normalize();
           FL.setPlaced({ id: ti.id, at: ti.pos, dir, pos: new THREE.Vector3(ti.pos[0], ti.pos[1] + 0.05, ti.pos[2]).addScaledVector(dir, 0.14) });
         }
-        FL.on = true;
-      } else {
-        if (FL.placed) { FL.setPlaced(null); if (!this.inv.inHands('flashlight')) FL.on = false; }
-        if (FL.on && !this.inv.inHands('flashlight')) FL.on = false;
-      }
+      } else if (FL.placed) FL.setPlaced(null);
+      if (FL.on && !this.inv.inHands('flashlight')) FL.on = false;   // FL.on means the torch in YOUR hand (the animals, the dark, the director read it)
     }
     this.iv.setTorchGlow(e.lights.flashlight.on);
     // dread: the lights stutter when something wrong is close (the Weeper, the thing at the tree line, a bear on you)
@@ -1435,7 +1441,7 @@ export class Game {
     const mat = this._sashMat || (this._sashMat = new THREE.MeshStandardMaterial({ color: 0x6f6454, roughness: 0.78, metalness: 0 }));
     const brass = this._brassMat || (this._brassMat = new THREE.MeshStandardMaterial({ color: 0xa8864a, roughness: 0.35, metalness: 0.9 }));
     const bar = (w, h, dx, dy, m = mat, d = D) => { const b = new THREE.Mesh(new THREE.BoxGeometry(thin === 'x' ? d : w, h, thin === 'x' ? w : d), m); b.position.copy(c); b.position[wide] += dx; b.position.y += dy; b.castShadow = false; b.name = 'FL_sash_frame'; o.add(b); return b; };
-    bar(W + T, T, 0, H / 2); bar(W + T, T * 1.3, 0, -H / 2); bar(T, H + T, -W / 2, 0); bar(T, H + T, W / 2, 0);
+    if (!o.children.some((ch) => /^FL_sash_frame/.test(ch.name || ''))) { bar(W + T, T, 0, H / 2); bar(W + T, T * 1.3, 0, -H / 2); bar(T, H + T, -W / 2, 0); bar(T, H + T, W / 2, 0); }   // (tower.glb gives each pane its frame)
     bar(0.07, 0.018, 0, -H / 2 + T * 0.9, brass, D + 0.02);   // the pull
   }
   /** Director phantoms: one pooled body per kind, spawned hidden at init (a scare never waits on a GLB / shader compile). */
@@ -1495,12 +1501,13 @@ export class Game {
   nearestThreat() {
     if (this._dogStare && this.e.time.value < this._dogStare.until) return this._dogStare.pos;   // the director pointed her at something
     const dp = this.dog && this.dog.position; const c = [];
-    if (this.weeper && this.weeperH && this.weeper.state !== 'gone') c.push(this.weeperH.position);
-    for (const w of this.lostWatchers || []) if (w.pos) c.push(V3(w.pos));
-    if (this.wildlife && this.wildlife.animals) for (const a of this.wildlife.animals) if (a.kind === 'bear' && a.position && a.root && a.root.visible !== false) c.push(a.position);
-    if (!dp || !c.length) return c[0] || null;
-    let best = null, bd = Infinity; for (const p of c) { const d = p.distanceToSquared(dp); if (d < bd) { bd = d; best = p; } }
-    return best;
+    const K = [];
+    if (this.weeper && this.weeperH && this.weeper.state !== 'gone') { c.push(this.weeperH.position); K.push('weeper'); }
+    for (const w of this.lostWatchers || []) if (w.pos) { c.push(V3(w.pos)); K.push('watcher'); }
+    if (this.wildlife && this.wildlife.animals) for (const a of this.wildlife.animals) if (a.kind === 'bear' && a.position && a.root && a.root.visible !== false) { c.push(a.position); K.push('bear'); }
+    if (!c.length) { this._threatKind = null; return null; }
+    let bi = 0, bd = Infinity; if (dp) c.forEach((p, i) => { const d = p.distanceToSquared(dp); if (d < bd) { bd = d; bi = i; } });
+    this._threatKind = K[bi]; return c[bi];
   }
   /** The fence gate swings between the way the model stands it (open, swung out) and shut across the gap. */
   updateGate(dt) {
@@ -1509,6 +1516,7 @@ export class Game {
       const g = this._gate = e.world.objects.get('FL_gate') || null;
       if (g) {
         this._gateOpenQ = g.quaternion.clone(); this._gateShutQ = new THREE.Quaternion(); this._gateA = this.flags.gateShut ? 0 : 1;
+        g.quaternion.slerpQuaternions(this._gateShutQ, this._gateOpenQ, this._gateA);   // (a save loaded with it shut: drawn shut)
         const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.7, 0.16), new THREE.MeshBasicMaterial({ visible: false }));
         m.name = 'COL_wall_gate'; m.position.set(g.position.x + 0.67, g.position.y + 0.8, g.position.z); m.visible = false;   // across the gap (the hinge is at its west post)
         g.parent.add(m); m.updateWorldMatrix(true, false);
@@ -1522,6 +1530,11 @@ export class Game {
     if (was !== this._gateA) { const k = this._gateA * this._gateA * (3 - 2 * this._gateA); this._gate.quaternion.slerpQuaternions(this._gateShutQ, this._gateOpenQ, k); }
     const col = !!this.flags.gateShut && this._gateA < 0.15;
     if (this._gateCol.enabled !== col) this._gateCol.enabled = col;
+  }
+  /** Everything the body put on the screen, gone: the heart, the tunnel, frost, sweat, the red. (New run, title, death screen.) */
+  calmBody() {
+    if (this.fear) this.fear.reset(); this.bodyHeat = 0; this.weeperFear = 0; this.bearFear = 0;
+    this.e.post.set({ pulse: 0, cold: 0, heat: 0, hurt: 0, fear: 0 }); if (this.ui && this.ui.bodyClear) this.ui.bodyClear();
   }
   /** Fear → the heart (heard + seen), and hot / cold / hurt → the screen. Every frame. */
   updateBody(dt, t) {

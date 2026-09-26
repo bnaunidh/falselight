@@ -221,14 +221,14 @@ html,body{margin:0;height:100%;background:#050607;overflow:hidden;color:#e6e0d2;
 .fl-surv .ring.w{color:#9cc8e0}.fl-surv .ring.f{color:#dcb680}.fl-surv .ring.h{color:#e0897a}.fl-surv .ring.s{color:#b9b1d8}
 .fl-surv .ring.full .ar{opacity:.55}
 .fl-surv .ring.low{color:#ff6a4d;animation:fl-low 1.1s ease-in-out infinite}
-.fl-surv .ring.h .ic svg{animation:fl-beat var(--beat,.94s) ease-out infinite;transform-origin:50% 60%}
+.fl-surv .ring.h .ic svg{animation:fl-beat 1s ease-out infinite;transform-origin:50% 60%}
 .fl-surv .ring.h.racing{color:#ff7560}
 .fl-surv .ring.h.racing .ic svg{width:15px;height:15px}
 @keyframes fl-beat{0%{transform:scale(1)}8%{transform:scale(1.28)}18%{transform:scale(1.02)}30%{transform:scale(1.16)}48%,100%{transform:scale(1)}}
 @media (max-width:700px){.fl-surv{left:14px;bottom:14px}.fl-surv .rings{gap:6px}}
 /* what your body does to the screen (painted in overlays.js): under the HUD, over the world */
 .fl-body{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-.fl-body>div{position:absolute;inset:0;background-size:100% 100%;opacity:0;will-change:opacity,transform}
+.fl-body>canvas{position:absolute;inset:0;width:100%;height:100%;opacity:0;will-change:opacity,transform}
 
 /* the epilogue: one paragraph at a time, then the last line on its own */
 .title.end .epi{max-width:620px;margin:22px auto 0;text-align:left}

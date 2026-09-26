@@ -1,7 +1,7 @@
 // FALSE LIGHT — the tower searchlight (spot + volumetric beam + operator mode), the flashlight, the cab lamp,
 // and the camera flash pulse.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js?v=1e6e737b';
+import { clamp, damp } from './util.js?v=d110de6c';
 
 // The searchlight beam: light scattered by haze inside the cone. Each pixel the cone covers gets ONE fragment (front faces
 // from outside, back faces from inside) and works out analytically how much beam its view ray crosses: the ray's closest
@@ -110,7 +110,7 @@ export function createLights(engine) {
       FL.placed = p || null;
     },
     isLit(p) {
-      if (!FL.on) return false;
+      if (!FL.on && !FL.placed) return false;
       const o = new THREE.Vector3(); flash.getWorldPosition(o); const d = new THREE.Vector3();
       if (FL.placed) d.copy(FL.placed.dir); else camera.getWorldDirection(d);
       const to = new THREE.Vector3().subVectors(p, o); if (to.length() > 30) return false;
@@ -155,7 +155,7 @@ export function createLights(engine) {
       const inside = tcc > 0 && _cp.addScaledVector(d, -tcc).length() < 0.34 + (22 - 0.34) * Math.min(1, tcc / beamLen) + 0.2;
       const side = inside ? THREE.BackSide : THREE.FrontSide; if (bm.side !== side) { bm.side = side; bm.needsUpdate = true; }
       glow.visible = I > 0.02; glow.material.opacity = Math.min(1, I * 1.2);
-      flash.intensity = FL.on ? 130 * (0.5 + 0.5 * FL.battery) * api.dipsAt(t, 2) : 0; flash.shadow.autoUpdate = FL.on;
+      const lit = FL.on || !!FL.placed; flash.intensity = lit ? 130 * (0.5 + 0.5 * FL.battery) * api.dipsAt(t, 2) : 0; flash.shadow.autoUpdate = lit;   // (a torch set down still on: FL.placed)
       LAMP.flicker = damp(LAMP.flicker, 0, 3, dt);
       lamp.intensity = LAMP.on ? 3.2 * (1 - LAMP.flicker * (0.5 + 0.5 * Math.sin(t * 60))) * api.dipsAt(t, 0) : 0;
       // the bulb itself glows only while the lamp is on (it stayed lit, 'a different on', when you pulled the chain)

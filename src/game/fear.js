@@ -2,7 +2,7 @@
 // stuttering, a hallucination, a jump: each pushes it up; it drops slowly (your heart doesn't settle the moment the thing is
 // gone). The heart is the readout: ~64 bpm resting, climbing past 170 when something is on you, audible from about a
 // third of the way up, a lub-dub whose gap tightens as it races; ragged breathing near the top. Pure logic + two tiny synths.
-import { clamp } from './util.js?v=1e6e737b'
+import { clamp } from './util.js?v=d110de6c'
 
 export const FEAR = {
   rest: 64, max: 188,        // bpm
@@ -61,7 +61,7 @@ export class Fear {
     this.shake = Math.pow(Math.max(0, this.level - 0.35) / 0.65, 1.5)
     return ev
   }
-  reset() { this.level = 0; this.spikes = 0; this.bpm = FEAR.rest; this.pulse = 0 }
+  reset() { this.level = 0; this.spikes = 0; this.bpm = FEAR.rest; this.pulse = 0; this.phase = 0; this.dubAt = -1; this.breathT = 0; this.breathIn = true; this.shake = 0; this.why = '' }
 }
 
 /** The heart and the breathing, as audio.addSynth recipes: a heart heard from inside (low, felt more than heard). */
