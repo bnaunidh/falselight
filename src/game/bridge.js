@@ -1,38 +1,38 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=225b0c77';
-import { Objectives } from './objectives.js?v=225b0c77';
-import { Radio } from './radio.js?v=225b0c77';
-import { Fuel, FUEL } from './fuel.js?v=225b0c77';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=225b0c77';
-import { Survival, SURV } from './survival.js?v=225b0c77';
-import { createItemsView } from './itemsView.js?v=225b0c77';
-import { createChill } from './chill.js?v=225b0c77';
-import { createPlume } from './smokePlume.js?v=225b0c77';
-import { FireFinder, spokenBearing } from './firefinder.js?v=225b0c77';
-import { Photos, classifyShot } from './photos.js?v=225b0c77';
-import { CO } from './co.js?v=225b0c77';
-import { Weeper, WEEPER, lookupChance } from './weeper.js?v=225b0c77';
-import { OtherLookout } from './otherLookout.js?v=225b0c77';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=225b0c77';
-import { GuidedHiker } from './hikers.js?v=225b0c77';
-import { MorseKeyer, isSOS } from './morse.js?v=225b0c77';
-import { normalizeLayout } from './layout.js?v=225b0c77';
-import { createSaves } from './saves.js?v=225b0c77';
-import { createRng } from './rng.js?v=225b0c77';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=225b0c77';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=225b0c77';
-import * as S from './content/story.js?v=225b0c77';
-import { createDog, setDogName } from './dog.js?v=225b0c77';
-import { createWildlife } from './wildlife.js?v=225b0c77';
-import { Fear, registerFearSounds } from './fear.js?v=225b0c77';
-import { epilogue } from './content/ending.js?v=225b0c77';
-import { Director, sosLamp } from './director.js?v=225b0c77';
-import { createPhotoBoard } from './photoBoard.js?v=225b0c77';
-import { makeTent } from './tents.js?v=225b0c77';
-import { makeSpringFlow } from './spring.js?v=225b0c77';
-import { Follower } from './follower.js?v=225b0c77';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=9c988591';
+import { Objectives } from './objectives.js?v=9c988591';
+import { Radio } from './radio.js?v=9c988591';
+import { Fuel, FUEL } from './fuel.js?v=9c988591';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=9c988591';
+import { Survival, SURV } from './survival.js?v=9c988591';
+import { createItemsView } from './itemsView.js?v=9c988591';
+import { createChill } from './chill.js?v=9c988591';
+import { createPlume } from './smokePlume.js?v=9c988591';
+import { FireFinder, spokenBearing } from './firefinder.js?v=9c988591';
+import { Photos, classifyShot } from './photos.js?v=9c988591';
+import { CO } from './co.js?v=9c988591';
+import { Weeper, WEEPER, lookupChance } from './weeper.js?v=9c988591';
+import { OtherLookout } from './otherLookout.js?v=9c988591';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=9c988591';
+import { GuidedHiker } from './hikers.js?v=9c988591';
+import { MorseKeyer, isSOS } from './morse.js?v=9c988591';
+import { normalizeLayout } from './layout.js?v=9c988591';
+import { createSaves } from './saves.js?v=9c988591';
+import { createRng } from './rng.js?v=9c988591';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=9c988591';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=9c988591';
+import * as S from './content/story.js?v=9c988591';
+import { createDog, setDogName } from './dog.js?v=9c988591';
+import { createWildlife } from './wildlife.js?v=9c988591';
+import { Fear, registerFearSounds } from './fear.js?v=9c988591';
+import { epilogue } from './content/ending.js?v=9c988591';
+import { Director, sosLamp } from './director.js?v=9c988591';
+import { createPhotoBoard } from './photoBoard.js?v=9c988591';
+import { makeTent } from './tents.js?v=9c988591';
+import { makeSpringFlow } from './spring.js?v=9c988591';
+import { Follower } from './follower.js?v=9c988591';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -275,7 +275,7 @@ export class Game {
       lost: (this.lostWatchers || []).map((w) => ({ idx: w.idx, steps: w.steps })) };
   }
   clearWorldEntities() {
-    for (const h of this.hikers || []) { h.ent && h.ent.remove(); h.lamp && this.e.scene.remove(h.lamp); if (h.light) h.light.intensity = 0; }
+    for (const h of this.hikers || []) { h.ent && h.ent.remove(); h.lamp && this.e.scene.remove(h.lamp); if (h.light) h.light.intensity = 0; if (h.escortReg) h.escortReg(); if (h.escortAnchor) this.e.scene.remove(h.escortAnchor); }
     for (const w of this.lostWatchers || []) w.ent && w.ent.remove();
     this.hikers = []; this.lostWatchers = [];
   }
@@ -592,10 +592,17 @@ export class Game {
     for (const H of this.hikers) {
       const r = H.rules;
       const lp = r.lampPos(t); const lv = V3(lp);
-      const lit = SL.on && SL.isLit(lv, { trees: false });
+      let lit = SL.on && SL.isLit(lv, { trees: false });
       // where the hiker sees the beam land: the point on the beam axis closest to them, dropped to the ground
       let spot = null;
       if (SL.on) { const g = V3(r.ground); const k = Math.max(0, g.clone().sub(o).dot(dir)); const q = o.clone().addScaledVector(dir, k); spot = [q.x, e.world.heightAt(q.x, q.z), q.z]; }
+      // on foot: you walked out to them. With your light on and within ~12 m, they follow you down the trail they know
+      if (H.escort && !r.done && r.kind !== 'false') {
+        const me = this.player().position, gd = V3(r.ground), near = Math.hypot(me.x - gd.x, me.z - gd.z) < 12;
+        const light = e.lights.flashlight.on || this.inv.items.some((i) => i.kind === 'lantern' && i.on && i.where === 'hand');
+        if (near && light) { lit = true; const a = r.route.at(Math.min(r.route.length, r.s + 3)); spot = [a[0], a[1], a[2]]; }
+      }
+      this.escortIA(H);
       const ev = r.update(dt, { lit, beam: spot, t });
       const on = r.lampOn(t);
       const d = lv.distanceTo(e.camera.position);
@@ -1777,6 +1784,20 @@ export class Game {
       caught: () => { this.scare({ shake: 1, seconds: 0.5 }); this.die('woods'); },
       dog: (p) => { const d = this.dog; if (d && d.tamed && d.position.distanceTo(this.player().position) < 15) e.audio.play('dog_growl', { position: d.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.7 }); },
     };
+  }
+  /** 'Stay behind me': walk out to a hiker with a light and lead them yourself (it answers their SOS too). */
+  escortIA(H) {
+    if (H.which !== 'night1' || H.escortReg) return;
+    const e = this.e, r = H.rules, anchor = new THREE.Object3D(); e.scene.add(anchor); H.escortAnchor = anchor;
+    H.escortReg = e.interact.register({ id: 'escort:' + H.which, anchor, radius: 0.8, reach: 4.5,
+      label: () => (H.escort ? 'They\'re with you. Keep your light on and stay close.' : 'E — "Stay behind me. I\'ll get you down."'),
+      enabled: () => { if (this.state !== 'play' || this.mode !== 'walk' || r.done || H.escort) return false; const g = r.ground, me = this.player().position; anchor.position.set(g[0], g[1] + 1.3, g[2]); return Math.hypot(me.x - g[0], me.z - g[2]) < 5 && (e.lights.flashlight.on || this.inv.items.some((i) => i.kind === 'lantern' && i.on && i.where === 'hand')); },
+      onUse: () => {
+        H.escort = true;
+        if (r.status === 'signalling' || r.status === 'answered') { r.status = 'waiting'; r.reply = null; this.complete('n1_answer'); this.add('n1_guide'); }
+        this.say([{ who: S.WHO.NOTE, note: true, text: 'He grabs your sleeve. "Oh thank God. I lost the trail when the light went. Just... don\'t lose me."' }]);
+        if (!this.flags.toldOnFoot) { this.flags.toldOnFoot = true; this.ui.toast('Lead him down the trail to the trailhead. He stops if you get too far ahead or your light goes out.', 4.5); }
+      } });
   }
   /** The ONE interface the director acts through (src/game/director.js ACTIONS). */
   makeDirectorActions() {
