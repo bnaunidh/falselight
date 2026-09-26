@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=f9194dc8';
+import { drawMap } from './mapdraw.js?v=f6619665';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -162,6 +162,7 @@ export function createUI(root = document.getElementById('ui')) {
         <label>Mouse sensitivity <input data-k="sens" type="range" min="0.4" max="2.5" step="0.1" value="${o.sens}"></label>
         <label>Sound <select data-k="sound"><option value="off" ${o.sound ? '' : 'selected'}>off</option><option value="on" ${o.sound ? 'selected' : ''}>on</option></select></label>
         <label>Volume <input data-k="volume" type="range" min="0" max="1" step="0.05" value="${o.volume}"></label>
+        <label>Music <input data-k="music" type="range" min="0" max="1" step="0.05" value="${o.music ?? 0.35}"></label>
         <button class="keysbtn" data-a="keys">Keys… <em>rebind any control</em></button>
         <label>Full screen <select data-k="fullscreen"><option value="on" ${o.fullscreen !== false ? 'selected' : ''}>on (Esc works in menus)</option><option value="off" ${o.fullscreen === false ? 'selected' : ''}>off</option></select></label>
         <button data-a="done">Done</button></div>`, 'center');

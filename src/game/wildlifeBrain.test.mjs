@@ -1,9 +1,10 @@
-// node --expose-gc src/game/wildlifeBrain.test.mjs — the wildlife rules, headless (deer, the bear, the dog's barking, the
-// ambient calls, save/restore), on synthetic ground and then on the real terrain + layout if assets/ is there.
+// node --expose-gc src/game/wildlifeBrain.test.mjs — the wildlife rules, headless (deer, the bear — its bluffs, the chase if you
+// run, the night stalk, its eyeshine — the dog's barking, the ambient calls, save/restore), on synthetic ground and then on the
+// real terrain + layout if assets/ is there.
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { WildlifeBrain, WILD, resolvePlaces, Path } from './wildlifeBrain.js'
+import { WildlifeBrain, WILD, resolvePlaces, Path, eyeshine } from './wildlifeBrain.js'
 
 let pass = 0, fail = 0
 const ok = (name, cond, info = '') => { if (cond) pass++; else fail++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${info !== '' ? '  — ' + info : ''}`) }
@@ -31,7 +32,7 @@ function makeBrain(o = {}) {
 function makeCtx(o = {}) {
   return { player: [0, 0, 0], vel: [0, 0], jog: false, playerSafe: false, indoor: false, night: false, rain: 0, weeper: null, weeperTriggered: false, dog: null, ...o }
 }
-const rec = (e, t) => ({ t, type: e.type, name: e.name, amount: e.amount, why: e.why, text: e.text, pos: e.pos.slice(), volume: e.volume })
+const rec = (e, t) => ({ t, type: e.type, name: e.name, amount: e.amount, why: e.why, text: e.text, pos: e.pos.slice(), volume: e.volume, shake: e.shake, fov: e.fov, beat: e.beat })
 /** Step the brain for secs, moving the player toward `to` at `speed` (null = stand still). onStep(t) after each frame. */
 function sim(b, ctx, secs, { to = null, speed = 0, jog = false, onStep = null, log = null, stopAt = null } = {}) {
   const evs = log || []
@@ -185,7 +186,8 @@ const bearBrain = (o = {}) => makeBrain({ deer: [], bear: true, bearSpots: [[0, 
   const evs = sim(b2, ctx2, 20, { stopAt: () => br2.state === 'leave' })
   ok('notice, then you freeze: it rears, huffs, and walks off', br2.state === 'leave' && !evs.some((e) => e.type === 'fear'), 'after ' + f1(evs.length ? evs[evs.length - 1].t : 0) + ' s')
 }
-// ------------------------------------------------------------------ 10. keep coming: bluff charge (stops ~3 m short) -> close in -> swat -> retreat
+// ------------------------------------------------------------------ 10. keep coming: bluff charge (10 m/s, stops ~2 m short, rears and
+// growls over you) -> close in -> swat -> retreat
 {
   const b = bearBrain({ seed: 4 }), br = b.bear, ctx = makeCtx({ player: [0, 0, 150] })
   sim(b, ctx, 40, { to: [0, 0, 100], speed: 1.4, stopAt: () => br.state === 'huff' })
@@ -194,14 +196,18 @@ const bearBrain = (o = {}) => makeBrain({ deer: [], bear: true, bearSpots: [[0, 
   sim(b, ctx, 5, { log: evs, onStep: () => { minD = Math.min(minD, d2(br.pos, ctx.player)); topV = Math.max(topV, br.speed) }, stopAt: () => br.state === 'standoff' })
   const fear = typed(evs, 'fear')
   ok('inside 10 m it bluff-charges', bluffAt != null && bluffAt <= B.bluffRange + 0.1, 'charged at ' + f1(bluffAt) + ' m, top speed ' + f1(topV) + ' m/s')
+  ok('...fast: ~10 m/s (a big boar, off the mark like a shot)', topV >= B.chargeSpeed * 0.95 && topV <= B.chargeSpeed + 1e-9, 'top speed ' + f1(topV) + ' m/s')
   ok('...hooks.fear(0.6) and a huff', fear.length === 1 && Math.abs(fear[0].amount - 0.6) < 1e-9 && named(evs, 'bear_huff').length > 0)
-  ok('...and stops ~3 m short', br.state === 'standoff' && minD > 2.4 && minD < 3.6, 'closest ' + f2(minD) + ' m')
+  const sc = typed(evs, 'scare')
+  ok('...a jolt as it comes (hooks.scare: shake, FOV punch, heartbeat) and a bawl', sc.some((e) => e.why === 'bluff' && e.shake > 0.3 && e.fov < 0 && e.beat) && named(evs, 'bear_bawl').length === 1, sc.map((e) => e.why + ' ' + e.shake + '/' + e.fov).join(', '))
+  ok('...and stops ~2 m short', br.state === 'standoff' && minD > 1.7 && minD < 2.6, 'closest ' + f2(minD) + ' m')
+  ok('...where it rears to its full height over you, growling', br.act === 'rear' && named(evs, 'bear_growl').length === 1 && sc.some((e) => e.why === 'rear'), 'act ' + br.act + ', ' + named(evs, 'bear_growl').length + ' growl')
   ok('the bluff says its line once', typed(evs, 'say').filter((e) => /stops dead/.test(e.text)).length === 1)
   ok('no hurt from a bluff', !evs.some((e) => e.type === 'hurt'))
   const evs2 = sim(b, ctx, 4, { to: [br.pos[0], 0, br.pos[2]], speed: 0.8, stopAt: () => typed(b._out, 'hurt').length > 0 })
   const hurt = typed(evs2, 'hurt'), fear2 = typed(evs2, 'fear')
   ok('close inside 4 m after the bluff: it SWATS — hooks.hurt(0.35, "bear")', hurt.length === 1 && Math.abs(hurt[0].amount - 0.35) < 1e-9 && hurt[0].why === 'bear', hurt.length ? 'hurt ' + hurt[0].amount + ' ' + hurt[0].why : 'no swat')
-  ok('...hooks.fear(1) and a growl', fear2.some((e) => e.amount === 1) && named(evs2, 'bear_growl').length === 1)
+  ok('...hooks.fear(1), a growl and a hard jolt', fear2.some((e) => e.amount === 1) && named(evs2, 'bear_growl').length === 1 && typed(evs2, 'scare').some((e) => e.why === 'hit' && e.shake === 1 && e.beat))
   const evs3 = sim(b, ctx, 25)
   ok('then it retreats (and does not come back for more)', d2(br.pos, ctx.player) > 25 && !evs3.some((e) => e.type === 'hurt'), f1(d2(br.pos, ctx.player)) + ' m, ' + br.state)
   ok('its mood is up after all that', br.mood > 0.5, 'mood ' + f2(br.mood))
@@ -386,6 +392,248 @@ const bearBrain = (o = {}) => makeBrain({ deer: [], bear: true, bearSpots: [[0, 
     if (clear < B.spotClear - 4) through++
   }
   ok('...and its next spot is one whose walk keeps clear of you', picks >= 8 && through === 0, through + ' of ' + picks + ' walks pass within ' + (B.spotClear - 4) + ' m of you')
+}
+
+console.log('— the bear: don\'t run —')
+/** The bridge's hurt(): one blow never kills from above half health (health 1 -> dead takes four 0.3 blows). */
+const hurtFn = (h, a) => Math.max(h > 0.5 ? 0.05 : 0, h - a)
+/** A bear that has noticed you (huffing) ~20-25 m off, by day. */
+function noticed(seed) {
+  const b = bearBrain({ seed }), br = b.bear, ctx = makeCtx({ player: [0, 0, 150] })
+  sim(b, ctx, 40, { to: [0, 0, 100], speed: 1.4, stopAt: () => br.state === 'huff' })
+  return { b, br, ctx }
+}
+// ------------------------------------------------------------------ 24. run from it: it chases you down and mauls you; keep running and it kills you
+{
+  const { b, br, ctx } = noticed(4)
+  const d0 = d2(br.pos, ctx.player)
+  let chaseAt = null, topV = 0, health = 1, deadAt = null
+  const hits = []
+  const evs = sim(b, ctx, 14, { to: [0, 0, 400], speed: 3.2, jog: true, onStep: () => {
+    if (chaseAt == null && br.state === 'chase') chaseAt = b.time0
+    topV = Math.max(topV, br.speed)
+    for (const e of b._out) if (e.type === 'hurt') { hits.push({ t: b.time0, a: e.amount, why: e.why, d: d2(br.pos, ctx.player) }); health = hurtFn(health, e.amount); if (health <= 0 && deadAt == null) deadAt = b.time0 }
+  }, stopAt: () => deadAt != null })
+  const t0 = evs.length ? evs[0].t - DT : b.time0
+  ok('it has noticed you (' + f1(d0) + ' m) and you jog away: it gives chase', d0 < B.chaseRange && chaseAt != null && chaseAt - t0 < 0.6, chaseAt != null ? 'after ' + f2(chaseAt - t0) + ' s' : 'no chase, ' + br.state)
+  ok('...at ~11 m/s: you jog at 3.2, you can\'t outrun it', topV > B.chaseSpeed - 0.5, 'top speed ' + f1(topV) + ' m/s')
+  ok('...with a bawl, and a jolt (hooks.scare)', named(evs, 'bear_bawl').length >= 1 && typed(evs, 'scare').some((e) => e.why === 'chase' && e.shake >= 0.5 && e.beat))
+  ok('it catches you: hooks.hurt(0.3, "bear") — and the DON\'T RUN line', hits.length > 0 && Math.abs(hits[0].a - B.maulHurt) < 1e-9 && hits[0].why === 'bear' && hits[0].t - t0 < 5 && typed(evs, 'say').filter((e) => /DON'T RUN/.test(e.text)).length === 1, hits.length ? 'first blow after ' + f1(hits[0].t - t0) + ' s at ' + f2(hits[0].d) + ' m' : 'never caught')
+  const gaps = hits.slice(1).map((h, i) => h.t - hits[i].t)
+  ok('keep running: another blow every ~1.2 s', gaps.length >= 2 && gaps.every((g) => Math.abs(g - B.maulEvery) < 0.1) && hits.every((h) => h.d <= B.maulReach + 1e-6), gaps.map(f2).join(' / ') + ' s, within ' + f2(Math.max(...hits.map((h) => h.d))) + ' m')
+  ok('...a player who keeps running dies (bridge.hurt: no one-blow kill above half health)', deadAt != null && hits.length === 4, deadAt != null ? 'dead ' + f1(deadAt - t0) + ' s after you ran, ' + hits.length + ' blows' : 'health ' + f2(health))
+  ok('...all the while: sustained fear at full (brain.fearLevel)', b.fearLevel === 1, 'fearLevel ' + f2(b.fearLevel))
+}
+// ------------------------------------------------------------------ 25. it's on you: stand still and it stops; it stands over you, then goes
+{
+  for (const [how, to, speed] of [['stand still', null, 0], ['back off slowly', 'away', 0.8]]) {
+    const { b, br, ctx } = noticed(4)
+    sim(b, ctx, 10, { to: [0, 0, 400], speed: 3.2, jog: true, stopAt: () => typed(b._out, 'hurt').length > 0 })
+    const tStop = b.time0
+    let loomAt = null, leaveAt = null, maxD = 0
+    const dest = to ? [ctx.player[0], 0, ctx.player[2] + 100] : null
+    const evs = sim(b, ctx, 40, { to: dest, speed, onStep: () => { if (loomAt == null && br.state === 'loom') loomAt = b.time0; if (leaveAt == null && br.state === 'leave') leaveAt = b.time0; if (leaveAt != null) maxD = Math.max(maxD, d2(br.pos, ctx.player)) } })
+    ok(`it's on you and you ${how}: no more blows`, !typed(evs, 'hurt').length, typed(evs, 'hurt').length + ' more')
+    ok(`...after ~1.5 s it stops, and stands over you (loom), breathing`, loomAt != null && Math.abs(loomAt - tStop - B.maulCalm) < 0.2 && named(evs, 'bear_breath').length > 0, loomAt != null ? 'loom after ' + f2(loomAt - tStop) + ' s' : br.state)
+    ok(`...then it leaves you`, leaveAt != null && leaveAt - loomAt < B.loom[1] + 0.2 && maxD > 20 && br.ignoreT > 0, leaveAt != null ? 'left after ' + f1(leaveAt - loomAt) + ' s, ' + f1(maxD) + ' m off' : br.state)
+  }
+  // it's looming over you and you bolt: it's straight back on you
+  const { b, br, ctx } = noticed(4)
+  sim(b, ctx, 10, { to: [0, 0, 400], speed: 3.2, jog: true, stopAt: () => typed(b._out, 'hurt').length > 0 })
+  sim(b, ctx, 3, { stopAt: () => br.state === 'loom' })
+  const evs = sim(b, ctx, 3, { to: [0, 0, 400], speed: 3.2, jog: true, stopAt: () => typed(b._out, 'hurt').length > 0 })
+  ok('...unless you run again while it stands over you: it\'s on you again', typed(evs, 'hurt').length === 1, br.state)
+}
+// ------------------------------------------------------------------ 26. stop running before it reaches you: it ends as a bluff
+{
+  const { b, br, ctx } = noticed(9)
+  sim(b, ctx, 3, { to: [0, 0, 400], speed: 3.2, jog: true, stopAt: () => br.state === 'chase' })
+  sim(b, ctx, 0.3, { to: [0, 0, 400], speed: 3.2, jog: true })
+  const dStop = d2(br.pos, ctx.player)
+  let minD = Infinity, reared = false
+  const evs = sim(b, ctx, 20, { onStep: () => { minD = Math.min(minD, d2(br.pos, ctx.player)); if (br.act === 'rear') reared = true } })
+  ok('it\'s coming (' + f1(dStop) + ' m) and you stop and stand your ground: it pulls up short — no blow', !typed(evs, 'hurt').length && minD > B.bluffStop - 0.5 && reared && named(evs, 'bear_growl').length >= 1, 'closest ' + f2(minD) + ' m, reared ' + reared)
+  ok('...and, as you keep still, it leaves', br.state === 'leave' || br.state === 'calm', br.state)
+}
+// ------------------------------------------------------------------ 27. jogging is only dangerous near a bear that has noticed you
+{
+  const b = bearBrain({ seed: 3 }), br = b.bear, ctx = makeCtx({ player: [-60, 0, 30] })
+  const evs = sim(b, ctx, 50, { to: [-60, 0, 170], speed: 3.2, jog: true })
+  ok('jogging past 60 m off: it doesn\'t care', !['chase', 'maul'].includes(br.state) && !typed(evs, 'hurt').length && !named(evs, 'bear_bawl').length, br.state)
+  const n = noticed(8)
+  sim(n.b, n.ctx, 60, { to: [0, 0, 220], speed: 1.2, stopAt: () => n.br.state === 'leave' })
+  const evs2 = sim(n.b, n.ctx, 20, { to: [0, 0, 400], speed: 3.2, jog: true })
+  ok('...nor once it has turned to leave (you backed off first)', !typed(evs2, 'hurt').length && n.br.state !== 'chase', n.br.state)
+}
+
+console.log('— the bear: night stalking —')
+// a straight trail north from the tower (0, 0); the bear forages off to the side
+const stalkBrain = (seed, o = {}) => bearBrain({ seed, tower: [0, 0], bearSpots: [[80, 160]], ...o })
+/** Night, you walking the trail; the stalk made certain (it happens on ~80 % of nights). Returns once it's stalking. */
+function stalked(seed, o = {}) {
+  const b = stalkBrain(seed, o), br = b.bear, ctx = makeCtx({ player: [0, 0, 60], night: true, ...(o.ctx || {}) })
+  b.update(DT, ctx); br.stalkRoll = true
+  const evs = sim(b, ctx, 150, { to: [0, 0, 460], speed: 1.4, stopAt: () => br.state === 'stalk' })
+  return { b, br, ctx, evs }
+}
+const offLook = (br, ctx) => Math.abs(((Math.atan2(br.pos[0] - ctx.player[0], br.pos[2] - ctx.player[2]) - Math.atan2(ctx.look[0], ctx.look[1]) + Math.PI * 3) % (Math.PI * 2)) - Math.PI)
+// ------------------------------------------------------------------ 28. it catches your scent and keeps pace with you, heard not seen
+{
+  const { b, br, ctx, evs: e0 } = stalked(7)
+  const t0 = e0.length ? e0[0].t : 0
+  ok('night, you on the trail well away from the tower: it catches your scent and stalks you', br.state === 'stalk' && br.sk === 'follow', br.state + ' after ' + f1(b.time0 - t0) + ' s, ' + f1(d2(br.pos, ctx.player)) + ' m off')
+  const b0 = br.pos.slice(), ds = [], breaths = [], snaps = []
+  let rushV = 0, holdD = Infinity, sawRush = false, sawHold = false, fearF = 0, fearH = 0, heardAt = null
+  const evs = sim(b, ctx, 120, { to: [0, 0, 460], speed: 1.4, onStep: (t) => {
+    if (br.heard && heardAt == null) heardAt = t
+    if (t > 30 && br.sk === 'follow' && br.skT > 8) ds.push(d2(br.pos, ctx.player))
+    if (br.sk === 'rush') { sawRush = true; rushV = Math.max(rushV, br.speed) }
+    if (br.sk === 'hold') { sawHold = true; holdD = Math.min(holdD, d2(br.pos, ctx.player)); fearH = Math.max(fearH, b.fearLevel) }
+    if (br.sk === 'follow' && br.heard) fearF = Math.max(fearF, b.fearLevel)
+    for (const e of b._out) if (e.type === 'sfx') { if (e.name === 'bear_breath') breaths.push(d2(e.pos, ctx.player)); if (e.name === 'branch_snap') snaps.push(d2(e.pos, ctx.player)) }
+  } })
+  ds.sort((a, c) => a - c)
+  const inBand = ds.filter((d) => d >= B.stalkDist[0] - 3 && d <= B.stalkDist[1] + 5).length / (ds.length || 1)
+  ok('it keeps pace ~25-42 m off as you walk', br.state === 'stalk' && inBand > 0.85 && d2(br.pos, b0) > 100, 'median ' + f1(ds[ds.length >> 1]) + ' m, ' + Math.round(inBand * 100) + ' % in the band; it moved ' + f1(d2(br.pos, b0)) + ' m')
+  ok('you hear it: branch snaps off the trail (hooks.sfx "branch_snap")', snaps.length >= 5 && snaps.every((d) => d > 5), snaps.length + ' snaps, ' + snaps.map(f1).slice(0, 6).join(' ') + ' m')
+  ok('...the first one brings the line (once) and the don\'t-run tip', typed(evs, 'say').filter((e) => /keeping pace/.test(e.text)).length === 1 && typed(evs, 'toast').filter((e) => /Don't run/.test(e.text)).length === 1)
+  ok('...and its heavy breathing, but only when it\'s within ~15 m', breaths.length > 0 && breaths.every((d) => d < B.breathRange + 1.5), breaths.length + ' breaths at ' + breaths.map(f1).join(' ') + ' m')
+  ok('now and then it rushes in (hooks.scare) ...', sawRush && rushV > B.rushSpeed - 0.5 && typed(evs, 'scare').some((e) => e.why === 'rush' && e.beat), 'top speed ' + f1(rushV) + ' m/s')
+  ok('...and stops, ~10 m off, blowing at you', sawHold && holdD > 5 && holdD < B.rushStop[1] + 0.5 && !typed(evs, 'hurt').length, 'closest ' + f1(holdD) + ' m')
+  ok('sustained fear once you\'ve heard it: some while it follows, more when it rushes you', fearF > 0.1 && fearF < 0.6 && fearH > fearF, 'follow ' + f2(fearF) + ', hold ' + f2(fearH))
+}
+// ------------------------------------------------------------------ 29. out of the light
+{
+  const { b, br, ctx } = stalked(8)
+  br.rushT = 1e9   // (no rushes here: they come at you on purpose)
+  sim(b, ctx, 40, { to: [0, 0, 460], speed: 1.4 })
+  ctx.torch = true; ctx.look = [0, 1]
+  let inCone = 0, n = 0
+  sim(b, ctx, 60, { to: [0, 0, 460], speed: 1.4, onStep: () => { if (br.sk !== 'follow') return; n++; if (offLook(br, ctx) < 0.35 && d2(br.pos, ctx.player) < 45) inCone++ } })
+  ok('torch on, pointed down the trail: it keeps out of the beam', n > 1000 && inCone / n < 0.02, inCone + ' of ' + n + ' frames in the 20 deg cone')
+  // you swing round and put the torch straight on it: it slips out of the cone
+  const L = d2(br.pos, ctx.player); ctx.look = [(br.pos[0] - ctx.player[0]) / L, (br.pos[2] - ctx.player[2]) / L]
+  let out = null
+  sim(b, ctx, 8, { onStep: (t) => { if (out == null && offLook(br, ctx) > 0.35) out = t } })
+  ok('...swing the torch onto it and it slips out of the beam in a couple of seconds', out != null && out < 3, out != null ? f2(out) + ' s, ' + f1(L) + ' m off' : 'still in the beam')
+}
+// ------------------------------------------------------------------ 30. a light held on it drives it back; it comes back later
+{
+  const { b, br, ctx } = stalked(9)
+  br.rushT = 1e9
+  sim(b, ctx, 30, { to: [0, 0, 460], speed: 1.4 })
+  sim(b, ctx, 5)
+  ctx.lit = true; sim(b, ctx, 2.0)
+  const early = br.sk
+  ctx.lit = false; sim(b, ctx, 4)
+  ctx.lit = true
+  let backAt = null
+  const tl = b.time0
+  sim(b, ctx, 4, { stopAt: () => { if (br.sk === 'back') backAt = b.time0 - tl; return backAt != null } })
+  ctx.lit = false
+  ok('a light on it for 2 s: nothing; held 2.5 s: it backs off', early !== 'back' && backAt != null && Math.abs(backAt - B.litBack) < 0.1, 'after ' + f2(backAt) + ' s')
+  let far = 0, waited = false, back = null
+  const tb = b.time0
+  sim(b, ctx, 90, { onStep: () => { far = Math.max(far, d2(br.pos, ctx.player)); if (br.sk === 'wait') waited = true; if (waited && back == null && br.sk === 'follow') back = b.time0 - tb } })
+  ok('...out past 40 m, where it waits in the dark', far >= 40 && waited, 'as far as ' + f1(far) + ' m')
+  ok('...and later it comes back', back != null && br.state === 'stalk' && d2(br.pos, ctx.player) < B.stalkDist[1] + 5, back != null ? 'after ' + f1(back) + ' s, now ' + f1(d2(br.pos, ctx.player)) + ' m off' : br.state + ' ' + br.sk)
+}
+// ------------------------------------------------------------------ 31. it gives up: home, dawn, or after a while
+{
+  const s1 = stalked(10)
+  s1.br.rushT = 1e9
+  let ended = null, minCheb = Infinity
+  sim(s1.b, s1.ctx, 200, { to: [0, 0, 0], speed: 1.4, onStep: () => { const p = s1.ctx.player; if (ended == null && s1.br.state !== 'stalk') ended = Math.hypot(p[0], p[2]); minCheb = Math.min(minCheb, Math.max(Math.abs(s1.br.pos[0]), Math.abs(s1.br.pos[2]))) }, stopAt: () => Math.hypot(s1.ctx.player[0], s1.ctx.player[2]) < 12 })
+  ok('you reach the tower clearing: it gives up and goes', ended != null && ended <= B.stalkHome + 0.1 && ended > B.stalkHome - 3 && s1.br.state === 'leave' && minCheb >= WILD.fence - 0.05, 'at ' + f1(ended) + ' m from the tower, ' + s1.br.state)
+  let again = false
+  sim(s1.b, s1.ctx, 200, { to: [0, 0, 80], speed: 1.4, onStep: () => { if (s1.br.state === 'stalk') again = true } })
+  ok('...and doesn\'t take it up again for a good while', !again && s1.br.stalkCool > 0, 'cooldown left ' + f1(s1.br.stalkCool) + ' s')
+  const s2 = stalked(11)
+  sim(s2.b, s2.ctx, 10, { to: [0, 0, 460], speed: 1.4 })
+  s2.ctx.night = false
+  sim(s2.b, s2.ctx, 1)
+  ok('dawn: it gives up the stalk', s2.br.state === 'leave', s2.br.state)
+  const s3 = stalked(12)
+  s3.br.rushT = 1e9
+  let len = null, leg = 0
+  const ts = s3.b.time0
+  while (len == null && s3.b.time0 - ts < 300) sim(s3.b, s3.ctx, 90, { to: [0, 0, leg++ % 2 ? 120 : 420], speed: 1.2, stopAt: () => { if (s3.br.state !== 'stalk') len = s3.b.time0 - ts; return len != null } })
+  ok('...or after a few minutes of it', len != null && len >= B.stalkMax[0] - 1 && len <= B.stalkMax[1] + 1 && s3.br.state === 'leave', len != null ? f1(len) + ' s' : s3.br.state)
+}
+// ------------------------------------------------------------------ 32. when it doesn't
+{
+  const none = (name, o, walk = [0, 0, 460], from = [0, 0, 60]) => {
+    const b = stalkBrain(13, o), br = b.bear, ctx = makeCtx({ player: from.slice(), night: true, ...(o.ctx || {}) })
+    b.update(DT, ctx); if (!o.noForce) br.stalkRoll = true
+    let st = false
+    sim(b, ctx, 200, { to: walk, speed: 1.4, onStep: () => { if (br.state === 'stalk') st = true } })
+    ok(name, !st, br.state)
+  }
+  none('no stalking by day', { ctx: { night: false } })
+  none('...nor off the trail (it follows the trail you walk)', { ctx: { offTrail: 30 } })
+  none('...nor round the tower clearing', { bearSpots: [[45, 45]] }, [30, 0, 5], [0, 0, 30])
+  none('...nor from up the tower (safe)', { ctx: { playerSafe: true } })
+  let n = 0
+  for (let k = 0; k < 400; k++) { const q = stalkBrain(200 + k); q.update(DT, makeCtx({ player: [0, 0, 300], night: true })); if (q.bear.stalkRoll) n++ }
+  ok('it hunts on about ' + Math.round(B.stalkChance * 100) + ' % of nights', Math.abs(n / 400 - B.stalkChance) < 0.06, f1(n / 4) + ' % of 400 nights')
+}
+// ------------------------------------------------------------------ 33. run from a stalker; the dog knows
+{
+  const { b, br, ctx } = stalked(14)
+  br.rushT = 1e9; br.snapT = 10   // (no snap for a few seconds: you haven't heard it yet)
+  const e1 = sim(b, ctx, 3, { to: [0, 0, 460], speed: 3.2, jog: true })
+  ok('it stalks you and you haven\'t heard it yet: jogging on doesn\'t set it off', !br.heard && br.state === 'stalk' && !typed(e1, 'hurt').length, br.state + ', heard ' + br.heard)
+  sim(b, ctx, 60, { to: [0, 0, 460], speed: 1.4, stopAt: () => br.heard })
+  sim(b, ctx, 8, { to: [0, 0, 460], speed: 1.4 })
+  const d0 = d2(br.pos, ctx.player)
+  const away = [ctx.player[0] * 2 - br.pos[0], 0, ctx.player[2] * 2 - br.pos[2]]
+  let chased = false
+  const e2 = sim(b, ctx, 12, { to: away, speed: 3.2, jog: true, onStep: () => { if (br.state === 'chase') chased = true }, stopAt: () => typed(b._out, 'hurt').length > 0 })
+  ok('...once you know it\'s there, run and it runs you down (' + f1(d0) + ' m back)', chased && typed(e2, 'hurt').length === 1, br.state)
+  // the tamed dog at your heel whimpers while it stalks you
+  const s = stalked(15, { ctx: { dog: { pos: [1, 0, 60], tamed: true } } })
+  s.br.rushT = 1e9
+  const w = []
+  sim(s.b, s.ctx, 90, { to: [0, 0, 460], speed: 1.4, onStep: () => { for (const e of s.b._out) if (e.type === 'dogWhine') w.push(d2(e.pos, s.ctx.dog.pos)); const p = s.ctx.player; s.ctx.dog.pos[0] = p[0] + 1; s.ctx.dog.pos[2] = p[2] - 1 } })
+  ok('the tamed dog at your heel whimpers while it stalks you (dogWhine at her)', w.length >= 4 && w.every((d) => d < 0.01), w.length + ' whimpers')
+}
+// ------------------------------------------------------------------ 34. eyeshine
+{
+  const E = [0, 1, 0], L = [0, 1.6, 12]
+  ok('eyeshine(): only at night, only while lit', eyeshine(false, true, 0, E, L) === 0 && eyeshine(true, false, 0, E, L) === 0 && eyeshine(true, true, 0, E, L) > 0.99)
+  ok('...and only while it faces the light', eyeshine(true, true, 0.5, E, L) > 0.9 && eyeshine(true, true, Math.PI / 2, E, L) === 0 && eyeshine(true, true, Math.PI, E, L) === 0 && eyeshine(true, true, 1.0, E, L) > 0 && eyeshine(true, true, 1.0, E, L) < 0.7,
+    [0, 0.5, 1, Math.PI / 2].map((y) => f2(eyeshine(true, true, y, E, L))).join(' '))
+  ok('...the searchlight from high on the tower lights them too, if less', eyeshine(true, true, 0, E, [0, 31, 20]) > 0.3, f2(eyeshine(true, true, 0, E, [0, 31, 20])))
+  const b = bearBrain({ seed: 16 }), br = b.bear, ctx = makeCtx({ player: [0, 0, 70] })
+  b.place(br, 0, 100, Math.PI); br.sub = 'nose'; br.subT = 60   // 30 m off, facing you
+  const run = (secs, o) => { Object.assign(ctx, o); let m = 0; const evs = sim(b, ctx, secs, { onStep: () => { m = Math.max(m, br.eyes) } }); return { m, evs } }
+  const day = run(1, { night: false, lit: true }), dark = run(1, { night: true, lit: false })
+  br.stalkRoll = false   // (tonight it doesn't hunt: this is about its eyes)
+  const seen = run(1, { lit: true })
+  ok('the bear: no eyeshine by day, or unlit at night', day.m === 0 && dark.m === 0)
+  ok('...lit at night, facing the light: two eyes shine back (bear.eyes)', seen.m > 0.9, 'eyes ' + f2(seen.m))
+  ok('...the first time: a jolt (hooks.scare, heartbeat) and the line', typed(seen.evs, 'scare').filter((e) => e.why === 'eyes' && e.beat).length === 1 && typed(seen.evs, 'say').filter((e) => /Two eyes/.test(e.text)).length === 1)
+  run(1, { lit: false })
+  const again = run(1, { lit: true })
+  ok('...a second look straight after: no jolt', !typed(again.evs, 'scare').length && again.m > 0.9)
+  run(8, { lit: false })
+  const later = run(1, { lit: true })
+  ok('...later, a new sighting is a new jolt — but the line is said once', typed(later.evs, 'scare').length === 1 && !typed(later.evs, 'say').length)
+  run(1, { lit: false }); br.yaw = 0
+  const away = run(1, { lit: true })
+  ok('...turned away from you: nothing', away.m === 0)
+  br.yaw = Math.PI
+  const held = run(3, { lit: true })
+  ok('a light held on it (not stalking) 2.5 s at night: it huffs and takes itself off', br.state === 'calm' && br.ignoreT > 0 && named(held.evs, 'bear_huff').length > 0 && br.sub === 'go', br.state + ' ' + br.sub + ', ignoring you ' + f1(br.ignoreT) + ' s')
+}
+// ------------------------------------------------------------------ 35. bigger, and saves
+{
+  const b = bearBrain(), br = b.bear
+  ok('a big boar: the bear is drawn (and heard) at ' + B.scale + 'x', br.scale === B.scale && B.scale >= 1.2)
+  const { b: sb } = stalked(17)
+  const j = JSON.parse(JSON.stringify(sb.toJSON()))
+  const r = bearBrain({ seed: 17, tower: [0, 0], bearSpots: [[80, 160]], saved: j })
+  ok('saved mid-stalk: restored calm, with a moment\'s grace (and its night roll)', j.bear.state === 'stalk' && r.bear.state === 'calm' && r.bear.ignoreT >= B.restoreGrace - 1e-9 && r.bear.stalkRoll === true, j.bear.state + ' -> ' + r.bear.state)
 }
 
 console.log('— ambient —')

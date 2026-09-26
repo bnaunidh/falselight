@@ -1,16 +1,16 @@
 // FALSE LIGHT — boot: engine → world → game → title screen. window.__fl exposes test hooks.
-import { createEngine } from './engine/engine.js?v=f9194dc8';
-import { createUI } from './ui/ui.js?v=f9194dc8';
-import { Game } from './game/bridge.js?v=f9194dc8';
-import { createSaves } from './game/saves.js?v=f9194dc8';
-import { UI as WORDS } from './game/content/story.js?v=f9194dc8';
-import { ACTIONS, keyName } from './engine/input.js?v=f9194dc8';
-import { registerAnimalSounds } from './engine/animalSounds.js?v=f9194dc8';
+import { createEngine } from './engine/engine.js?v=f6619665';
+import { createUI } from './ui/ui.js?v=f6619665';
+import { Game } from './game/bridge.js?v=f6619665';
+import { createSaves } from './game/saves.js?v=f6619665';
+import { UI as WORDS } from './game/content/story.js?v=f6619665';
+import { ACTIONS, keyName } from './engine/input.js?v=f6619665';
+import { registerAnimalSounds } from './engine/animalSounds.js?v=f6619665';
 
 const canvas = document.getElementById('c');
 const q = new URLSearchParams(location.search);
 const saves = createSaves();
-const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, sound: false, fullscreen: true, keys: {} });
+const settings = saves.settings({ quality: 'medium', sens: 1, volume: 0.8, music: 0.35, sound: false, fullscreen: true, keys: {} });
 if (!settings.qv2) { settings.quality = 'medium'; settings.qv2 = true; saves.saveSettings(settings); }   // older saves defaulted to 'high'
 const ui = createUI();
 ui.loading(0, 'starting');
@@ -18,6 +18,7 @@ const engine = await createEngine(canvas, { quality: q.get('q') || settings.qual
 engine.input.setBindings(settings.keys || {});   // your keys (Settings → Keys)
 engine.input.sensitivity = 0.0022 * settings.sens;
 engine.audio.setVolume(+settings.volume);
+if (engine.audio.setMusicVolume) engine.audio.setMusicVolume(settings.music ?? 0.35);
 engine.audio.setMuted(!settings.sound || q.has('mute'));   // sound is OFF until the player turns it on in Settings
 registerAnimalSounds(engine.audio);   // birds, owl, coyotes, elk, deer, bear, dog (procedural)
 window.__fl = { engine, ui };
@@ -41,6 +42,7 @@ function continueLabel() {
   return names[sv.phase] ? names[sv.phase] + ' · where you left off' : '';
 }
 function title() {
+  engine.audio.music.setMood('title', 4);
   game.state = 'title'; engine.input.unlock(); ui.hideHUD(true); ui.tracker(null);
   engine.sky.setTime(20.9); engine.sky.setWeather({ fog: 0.5, rain: 0, wind: 0.45, lightning: 0 });
   engine.lights.cabLamp.on = true;
@@ -82,9 +84,10 @@ function openKeys(back) {
     onBack: () => { ui.closeModal(); back(); } });
 }
 function openSettings(back) {
-  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, sound: settings.sound, fullscreen: settings.fullscreen,
+  ui.screen('settings', { quality: engine.qualityName, sens: settings.sens, volume: settings.volume, music: settings.music ?? 0.35, sound: settings.sound, fullscreen: settings.fullscreen,
     onKeys: () => { ui.closeModal(); openKeys(() => openSettings(back)); }, onDone: (v) => {
-    Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
+    Object.assign(settings, { quality: v.quality, sens: +v.sens, volume: +v.volume, music: +(v.music ?? 0.35), sound: v.sound === true || v.sound === 'on', fullscreen: v.fullscreen !== 'off' }); saves.saveSettings(settings);
+    if (engine.audio.setMusicVolume) engine.audio.setMusicVolume(settings.music);
     if (!settings.fullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
     engine.input.sensitivity = 0.0022 * settings.sens; engine.audio.setVolume(settings.volume); engine.audio.setMuted(!settings.sound);
     if (v.quality !== engine.qualityName) engine.setQuality(v.quality);

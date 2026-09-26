@@ -1,31 +1,31 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f9194dc8';
-import { Objectives } from './objectives.js?v=f9194dc8';
-import { Radio } from './radio.js?v=f9194dc8';
-import { Fuel, FUEL } from './fuel.js?v=f9194dc8';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=f9194dc8';
-import { Survival, SURV } from './survival.js?v=f9194dc8';
-import { createItemsView } from './itemsView.js?v=f9194dc8';
-import { createChill } from './chill.js?v=f9194dc8';
-import { createPlume } from './smokePlume.js?v=f9194dc8';
-import { FireFinder, spokenBearing } from './firefinder.js?v=f9194dc8';
-import { Photos, classifyShot } from './photos.js?v=f9194dc8';
-import { CO } from './co.js?v=f9194dc8';
-import { Weeper, lookupChance } from './weeper.js?v=f9194dc8';
-import { OtherLookout } from './otherLookout.js?v=f9194dc8';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f9194dc8';
-import { GuidedHiker } from './hikers.js?v=f9194dc8';
-import { MorseKeyer, isSOS } from './morse.js?v=f9194dc8';
-import { normalizeLayout } from './layout.js?v=f9194dc8';
-import { createSaves } from './saves.js?v=f9194dc8';
-import { createRng } from './rng.js?v=f9194dc8';
-import { canSend, send as sendPrint, isProof } from './sending.js?v=f9194dc8';
-import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=f9194dc8';
-import * as S from './content/story.js?v=f9194dc8';
-import { createDog, setDogName } from './dog.js?v=f9194dc8';
-import { createWildlife } from './wildlife.js?v=f9194dc8';
+import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=f6619665';
+import { Objectives } from './objectives.js?v=f6619665';
+import { Radio } from './radio.js?v=f6619665';
+import { Fuel, FUEL } from './fuel.js?v=f6619665';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS } from './items.js?v=f6619665';
+import { Survival, SURV } from './survival.js?v=f6619665';
+import { createItemsView } from './itemsView.js?v=f6619665';
+import { createChill } from './chill.js?v=f6619665';
+import { createPlume } from './smokePlume.js?v=f6619665';
+import { FireFinder, spokenBearing } from './firefinder.js?v=f6619665';
+import { Photos, classifyShot } from './photos.js?v=f6619665';
+import { CO } from './co.js?v=f6619665';
+import { Weeper, lookupChance } from './weeper.js?v=f6619665';
+import { OtherLookout } from './otherLookout.js?v=f6619665';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=f6619665';
+import { GuidedHiker } from './hikers.js?v=f6619665';
+import { MorseKeyer, isSOS } from './morse.js?v=f6619665';
+import { normalizeLayout } from './layout.js?v=f6619665';
+import { createSaves } from './saves.js?v=f6619665';
+import { createRng } from './rng.js?v=f6619665';
+import { canSend, send as sendPrint, isProof } from './sending.js?v=f6619665';
+import { fmtHour, dayHour, dist, dist2d, bearing, angDiff } from './util.js?v=f6619665';
+import * as S from './content/story.js?v=f6619665';
+import { createDog, setDogName } from './dog.js?v=f6619665';
+import { createWildlife } from './wildlife.js?v=f6619665';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const A3 = (v) => [v.x, v.y, v.z];
@@ -120,7 +120,9 @@ export class Game {
       night: () => !!this.clock && this.night,
       dog: () => this.dog,
       hurt: (amount, why) => this.hurt(amount, why),
-      fear: (amount) => { e.post.params.fear = Math.min(1, Math.max(e.post.params.fear, amount)); },
+      fear: (amount) => { this.bearFear = Math.min(1, Math.max(this.bearFear || 0, amount)); },   // held while it's near (decays when not refreshed)
+      scare: (o = {}) => this.scare(o),
+      dogWhine: (pos) => { if (e.audio.has('dog_whine')) e.audio.play('dog_whine', { position: pos, volume: 0.8 }); },
       say: (text) => this.say([{ who: S.WHO.NOTE, text, note: true }]),
       toast: (text, secs) => this.ui.toast(text, secs),
       sfx: (name, pos, volume) => { if (e.audio.has(name)) e.audio.play(name, { position: pos, volume }); },
@@ -324,6 +326,9 @@ export class Game {
     this.refreshTracker();
   }
   endPhase() {
+    const M = this.e.audio.music;
+    if (isNight(this.clock.phase)) M.sting('dawn');   // relief: the night is over
+    M.setMood('silent', 2);                            // update() doesn't run during the transition; finish() overrides with the title
     const n = nextPhase(this.clock.phase);
     if (n === 'end' || this.clock.phase === 'night2') { this.finish(); return; }
     this.ui.fade(1);
@@ -331,7 +336,7 @@ export class Game {
     this.state = 'transition';
   }
   finish() {
-    this.state = 'end'; this.e.input.unlock();
+    this.state = 'end'; this.e.input.unlock(); this.e.audio.music.setMood('title', 8);
     const sent = this.photos.prints.filter((p) => p.sent).length;
     this.ui.screen('end', { text: 'Grey in the east. Somewhere below, the truck is coming up the road.',
       detail: `End of the first two nights. Proof sent: ${this.proofs} of ${S.PROOF_GOAL}. Prints taken: ${this.photos.prints.length} (${sent} sent). ${this.flags.lostN1 ? 'You lost Lyle Pruitt.' : 'Lyle Pruitt made it to the lot.'} Nights three to seven are still being built.`,
@@ -339,7 +344,7 @@ export class Game {
   }
   die(kind) {
     if (this.state !== 'play') return;
-    this.state = 'dead'; this.exitMode(); this.e.audio.play('scream', { volume: 1 });
+    this.state = 'dead'; this.exitMode(); this.e.audio.play('scream', { volume: 1 }); this.e.audio.music.sting('death');
     this.e.post.set({ blackout: 1 }); this.e.input.unlock();
     setTimeout(() => this.ui.screen('death', { text: S.UI.death[kind] || S.UI.death.generic, onAction: (a) => { this.ui.closeModal(); this.e.post.set({ blackout: 0, fear: 0 }); if (a === 'retry') this.retry(); else this.onTitle && this.onTitle(); } }), 1400);
   }
@@ -367,7 +372,7 @@ export class Game {
       : { text: 'Keep watch — Silver Fork will call', hint: 'Scan the horizon from the catwalk, or rest on the bed to let the hours pass.' };
     this.ui.tracker(v, { date: PHASES[this.clock.phase].short + ' · ' + this.hourText() });
   }
-  complete(id, note) { if (this.obj.complete(id, note)) { this.e.audio.play('paper', { volume: 0.4 }); this.refreshTracker(); setTimeout(() => this.checkpoint('task:' + id), 1500); } }
+  complete(id, note) { if (this.obj.complete(id, note)) { this.e.audio.play('paper', { volume: 0.4 }); if (id !== 'n1_guide' && id !== 'weeper_send') this.e.audio.music.sting('task'); this.refreshTracker(); setTimeout(() => this.checkpoint('task:' + id), 1500); } }
   add(id, extra) { if (!this.obj.has(id)) { this.obj.add(id, extra); this.refreshTracker(); } }
   inCab() { return this.player().zone === 'cab'; }
   beamSpot() {
@@ -503,7 +508,7 @@ export class Game {
         if (ev === 'ready') { this.complete('n1_answer'); this.add('n1_guide'); }
         if (ev === 'stopped' && !H.announced.stopped) { H.announced.stopped = true; this.say(S.LINES.hikerStopped); }
         if (ev === 'straying' && !H.announced.stray) { H.announced.stray = true; this.say(S.LINES.hikerStraying); }
-        if (ev === 'saved') { setTimeout(() => this.checkpoint('saved'), 2000); this.say(S.LINES.savedN1); this.complete('n1_guide'); this.addLog(S.AUTO_LOG.saved()); this.flags.savedN1 = true; }
+        if (ev === 'saved') { e.audio.music.sting('found'); setTimeout(() => this.checkpoint('saved'), 2000); this.say(S.LINES.savedN1); this.complete('n1_guide'); this.addLog(S.AUTO_LOG.saved()); this.flags.savedN1 = true; }
         if (ev === 'fell') { setTimeout(() => this.checkpoint('fell'), 2000); this.say(S.LINES.fellN1); this.obj.complete('n1_guide', null, true); this.refreshTracker(); this.addLog(S.AUTO_LOG.lost()); this.flags.lostN1 = true; e.audio.play('breath', { volume: 0.6 }); }
       }
     }
@@ -559,7 +564,7 @@ export class Game {
       if (ev === 'hush') { this.say(S.LINES.weeperHush); }
       if (ev === 'resume') this.say(S.LINES.weeperResume);
       if (ev === 'lookup') { /* pose shows it */ }
-      if (ev === 'seen') { this.say(S.LINES.weeperSeen); e.audio.play('heart', { volume: 1 }); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); }
+      if (ev === 'seen') { e.audio.music.sting('seen'); this.say(S.LINES.weeperSeen); e.audio.play('heart', { volume: 1 }); if (!this.night) { setTimeout(() => this.say(S.LINES.weeperDay), 2500); } this.add('weeper_photo'); }
       if (ev === 'scream') this.say(S.LINES.weeperScream);
       if (ev === 'coming') { this.say(S.LINES.weeperComing); this.add('weeper_photo'); }
       if (ev === 'stairs') { this.say(S.LINES.weeperStairs); }
@@ -586,7 +591,7 @@ export class Game {
     }
     // fear
     const near = W.pos ? dist(W.pos, this.pos()) : 999;
-    const fear = W.triggered ? Math.max(0.25, 1 - near / 120) : 0;
+    const fear = Math.max(W.triggered ? Math.max(0.25, 1 - near / 120) : 0, this.bearFear || 0);
     e.post.params.fear += (fear - e.post.params.fear) * Math.min(1, dt * 1.5);
     if (W.triggered) { this.heartT = (this.heartT || 0) - dt; if (this.heartT <= 0) { e.audio.play('heart', { volume: 0.4 + fear }); this.heartT = 1.4 - fear * 0.8; } }
     if (W.triggered && !W.carrier) this.add('weeper_photo');
@@ -633,7 +638,7 @@ export class Game {
       if (channel === 'fax') { this.say(S.LINES.faxSent); this.flags.faxUsed = true; }
       if (channel === 'mailbox') this.say(S.LINES.mailSent);
       if (channel === 'driver') this.say(it.p.faceDown ? S.LINES.driverFaceDown : it.p.forbidden ? S.LINES.driverFace : S.LINES.driverNormal);
-      if (this.weeper.sendAway(it.p.id)) { this.say(S.LINES.weeperGone); this.complete('weeper_send'); this.obj.remove('weeper_photo'); this.refreshTracker(); }
+      if (this.weeper.sendAway(it.p.id)) { this.e.audio.music.sting('dawn'); this.say(S.LINES.weeperGone); this.complete('weeper_send'); this.obj.remove('weeper_photo'); this.refreshTracker(); }
     }, () => this.closedModal()));
   }
 
@@ -652,9 +657,9 @@ export class Game {
     });
     reg('tillman', 'IA_logbook', 'E — Read Tillman\'s logbook', () => { this.flags.readTillman = true; this.openLogbook('tillman'); });
     reg('map', 'IA_map', 'E — The trail map', () => this.openMap());
-    reg('heater', 'IA_heater', () => this.co.heater ? 'E — Turn the heater off' : 'E — Light the propane heater', () => { this.co.toggleHeater(); e.audio.play('door', { volume: 0.2 }); });
+    reg('heater', 'IA_heater', () => this.co.heater ? 'E — Turn the heater off' : 'E — Light the propane heater', () => { this.co.toggleHeater(); e.audio.play(this.co.heater ? 'heater_on' : 'heater_off', { volume: 0.7, position: this.anchor('IA_heater') }); });
     for (const k of ['n', 'e', 's', 'w']) reg('win_' + k, 'IA_window_' + k, () => this.co.windows[k] ? 'E — Close the window' : 'E — Open the window', () => {
-      const open = this.co.toggleWindow(k); e.audio.play('door', { volume: 0.22 });
+      const open = this.co.toggleWindow(k); e.audio.play(open ? 'window_open' : 'window_close', { volume: 0.7, position: this.anchor('IA_window_' + k) });
       this.ui.toast(open ? 'Cold air pours in. The cab smells of pine instead of propane.' : 'The window thumps shut. Quieter.', 2.5);
     }, () => true, 0.7);
     reg('searchlight', 'IA_searchlight', 'E — Take the searchlight', () => this.enterSearchlight(), () => true, 0.7);
@@ -677,10 +682,12 @@ export class Game {
     reg('fax', 'IA_fax', 'E — Fax a photograph to the district', () => this.sendFlow('fax'), () => this.photos.sendable().length > 0);
     reg('truck', 'IA_truck', () => this.photos.sendable().length ? 'E — Give Walt a photograph' : 'E — Talk to Walt', () => { if (this.photos.sendable().length) this.sendFlow('driver'); else this.say(S.LINES.driverHello); }, () => this.truckVisible);
     reg('pack', 'IA_camp_backpack', 'E — Search the pack', () => {
+      e.audio.music.sting('found');
       const f = S.FINDS.camp_backpack; this.flags.rulesTo = Math.max(this.flags.rulesTo, f.rulesTo);
       this.openModal(() => this.ui.note(f.title, f.text + '\n\n' + S.RULES.slice(5, 8).map((r, i) => `${i + 6}. ${r}`).join('\n'), () => { this.closedModal(); this.complete('d2_camp'); }));
     }, () => this.clock.phase === 'day2');
     reg('overlook', 'IA_overlook', 'E — Look over the rail', () => {
+      if (!this.flags.lostN1) e.audio.music.sting('found');
       const f = this.flags.lostN1 ? S.FINDS.body : S.FINDS.noBody;
       if (this.flags.lostN1 && !this.bodyEnt) { const ov = V3(this.L.places.ravine_overlook); this.bodyEnt = e.entities.spawn('lost_hiker_body', { position: new THREE.Vector3(ov.x + 22, e.world.heightAt(ov.x + 22, ov.z + 4), ov.z + 4), pose: 'body' }); }
       this.player().lookAt(V3(this.L.places.ravine_overlook).add(new THREE.Vector3(24, -30, 4)), 1.2);
@@ -691,14 +698,14 @@ export class Game {
       this.resting = true; this.restObjN = this.obj.list.length; this.clock.speed = 14; e.post.set({ blackout: 0.85 }); this.ui.toast('You lie down. The hours go by. (W to get up)', 3);
     }, () => !this.resting && !this.weeper.triggered, 0.8);
     reg('door', 'IA_cab_door', () => this.flags.doorShut ? 'E — Open the door' : 'E — Shut the door', () => {
-      this.flags.doorShut = !this.flags.doorShut; e.audio.play('door', { volume: 0.35 });
+      this.flags.doorShut = !this.flags.doorShut; e.audio.play(this.flags.doorShut ? 'door_close' : 'door_open', { volume: 0.8, position: this.anchor('IA_cab_door') });
       if (this.flags.doorShut && this.inCab()) this.ui.toast('The latch drops. The wind noise halves.', 2);
     }, () => true, 0.75);
     reg('lamp', 'IA_lamp', () => e.lights.cabLamp.on ? 'E — Pull the chain (lamp off)' : 'E — Pull the chain (lamp on)', () => {
-      e.lights.cabLamp.on = !e.lights.cabLamp.on; this.flags.lampOff = !e.lights.cabLamp.on; e.audio.play('morse_click', { volume: 0.3 });
+      e.lights.cabLamp.on = !e.lights.cabLamp.on; this.flags.lampOff = !e.lights.cabLamp.on; e.audio.play('lamp_chain', { volume: 0.6 });
     }, () => true, 0.6);
     reg('stove', 'IA_stove', () => this.coffee == null ? 'E — Light the stove and put the coffee on' : this.coffee < 1 ? 'The coffee pot is ticking on the burner…' : 'E — Pour a cup of coffee', () => {
-      if (this.coffee == null) { this.coffee = 0; e.audio.play('door', { volume: 0.15 }); this.ui.toast('The burner catches with a soft whump. Give it a minute.', 2.5); }
+      if (this.coffee == null) { this.coffee = 0; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); this.ui.toast('The burner catches with a soft whump. Give it a minute.', 2.5); }
       else if (this.coffee >= 1) { this.coffee = null; this.surv.drink(0.3); this.surv.warmth = 1; this.co.blood = Math.max(0, this.co.blood - 0.02); this.ui.toast('Boiled coffee, grounds and all. Heat spreads through your chest.', 3); this.refreshHotbar(); }
     }, () => this.coffee == null || this.coffee >= 1, 0.6);
     reg('clock', 'IA_clock', 'E — Look at the alarm clock', () => { this.ui.toast(`The alarm clock says ${fmtHour(this.clock.hour)}. It gains a minute a day.`, 3); e.audio.play('morse_click', { volume: 0.15 }); }, () => true, 0.45);
@@ -967,6 +974,13 @@ export class Game {
     this.openModal(render);
   }
   /** Fall damage. Under ~1.5 m you just thump down; a storey hurts and leaves you limping; ~8 m kills. */
+  /** A jolt: screen shake (0..1) for `seconds`, an FOV punch (negative degrees = the world lurches closer), a heartbeat. */
+  scare({ shake = 0, seconds = 0.6, fov = 0, heartbeat = false } = {}) {
+    if (this.state !== 'play') return;
+    if (shake > (this._shake ? this._shake.amp * (1 - this._shake.t / this._shake.dur) : 0)) this._shake = { amp: Math.min(1, shake), t: 0, dur: Math.max(0.1, seconds) };
+    if (fov) this.fovPunch = Math.min(this.fovPunch || 0, fov);
+    if (heartbeat && this.e.time.value - (this._beatAt ?? -9) > 1.5) { this._beatAt = this.e.time.value; this.e.audio.play('heart', { volume: 1 }); }
+  }
   /** Something hurt you that isn't a fall (the bear's swat). One blow never kills from above half health. */
   hurt(amount, why = 'generic') {
     if (this.state !== 'play') return;
@@ -1045,7 +1059,14 @@ export class Game {
     if (!sigMode) this.signal.mode = false;
     SL.on = this.fuel.power && !!this.slLit && (sigMode ? e.input.isDown('signal') : true);
     SL.power = this.fuel.power ? 1 - this.fuel.sputter * 0.7 : 0;
-    e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1), forest: this.wildlife ? (this.night && !this.wildlife.silent ? 0.8 : 0) : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0 });
+    e.audio.setAmbience({ generator: this.fuel.genOn ? 1 : 0, genSputter: this.fuel.sputter, rain: e.sky.weather.rain, wind: e.sky.weather.wind * (this.inCab() ? 1 + this.co.open * 0.5 : 1),
+      forest: this.wildlife && this.wildlife.silent ? 0 : (this.night ? 0.8 : 0.6), radioStatic: this.inCab() ? 0.35 : 0,
+      heater: this.co.heater ? 1 : 0, stove: this.coffee != null ? 1 : 0, coffee: this.coffee ?? 0, lamp: e.lights.cabLamp.on ? 1 : 0, clockTick: 1,
+      inCab: this.inCab(), doorOpen: !this.flags.doorShut, windowsOpen: this.co.open });
+    // the score follows what's happening (src/engine/music.js; changes are debounced inside, so asking every frame is fine)
+    { const W = this.weeper, M = e.audio.music;
+      const mood = M && M.pickMood ? M.pickMood({ state: this.state, phase: this.clock.phase, hour: this.clock.hour, inCab: this.inCab(), sitting: !!this.sitting, weeper: W.state, weeperDist: W.pos ? dist(W.pos, this.pos()) : 999 }) : null;
+      if (mood) M.setMood(mood); }
     for (const ev of this.keyer.update(t)) if (ev.kind === 'end') this.onMorseEnd(ev.v, t);
     // modes: camera placement
     const cam = e.camera;
@@ -1063,7 +1084,8 @@ export class Game {
       this.ui.finder({ readout: this.finder.readout });
     }
     // fov (camera, binoculars, finder)
-    const fovT = this.binocular && this.mode === 'walk' ? 16 : this.fovTarget;
+    this.fovPunch = (this.fovPunch || 0) * Math.exp(-dt * 3.5);
+    const fovT = (this.binocular && this.mode === 'walk' ? 16 : this.fovTarget) + this.fovPunch;
     if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov += (fovT - cam.fov) * Math.min(1, dt * 8); cam.updateProjectionMatrix(); }
     cam.userData.zoom = 68 / cam.fov;
     const fw = cam.getWorldDirection(this._fw || (this._fw = new THREE.Vector3()));
@@ -1097,7 +1119,7 @@ export class Game {
     for (const ev of this.photos.tick(dt)) {
       if (ev.kind === 'seen') {
         const p = this.photos.get(ev.id);
-        if (p && p.forbidden) { this.weeper.trigger('print', { night: this.night, carrier: p.id }); this.say(S.LINES.weeperSeen); e.audio.play('heart', { volume: 1 }); this.add('weeper_send'); }
+        if (p && p.forbidden) { e.audio.music.sting('seen'); this.weeper.trigger('print', { night: this.night, carrier: p.id }); this.say(S.LINES.weeperSeen); e.audio.play('heart', { volume: 1 }); this.add('weeper_send'); }
       }
     }
     if (this.holding) { const p = this.photos.get(this.holding); const v = this.photos.look(this.holding); this.ui.print(p && v ? { ...v, dataURL: p.dataURL } : null); } else this.ui.print(null);
@@ -1138,6 +1160,7 @@ export class Game {
     this.updateLost(dt, t);
     this.updateWeeper(dt, t);
     if (this.dog) this.dog.update(dt, t);
+    this.bearFear = Math.max(0, (this.bearFear || 0) - dt * 0.35);   // wildlife refreshes it every frame while the bear is close
     if (this.wildlife) this.wildlife.update(dt, t);
     // sitting down turns you to face what the seat looks out on
     if (this.sitting && this.chill && this.chill.sitting && this.chill.sitting !== this._sitFaced) {
@@ -1172,6 +1195,12 @@ export class Game {
     // script + tracker
     this.scriptTick(dt);
     this.trackerT = (this.trackerT || 0) - dt; if (this.trackerT <= 0) { this.trackerT = 1; this.refreshTracker(); }
+    // screen shake last: player.update already placed the camera this frame, so the offset never accumulates
+    const sh = this._shake;
+    if (sh) {
+      sh.t += dt; const k = sh.amp * Math.max(0, 1 - sh.t / sh.dur); if (k <= 0.001) this._shake = null;
+      else { const c = e.camera, w = t * 38; c.position.x += Math.sin(w * 1.3) * 0.045 * k; c.position.y += Math.sin(w * 1.7 + 1) * 0.035 * k; c.rotation.z += Math.sin(w * 0.9 + 2) * 0.03 * k; }
+    }
   }
   hallucinate(kind) {
     const e = this.e;
