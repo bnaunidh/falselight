@@ -128,13 +128,14 @@ export class DogBrain {
     this.eatT = 0; this.petT = 0; this.stareT = 0; this.warned = false; this.weeperGoneT = 0
     this.stillT = 0; this.restT = 0; this.stayT = 0; this.tameStillT = 0; this.comeT = 0; this.coming = false
     this.sd = 0; this.ci = 0; this.detour = null; this.atHeater = false; this.lastEndS = null; this.endRate = 0; this.slope = 0
+    this.atBed = false; this.bedRoute = null
     this.sighted = false; this.shied = 0; this.hinted = false; this.snapT = 0; this.fled = false; this.asideT = 0; this.asideSide = 1
     this.doorT = 0; this.atDoor = false; this.needSnap = false; this.weeperPos = null; this.alertHold = 0; this.nextPause = 'stand'
     this.lastPlayer = null
     this.crumbs.clear()
   }
   get name() { return DOG.name }
-  get state() { return this.tamed ? (this.mode === 'stay' ? 'stay' : this.atHeater ? 'heater' : 'follow') : 'stray' }
+  get state() { return this.tamed ? (this.atBed ? 'bed' : this.mode === 'stay' ? 'stay' : this.atHeater ? 'heater' : 'follow') : 'stray' }
   emit(type, extra) { this.events.push(extra ? { type, ...extra } : { type }) }
   fixY() {
     if (this.opts.ground) { const g = this.opts.ground(this.pos[0], this.pos[2]); if (Number.isFinite(g)) this.pos[1] = g }
@@ -204,9 +205,9 @@ export class DogBrain {
     // look + wag + alert (the view smooths these)
     this.hasLook = false
     if (this.weeperPos && (this.stareT > 0 || this.alertHold > 0)) { this.setLook(this.weeperPos[0], this.weeperPos[1] + 1.2, this.weeperPos[2]); this.lookW = 1 }
-    else if (this.posture !== 'eat' && dist < (this.tamed ? 5 : 16) && Math.abs(pl[1] - this.pos[1]) < 3) { this.setLook(pl[0], pl[1] + 1.5, pl[2]); this.lookW = this.tamed ? 1 : 0.8 }
+    else if (!this.atBed && this.posture !== 'eat' && dist < (this.tamed ? 5 : 16) && Math.abs(pl[1] - this.pos[1]) < 3) { this.setLook(pl[0], pl[1] + 1.5, pl[2]); this.lookW = this.tamed ? 1 : 0.8 }
     else this.lookW = 0
-    const wagT = this.alertHold > 0 ? 0 : this.petT > 0 ? 1 : this.comeT > 0 ? 0.6 : this.tamed ? (dist < 3 ? 0.4 : 0.12) : (ctx.food && dist < 8 ? 0.18 : 0)
+    const wagT = this.alertHold > 0 || this.atBed ? 0 : this.petT > 0 ? 1 : this.comeT > 0 ? 0.6 : this.tamed ? (dist < 3 ? 0.4 : 0.12) : (ctx.food && dist < 8 ? 0.18 : 0)
     this.wag += (wagT - this.wag) * Math.min(1, dt * 3)
     const alertT = this.alertHold > 0 ? 1 : !this.tamed && this.fled ? 0.3 : 0
     this.alert += (alertT - this.alert) * Math.min(1, dt * (alertT > this.alert ? 4 : 0.8))
@@ -334,6 +335,25 @@ export class DogBrain {
     const pl = ctx.player, C = this.crumbs
     if (this.needSnap) { this.needSnap = false; this.snapTo(pl) }
     if (this.eatT > 0) { this.posture = 'eat'; this.act = 'eat'; this.accelTo(0, dt); return 0 }
+    // Use the floor route to the foot of the cot, then a short hop. The dog never walks through the mattress.
+    const bed = ctx.bed
+    const wantBed = bed && ctx.zone === 'cab' && inCab(pl) && !this.alertHold && !this.coming && this.comeT <= 0 && this.mode !== 'stay' && (ctx.night || this.stillT > DOG.lieAfter || this.atBed || this.bedRoute?.kind === 'up')
+    if (wantBed && (inCab(this.pos) || this.atBed || this.bedRoute)) {
+      this.atHeater = false; this.detour = null
+      if (this.atBed) { this.posture = 'lie'; this.act = 'sleep'; this.speed = 0; this.turnTo(bed.yaw,dt,2); return 0 }
+      if (!this.bedRoute) {
+        // Go around the fire-finder table, using the clear aisle south/west of it.
+        const via = this.pos[0] > -.5 ? [[this.pos[0],30,.72],[-.65,30,.72],bed.approach.slice()] : [bed.approach.slice()]
+        this.bedRoute = { kind:'approach', to:via.shift(), via }
+      }
+      return this.bedTick(dt,bed)
+    }
+    if (bed && (this.atBed || this.bedRoute)) {
+      if (this.bedRoute?.kind === 'approach') { this.bedRoute=null; this.atBed=false; }
+      else if (this.bedRoute?.kind !== 'down') this.bedRoute = { kind:'down', from:this.pos.slice(), to:bed.approach.slice(), t:0 }
+      this.atBed = false
+      if (this.bedRoute) return this.bedTick(dt,bed)
+    }
     // stay: hold the spot; sit, then lie down
     if (this.mode === 'stay') {
       this.act = 'stay'; this.accelTo(0, dt); this.stayT += dt
@@ -342,7 +362,7 @@ export class DogBrain {
     }
     // night in the cab: the rug by the heater
     const heater = ctx.heater
-    const wantHeater = ctx.night && heater && ctx.zone === 'cab' && inCab(pl)
+    const wantHeater = !bed && ctx.night && heater && ctx.zone === 'cab' && inCab(pl)
     if (wantHeater && (inCab(this.pos) || this.atHeater || (this.detour && this.detour.then === 'heater'))) {
       if (!this.atHeater && !(this.detour && this.detour.then === 'heater')) this.detour = { to: heater.pos.slice(), then: 'heater' }
       if (this.detour) return this.detourTick(dt, heater)
@@ -427,6 +447,29 @@ export class DogBrain {
     this.turnTo(Math.atan2(dx, dz), dt, 6)
     return this.speed
   }
+  bedTick(dt, bed) {
+    const route=this.bedRoute; this.posture='stand'; this.act='to-bed'; this.slope=0
+    if (route.kind === 'approach') {
+      const dx=route.to[0]-this.pos[0], dz=route.to[2]-this.pos[2], dist=Math.hypot(dx,dz)
+      if (dist > .055) {
+        this.accelTo(Math.min(DOG.walkSpeed,dist*2+.15),dt)
+        const step=Math.min(this.speed*dt,dist); this.pos[0]+=dx/dist*step; this.pos[2]+=dz/dist*step
+        this.turnTo(Math.atan2(dx,dz),dt,6); return this.speed
+      }
+      if(route.via?.length) { route.to=route.via.shift(); return 0 }
+      this.bedRoute={kind:'up',from:this.pos.slice(),to:bed.pos.slice(),t:0}; this.speed=0; return 0
+    }
+    route.t=Math.min(1,route.t+dt/.65)
+    const t=route.t,k=t*t*(3-2*t)
+    for(let i=0;i<3;i++) this.pos[i]=route.from[i]+(route.to[i]-route.from[i])*k
+    this.pos[1]+=Math.sin(Math.PI*t)*.14; this.speed=0
+    this.turnTo(route.kind==='up'?bed.yaw:Math.atan2(route.to[0]-route.from[0],route.to[2]-route.from[2]),dt,5)
+    if(t>=1) {
+      this.atBed=route.kind==='up'; this.bedRoute=null; this.posture=this.atBed?'lie':'stand'
+      if(!this.atBed) { const j=this.nearestCrumb(this.pos,3.2,90); if(j>=0) this.detour={to:this.crumbs.get(j,[0,0,0]),then:'path',s:this.crumbs.s(j),i:j}; }
+    }
+    return 0
+  }
   /** opts.blocked(a, b): is the straight move a -> b through something shut (the cab door)? Checked from her feet to a point
    *  on the path a nose-length (+ a little braking room) ahead. */
   doorAhead(pl) {
@@ -470,7 +513,7 @@ export class DogBrain {
     this.crumbs.push(out[0], out[1], out[2])
     if (d3(out, pl) > 0.05) this.crumbs.push(pl[0], pl[1], pl[2])
     this.pos[0] = out[0]; this.pos[1] = out[1]; this.pos[2] = out[2]
-    this.sd = 0; this.ci = 0; this.detour = null; this.atHeater = false; this.speed = 0; this.coming = false; this.lastEndS = null; this.endRate = 0
+    this.sd = 0; this.ci = 0; this.detour = null; this.atHeater = false; this.atBed = false; this.bedRoute = null; this.speed = 0; this.coming = false; this.lastEndS = null; this.endRate = 0
     this.yaw = Math.atan2(pl[0] - out[0], pl[2] - out[2]) || this.yaw
     this.emit('teleport')
   }
@@ -484,7 +527,8 @@ export class DogBrain {
   toJSON() {
     return { v: 1, tamed: this.tamed, trust: +this.trust.toFixed(2), offers: this.offers, mode: this.mode,
       pos: this.pos.map((v) => +v.toFixed(3)), yaw: +this.yaw.toFixed(3), posture: this.posture, hs: +this.hs.toFixed(2), lat: +this.lat.toFixed(2),
-      tameStillT: +this.tameStillT.toFixed(1), sighted: this.sighted, hinted: this.hinted, stayT: +this.stayT.toFixed(1),
+      tameStillT: +this.tameStillT.toFixed(1), sighted: this.sighted, hinted: this.hinted, stayT: +this.stayT.toFixed(1), atBed: this.atBed,
+      bedRoute: this.bedRoute ? JSON.parse(JSON.stringify(this.bedRoute)) : null,
       crumbs: this.tamed ? this.crumbs.toJSON() : [], sd: this.tamed ? +(this.sd - this.firstSavedS()).toFixed(3) : 0,
       // she's off the saved stretch of your path (staying far back, or you jumped): "Come" must put her with you, not on it
       lost: this.tamed && (!this.crumbs.count || this.sd < this.firstSavedS() - 1e-6) }
@@ -497,6 +541,10 @@ export class DogBrain {
     this.tamed = !!s.tamed; this.trust = clamp(num(s.trust), 0, DOG.trustMax); this.offers = num(s.offers); this.mode = s.mode === 'stay' ? 'stay' : 'follow'
     if (Array.isArray(s.pos) && s.pos.length === 3 && s.pos.every(Number.isFinite)) { this.pos[0] = s.pos[0]; this.pos[1] = s.pos[1]; this.pos[2] = s.pos[2] }
     this.yaw = num(s.yaw); this.posture = ['stand', 'sit', 'lie'].includes(s.posture) ? s.posture : 'stand'
+    this.atBed = !!s.atBed && this.tamed && inCab(this.pos)
+    if (s.bedRoute && ['approach','up','down'].includes(s.bedRoute.kind) && Array.isArray(s.bedRoute.to) && s.bedRoute.to.length===3 && s.bedRoute.to.every(Number.isFinite)) {
+      const r=s.bedRoute; if(r.kind==='approach' || (Array.isArray(r.from) && r.from.length===3 && r.from.every(Number.isFinite))) this.bedRoute={kind:r.kind,to:[...r.to],from:r.from?[...r.from]:undefined,t:clamp(num(r.t),0,1),via:Array.isArray(r.via)?r.via.filter(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite)).slice(0,3).map(p=>[...p]):[]}
+    }
     this.hs = clamp(num(s.hs, this.homeS), 0, this.line.length); this.lat = clamp(num(s.lat), -DOG.aside, DOG.aside); this.wander.s = this.hs; this.wander.lat = this.lat
     this.tameStillT = num(s.tameStillT); this.sighted = !!s.sighted; this.hinted = !!s.hinted; this.stayT = num(s.stayT)
     if (this.tamed) {

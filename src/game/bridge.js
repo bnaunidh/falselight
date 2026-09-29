@@ -5,9 +5,9 @@ import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=e1921a4d4894c1b4
 import { Objectives } from './objectives.js?v=9b4ecf1404219fd0';
 import { Radio } from './radio.js?v=b7caebeac794988c';
 import { Fuel, FUEL } from './fuel.js?v=c503ffa055b08bd7';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=0a1e69d327a2184c';
-import { Survival, SURV } from './survival.js?v=9a11d5dc290db856';
-import { createItemsView } from './itemsView.js?v=80c046b37e787c47';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=1cb1ae6820f9d8bb';
+import { Survival, SURV } from './survival.js?v=d00b6b0653de46ed';
+import { createItemsView } from './itemsView.js?v=e41b97bf97f8d859';
 import { createChill } from './chill.js?v=ec826bfe80729529';
 import { createPlume } from './smokePlume.js?v=7b5942b988989140';
 import { FireFinder, spokenBearing } from './firefinder.js?v=5de3274a9333ec2e';
@@ -23,12 +23,12 @@ import { createSaves } from './saves.js?v=9b2daabbbb6263ff';
 import { createRng } from './rng.js?v=d4fee6ae2c2692f2';
 import { canSend, send as sendPrint, isProof } from './sending.js?v=912afb8ed504e6bd';
 import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d92670d68201cefe';
-import * as S from './content/story.js?v=7e5059850648baf0';
-import { createDog, setDogName } from './dog.js?v=2010a7d88d3be31c';
+import * as S from './content/story.js?v=9dd49fbd51ba06df';
+import { createDog, setDogName } from './dog.js?v=53bbce25c503c90c';
 import { createWildlife } from './wildlife.js?v=21bfc0c3d12ab06c';
 import { Fear, registerFearSounds } from './fear.js?v=7313292ea4947f94';
 import { epilogue } from './content/ending.js?v=eb9d7293a71584ff';
-import { Director, sosLamp } from './director.js?v=bc06bb5f18fce978';
+import { Director, sosLamp } from './director.js?v=4c091ce6fee8aef1';
 import { createPhotoBoard } from './photoBoard.js?v=171437e75704cdce';
 import { makeTent } from './tents.js?v=8256affaddf0bab6';
 import { makeSpringFlow } from './spring.js?v=841fcca15db5856c';
@@ -36,6 +36,7 @@ import { Follower } from './follower.js?v=9830b5f962ff68ec';
 import * as NW from './northWoods.js?v=38b24fd4e4e18620';
 import { createFireCache } from './fireCache.js?v=e8cfe5ff077d6729';
 import { createLandmarks } from './landmarks.js?v=2313a59f6c3ed484';
+import { fillFromSource, pourWater, heatPot, tickPot } from './water.js?v=caa3f7db15705bfd';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -111,7 +112,7 @@ export class Game {
     this.fear = new Fear(); registerFearSounds(e.audio);   // the heart: game.fear.spike(k, why) from anything that scares you
     // the nightmare director (src/game/director.js): pacing, dread, and what a tired head does
     this.setupPhantoms();
-    this.director = new Director({ rng: this.rng });
+    this.director = new Director({ rng: this.rng }); this.director.onStart = (ev) => { if (ev.fam === 'dread') this.feelWrong(); };   // (your own head's tricks come unannounced)
     { const an = (n, fb) => { const a = this.anchor(n); return a ? A3(a) : fb; };
       this.director.setWorld({ heightAt: (x, z) => W.heightAt(x, z), cab: [0, 30, 0], door: an('IA_cab_door', an('IA_trapdoor', [-1.5, 30, 0])),
         hatch: this.anchor('IA_trapdoor') ? A3(this.anchor('IA_trapdoor')) : null, stairFoot: an('SP_stair_foot', this.L.gate || [0, 0, 6]),
@@ -127,8 +128,9 @@ export class Game {
     // Juniper, the stray on the spring trail (src/game/dog.js + dogBrain.js)
     this.dog = null;
     this.dogReady = createDog(e, {
-      foodInHands: () => (this.inv ? this.inv.inHands('food') : null),
-      eatFood: (it) => { this.inv.useOne(it); this.syncItems(); this.refreshHotbar(); e.audio.sfx('metal', { volume: 0.25 }); },   // one tin off the stack, not the stack
+      foodInHands: () => (this.inv ? this.inv.inHands('food') || (this.inv.wearingPack ? this.inv.items.find((i) => i.kind === 'food' && i.where === 'pack') : null) || null : null),   // (a tin in the pack will do for a stray: you'd dig one out)
+      foodHeld: () => (this.inv ? this.inv.inHands('food') : null),
+      eatFood: (it) => { this.finishTin(it); this.syncItems(); this.refreshHotbar(); e.audio.sfx('metal', { volume: 0.25 }); },
       toast: (text, secs) => this.ui.toast(text, secs),
       say: (text) => this.say([{ who: S.WHO.NOTE, text, note: true }]),
       onTamed: () => {   // you name her
@@ -241,6 +243,7 @@ export class Game {
     this.calmBody();   // a new run starts with a quiet heart and a clean screen
     this._dogWarns = 0;
     this.coffee = null;
+    this.boil = null; this.boilCan = null; this._bHeld = false; this._binocOutAt = null;
     this.clock = new Clock(phase);
     this.obj = new Objectives(S.OBJECTIVES);
     this.radio = new Radio();
@@ -260,9 +263,9 @@ export class Game {
   startInventory(phase = 'day1') {
     const fa = this.anchor('IA_fuel_cans') || new THREE.Vector3(7.05, 0.4, 7.9);
     const fuel = [[0, 0], [0.38, -0.05]].map(([dx, dz]) => [fa.x - 0.15 + dx, fa.y, fa.z + dz]);   // two: the rest is out at Tillman's cache
-    const food = [[0.5, -1.86]].map(([x, z]) => [x, 31.3, z]);
+    const food = [[0.5, -1.86], [0.63, -1.9], [0.76, -1.85]].map(([x, z]) => [x, 31.3, z]);   // three: one for you, two to win the stray over
     const inv = Inventory.start({ fuel, food });
-    for (const it of inv.world) it.settle = true;
+    for (const it of inv.world) if (!it.hook && it.settle !== false) it.settle = true;
     if (phase !== 'day1') {   // starting later (skip / old save): a can already up top, and the camera
       const can = inv.world.find((i) => i.kind === 'fuel'); if (can) can.pos = [2.58, 30.2, 0.6];
       inv.create('camera', { where: 'pack', slot: 4 });
@@ -282,7 +285,7 @@ export class Game {
     const P = this.e.player;
     return { phase: this.clock.phase, hour: this.clock.hour, flags: { ...this.flags }, fuel: this.fuel.toJSON(), photos: this.photos.toJSON(), co: this.co.toJSON(),
       weeper: this.weeper.toJSON(), other: this.other.toJSON(), log: this.log.map((x) => ({ ...x })), proofs: this.proofs, obj: this.obj.toJSON(),
-      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, chillSeen: this.chill ? this.chill.toJSON() : [], dog: this.dog ? this.dog.toJSON() : (this._dogSave || null), wildlife: this.wildlife ? this.wildlife.toJSON() : (this._wildSave || null),
+      fired: [...(this.fired || [])], truckVisible: !!this.truckVisible, slLit: !!this.slLit, inv: this.inv.toJSON(), surv: this.surv.toJSON(), health: this.health ?? 1, limp: this.limp || 0, chillSeen: this.chill ? this.chill.toJSON() : [], dog: this.dog ? this.dog.toJSON() : (this._dogSave || null), wildlife: this.wildlife ? this.wildlife.toJSON() : (this._wildSave || null),
       director: this.director ? this.director.toJSON() : null,
       player: { pos: [P.position.x, P.position.y, P.position.z], yaw: P.yaw },
       hikers: (this.hikers || []).map((h) => ({ which: h.which, s: h.rules.s, off: h.rules.off, status: h.rules.status })),
@@ -299,7 +302,7 @@ export class Game {
     if (this.director) { this.director.clear(this.dirActions); this.director.restore(s.director || {}); }
     this.flags = { rulesTo: 5, ...s.flags }; this.fuel = new Fuel(s.fuel); this.photos = new Photos(s.photos); this.co = new CO(s.co);
     this.weeper = new Weeper(s.weeper); this.other = new OtherLookout(s.other); this.log = (s.log || []).map((x) => ({ ...x })); this.proofs = s.proofs || 0;
-    this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = 0;
+    this.inv = s.inv ? new Inventory(s.inv) : this.migrateInventory(s); this.surv = new Survival(s.surv || {}); this.health = s.health ?? 1; this.limp = s.limp || 0;
     setDogName(this.flags.dogName || 'Juniper');
     if (this.dog) { if (s.dog) this.dog.restore(s.dog); else this.dog.reset(); } else this._dogSave = s.dog || null;
     if (this.wildlife) { if (s.wildlife) this.wildlife.restore(s.wildlife); else this.wildlife.reset(); } else this._wildSave = s.wildlife || null;
@@ -333,6 +336,13 @@ export class Game {
     if (cp) { this.restore(cp); this.startPhase(cp.phase, true, cp); return; }
     this.restartPhase();
   }
+  /** The one warning the user asked for: before something happens, a quiet 'Something doesn't feel right.' (never more than
+   *  once in 45 s of play), and the heart ticks up. foreboding(fn, sec): the warning, then the thing `sec` later. */
+  feelWrong() {
+    if (this.state !== 'play') return; const now = this.e.time.value; if (now - (this._wrongAt ?? -1e9) < 45) return;
+    this._wrongAt = now; this.ui.toast('Something doesn\'t feel right.', 3.2); if (this.fear) this.fear.spike(0.18, 'wrong');
+  }
+  foreboding(fn, sec = 4) { this.feelWrong(); this.later(sec, fn); }
   /** Run fn after `sec` of GAME time: it waits while the game is paused or a menu is up, and a restart or a new phase drops
    *  it (so nothing from a run you left fires into the next). For beats the story depends on; setTimeout is only for UI. */
   later(sec, fn) { (this._later || (this._later = [])).push({ at: this.e.time.value + sec, fn, epoch: this._epoch || 0 }); }
@@ -360,13 +370,6 @@ export class Game {
     this.placing = null; this.syncItems();
     this.campTents(); this.buildTents(); this.springWater();
     if (this.woods) this.woods.snap(); if (this.landmarks) this.landmarks.snap();
-    if (!this.flags.tentGiven) {   // saves from before the emergency tent: you get one (a free hand or the pack, else at your feet)
-      this.flags.tentGiven = true;
-      if (!this.inv.items.some((i) => i.kind === 'tent' && i.where !== 'world')) {
-        const Pl = this.player(), it = this.inv.create('tent', { where: 'world', pos: [Pl.position.x - Math.sin(Pl.yaw) * 0.8, Pl.position.y + 0.3, Pl.position.z - Math.cos(Pl.yaw) * 0.8], uses: 3, settle: true });
-        if (!this.inv.take(it.id).ok) this.ui.toast('An emergency tent (three pitches) is on the ground in front of you.', 3.5); this.syncItems();
-      }
-    }
     if (!restored) this.health = Math.max(this.health ?? 1, 0.85);   // a night's sleep (or a day's) mends most of it
     if (!restored) this.dogFetch();
     if (!restored && !isNight(phase) && phase !== 'day1' && this.surv) { this.surv.fatigue.sleep(2, 1); const F = this.surv.fatigue; F.awake = Math.max(0, F.awake - 0.1 * 18); }   // the 05:30 -> 07:30 in the bunk, and 10% more rest for getting through the night
@@ -425,7 +428,7 @@ export class Game {
     if (this.state !== 'play') return;
     this.state = 'dead'; if (this.director) this.director.clear(this.dirActions); if (this.ui.modalOpen()) this.ui.closeModal(); this.e.uiBlocking = false; this.binocular = false; if (this.camRaised) this.lowerCamera(); this.exitMode(); this.e.audio.play('scream', { volume: 1 }); this.e.audio.music.sting('death');
     this.e.post.set({ blackout: 1 }); this.e.input.unlock();
-    setTimeout(() => this.ui.screen('death', { text: S.UI.death[kind] || S.UI.death.generic, onAction: (a) => { this.ui.closeModal(); this.e.post.set({ blackout: 0, fear: 0 }); this.calmBody(); if (a === 'retry') this.retry(); else this.onTitle && this.onTitle(); } }), 1400);
+    setTimeout(() => this.ui.screen('death', { text: S.UI.death[kind] || S.UI.death.generic, auto: 6, onAction: (a) => { this.ui.closeModal(); this.e.post.set({ blackout: 0, fear: 0 }); this.calmBody(); if (a === 'retry') this.retry(); else this.onTitle && this.onTitle(); } }), 1400);
   }
 
   // ------------------------------------------------------------------ helpers
@@ -501,14 +504,12 @@ export class Game {
     this.flags['fuelRescue_' + ph] = true;
     const g = this.anchor('IA_generator') || new THREE.Vector3(9.3, 0.7, 6.8);
     this.inv.create('fuel', { pos: [g.x - 0.9, g.y, g.z + 0.9], rotY: 1.2, settle: true }); this.syncItems();
-    this.ui.toast('Walt must have left one more: a can by the generator in the shed.', 4);
   }
   nightFuelCheck() {
     const anyFuel = this.inv.items.some((i) => i.kind === 'fuel' && i.fill > 0.01);
     if (!anyFuel && this.fuel.tank < 1.5) {
       const g = this.anchor('IA_generator') || new THREE.Vector3(9.3, 0.7, 6.8);
       this.inv.create('fuel', { pos: [g.x - 0.9, g.y, g.z + 0.9], rotY: 1.2, settle: true }); this.syncItems();
-      setTimeout(() => this.ui.toast('There\'s one last can of fuel in the shed, beside the generator.', 4), 8000);
     }
     if (!this.fuel.power) this.add(this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel', { urgent: true });
   }
@@ -601,14 +602,15 @@ export class Game {
     }
     if (ph === 'night2') {
       if (h >= 21.4) this.once('glow2', () => { this.say(S.LINES.glowN2); this.add('n2_fire'); this.showFire('Sheep Ridge', true); });
-      if (h >= 22.0) this.once('tree', () => this.spawnLost());
+      if (h >= 22.0) this.once('tree', () => this.foreboding(() => this.spawnLost(), 5));
       if (h >= 23.0) this.once('falseq', () => this.quiet());   // the score drops out ~15 s before the too-steady light
+      if (h >= 23.1) this.once('falseWrong', () => this.feelWrong());
       if (h >= 23.2) this.once('false', () => { this.quiet(); this.spawnHiker('false'); this.say(S.LINES.falseSOS); this.add('n2_light', { optional: true }); });
       if (h >= 28.4) this.once('dawnObj2', () => this.add('n2_dawn'));
     }
     // the Other Lookout
     const evs = this.other.check({ phase: ph, hour: h, zone: z, flags: { ...f, weeperComing: this.weeper.triggered, lostHikerStepped: f.lostSteps || 0 } });
-    for (const id of evs) this.otherEvent(id);
+    for (const id of evs) this.foreboding(() => this.otherEvent(id), 4);   // a beat of 'wrong' first (the entry in your hand, the boots, the one on the bed)
     if (this.clock.ended && this.state === 'play') this.endPhase();
   }
   otherEvent(id) {
@@ -992,14 +994,13 @@ export class Game {
     reg('lamp', 'IA_lamp', () => e.lights.cabLamp.on ? 'E — Pull the chain (lamp off)' : 'E — Pull the chain (lamp on)', () => {
       e.lights.cabLamp.on = !e.lights.cabLamp.on; this.flags.lampOff = !e.lights.cabLamp.on; e.audio.play('lamp_chain', { volume: 0.6 });
     }, () => true, 0.6);
-    const rawCanteen = () => this.inv.inHands('canteen', (c) => c.raw && c.fill > 0);
-    reg('stove', 'IA_stove', () => this.boil != null ? 'The water is coming to a boil…' : rawCanteen() && this.coffee == null ? 'E — Boil the canteen water in the pot' : this.coffee == null ? 'E — Light the stove and put the coffee on' : this.coffee < 1 ? 'The coffee pot is ticking on the burner…' : 'E — Pour a cup of coffee', () => {
-      if (this.boil != null) return;
-      if (this.coffee == null && !this.potOnStove()) { this.ui.toast('Put the coffee pot on the burner first (it\'s an item: E picks it up, G sets it down).', 3.5); return; }
-      if (this.coffee == null && rawCanteen()) { this.boil = 0; this.boilCan = rawCanteen().id; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); return; }
-      if (this.coffee == null) { this.coffee = 0; e.audio.play('stove_on', { volume: 0.7, position: this.anchor('IA_stove') }); }
-      else if (this.coffee >= 1) { this.coffee = null; this.surv.drink(0.3); this.surv.warmth = 1; this.surv.fatigue.coffee(); this.co.blood = Math.max(0, this.co.blood - 0.02); this.refreshHotbar(); }
-    }, () => this.boil == null && (this.coffee == null || this.coffee >= 1), 0.6);
+    reg('stove', 'IA_stove', () => this.stovePot()?.heating ? 'E — Check the pot' : 'E — Use the stove', () => this.useStove(), () => true, 0.35);
+    for (const [name, anchor] of [['tents', 'IA_tent_cupboard'], ['stove', 'IA_stove_cupboard']]) {
+      reg('cupboard:' + name, anchor, () => `E — ${this.flags['cupboard_' + name] ? 'Close' : 'Open'} the cupboard`, () => {
+        this.flags['cupboard_' + name] = !this.flags['cupboard_' + name];
+        e.audio.play(this.flags['cupboard_' + name] ? 'door_open' : 'door_close', { volume: 0.3, position: this.anchor(anchor) });
+      }, () => true, 0.16);
+    }
     reg('books', 'IA_books', 'E — Take a book off the shelf', () => {
       const b = S.BOOKS[(this.bookI = ((this.bookI ?? -1) + 1) % S.BOOKS.length)];
       this.openModal(() => this.ui.note(b.title, b.text, () => this.closedModal()));
@@ -1008,15 +1009,15 @@ export class Game {
     // the creek: anywhere along it, if you're down at the water (untreated, and worse than the spring)
     this._creekIA = new THREE.Object3D(); this._creekIA.name = 'IA_creek_dyn'; e.scene.add(this._creekIA); this._creekNear = false;
     reg('creek', this._creekIA, () => { const c = this.inv.find('canteen'); return c && c.fill < 1 ? 'E — Drink from the creek, and fill the canteen' : 'E — Drink from the creek'; }, () => {
-      const c = this.inv.find('canteen'); this.surv.drink(1); this.surv.drinkRaw(0.55); this.surv.drinkCold(); this.surv.fatigue.water(); if (c) { c.fill = 1; c.raw = true; }
+      const c = this.inv.find('canteen'); this.surv.drink(1); this.drinkUnpurified(0.55); this.surv.drinkCold(); this.surv.fatigue.water(); fillFromSource(c, 'river');
       this.e.audio.play('drink', { volume: 0.8 });
       if (!this.flags.toldCreek) { this.flags.toldCreek = true; this.ui.toast('Creek water. It tastes of stone and something else. Boil the rest before you drink it.', 4); }
       this.refreshHotbar();
     }, () => this._creekNear, 0.9);
     reg('spring', 'IA_spring', () => { const c = this.inv.find('canteen'); return c && c.fill < 1 ? 'E — Drink, and fill the canteen' : 'E — Drink from the spring'; }, () => {
-      const c = this.inv.find('canteen'); this.surv.drink(1); this.surv.drinkRaw(0.3); this.surv.drinkCold(); this.surv.fatigue.water(); if (c) { c.fill = 1; c.raw = true; }
+      const c = this.inv.find('canteen'); this.surv.drink(1); this.surv.drinkCold(); this.surv.fatigue.water(); fillFromSource(c, 'spring');
       this.e.audio.play('drink', { volume: 0.8 });
-      if (!this.flags.toldRaw) { this.flags.toldRaw = true; this.ui.toast('Spring water. Nobody\'s boiled it: boil the canteen on the cab stove (in the coffee pot) before you drink more.', 5); }
+      if (c?.raw) this.ui.toast('The untreated water already in your canteen contaminates the refill.', 3);
       this.refreshHotbar();
     });
   }
@@ -1030,7 +1031,7 @@ export class Game {
   enterSearchlight() {
     const p = this.player(); this.slReturn = { pos: p.position.clone(), yaw: p.yaw };
     this.mode = 'searchlight'; p.setEnabled(false); p.lookLocked = true;
-    if (!this.fuel.power) this.ui.toast(this.fuel.tank <= 0 ? 'No power: the generator tank is dry. Bring fuel to the shed.' : 'No power: start the generator in the shed at the base.', 4);
+    if (!this.fuel.power) this.ui.toast('No power.', 2.5);
     this.binocular = false; if (this.placing) this.cancelPlace(); if (this.camRaised) this.lowerCamera();
     const SL = this.e.lights.searchlight; SL.operating = true; if (this.night && this.fuel.power) this.slLit = true; this.fovTarget = 58;   // by day it stays as you left it (it burns fuel)
     if (this.fuel.power && this.e.sky.dayFactor > 0.45) this.ui.toast(this.slLit ? 'The lamp is lit, but in daylight the beam barely shows. It burns fuel: E switches it off.' : 'The lamp is off. By day the beam barely shows (E switches it on).', 4);
@@ -1049,7 +1050,7 @@ export class Game {
     this.mode = 'walk'; p.setEnabled(true); p.lookLocked = false; this.fovTarget = 68;
     this.ui.finder(null); this.ui.searchlight(null);
   }
-  openModal(fn) { this.binocular = false; if (this.holding) this.photos.close(); this.e.uiBlocking = true; this.e.input.unlock(); this.player().setEnabled(false); fn(); }
+  openModal(fn) { this.binocular = false; this._bHeld=false; this._binocOutAt=null; if (this.holding) this.photos.close(); this.e.uiBlocking = true; this.e.input.unlock(); this.player().setEnabled(false); fn(); }
   closedModal() { this.e.uiBlocking = false; this.player().setEnabled(this.mode === 'walk' && !this.sitting); if (this.holding && !this.photos.open(this.holding)) this.holding = null; if (this.state === 'play') this.e.input.lock(); }
   openLogbook(page = 'tasks') {
     const o = this.obj;
@@ -1101,7 +1102,6 @@ export class Game {
       if (this.mode !== 'walk') return;
       const z = this.player().zone;
       if (z === 'cab' || z === 'catwalk') this.enterSearchlight();
-      else this.ui.toast('The searchlight is on the cab roof. Work it from the cab or the catwalk (F).', 3);
     });
     In.onAction('logbook', (d) => { if (!d || this.state !== 'play') return; if (this.resting) this.wake(); if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openLogbook(); });
     In.onAction('map', (d) => { if (!d || this.state !== 'play') return; if (this.resting) this.wake(); if (this.ui.modalOpen()) this.ui.closeModal(); else if (this.mode === 'walk') this.openMap(); });
@@ -1137,26 +1137,27 @@ export class Game {
     });
     In.onAction('flashlight', (d) => { if (d && this.state === 'play' && !this.ui.modalOpen()) this.toggleFlashlight(); });
     In.onAction('binoculars', (d) => {
+      if (!d) { this._bHeld = false; this.binocular = false; this._binocOutAt = null; return; }
       if (d && this.resting) { this.wake(); return; }   // lying down: the key gets you up first
       if (this.state !== 'play' || this.mode !== 'walk' || this.ui.modalOpen()) { this.binocular = false; return; }
-      const now = e.time.value;
+      const now = e.time.value; this._bHeld = !!d;   // HOLD B: up while it's held, down when you let go
       if (d) {
-        if (this.binocular) { this.binocular = false; return; }
+        if (this.binocular) return;
         // they have to be in your hand: from the pack they come out into a free hand first (a moment: the pack's zip, the strap)
         if (!this.inv.find('binoculars')) { this.ui.toast(this.inv.items.some((i) => i.kind === 'binoculars' && i.where === 'pack') ? 'The binoculars are in the pack, and you set the pack down.' : 'You don\'t have the binoculars with you.', 3); this.binocular = false; return; }
         if (!this.inv.inHands('binoculars')) {
           const r = this.inv.ready('binoculars');
           if (!r.ok) { this.ui.toast('The binoculars are in your pack and both hands are full. Put something away first (I).', 3); this.binocular = false; return; }
           e.audio.sfx('cloth', { volume: 0.35 }); this.syncItems(); this.refreshHotbar();
-          this.binocular = false; this._binocOutAt = now; setTimeout(() => { if (this.state === 'play' && this.mode === 'walk' && this.inv.inHands('binoculars') && this._binocOutAt === now) { this.binocular = true; this.binocAt = this.e.time.value; } }, 550);
+          this.binocular = false; this._binocOutAt = now; setTimeout(() => { if (this._bHeld && this.state === 'play' && this.mode === 'walk' && !this.ui.modalOpen() && !this.resting && this.inv.inHands('binoculars') && this._binocOutAt === now) { this.binocular = true; this.binocAt = this.e.time.value; } }, 550);   // (still holding B once they're out)
           return;
         }
         const h = this.inv.inHands('binoculars'); if (h) this.selectSlot(h.slot);
         if (this.camRaised) this.lowerCamera();
         if (this.placing) this.cancelPlace();
         this.binocular = true; this.binocAt = now;
-        if (!this.flags.toldBinoc) { this.flags.toldBinoc = true; this.ui.toast('B again (or Esc) lowers them. Your bearing is at the bottom.', 3); }
-      } else if (this.binocular && now - (this.binocAt || 0) > 0.45) this.binocular = false;   // held down: letting go lowers them
+        if (!this.flags.toldBinoc) { this.flags.toldBinoc = true; this.ui.toast('Hold B to look; let go to lower them. Your bearing is at the bottom.', 3); }
+      } else { this.binocular = false; this._binocOutAt = null; }   // let go: lowered
     });
     In.onAction('signal', (d) => this.keySignal(d));
   }
@@ -1175,9 +1176,9 @@ export class Game {
       const top = this.iv.topOf(it);
       if (this.itemIA.has(it.id)) { this.itemIA.get(it.id).t.anchor.copy(top); continue; }
       const id = it.id;
-      const t = { id: 'item:' + id, anchor: top, radius: it.kind === 'backpack' || it.kind === 'fuel' ? 0.45 : 0.32, reach: 2.6,
-        label: () => { const x = this.inv.get(id); return x ? 'E — Pick up the ' + this.inv.label(x).replace(/^./, (c) => c.toLowerCase()) : ''; },
-        enabled: () => this.state === 'play' && this.mode === 'walk' && !this.placing && !!this.inv.get(id) && this.inv.get(id).where === 'world',
+      const t = { id: 'item:' + id, anchor: top, radius: it.cabinet ? 0.10 : it.kind === 'backpack' || it.kind === 'fuel' ? 0.45 : 0.22, reach: 2.6,
+        label: () => { const x = this.inv.get(id); return x ? (KINDS[x.kind]?.trash && this.inv.inHands('trashbag') ? 'E — Bag the ' : KINDS[x.kind]?.wear ? 'E — Put on the ' : 'E — Pick up the ') + this.inv.label(x).replace(/^./, (c) => c.toLowerCase()) : ''; },
+        enabled: () => { const x = this.inv.get(id); return this.state === 'play' && this.mode === 'walk' && !this.placing && !!x && x.where === 'world' && (!x.cabinet || !!this.flags['cupboard_' + x.cabinet]); },
         onUse: () => this.pickUp(id) };
       this.itemIA.set(id, { t, off: this.e.interact.register(t) });
     }
@@ -1196,6 +1197,14 @@ export class Game {
   }
   pickUp(id) {
     const it = this.inv.get(id); if (!it) return;
+    if (it.cabinet && !this.flags['cupboard_' + it.cabinet]) return;
+    const bag = this.inv.inHands('trashbag');
+    if (KINDS[it.kind]?.trash && bag) {
+      if (this.inv.collectTrash(id, bag)) { this.e.audio.sfx('cloth', { volume: 0.35 }); this.syncItems(); }
+      else this.ui.toast('The bag is full.', 2);
+      return;
+    }
+    if (KINDS[it.kind] && KINDS[it.kind].wear) { this.wear(it); return; }
     const r = this.inv.take(id);
     if (!r.ok) { this.ui.toast(r.why, 3); return; }
     if (it) it.leftAt = null;
@@ -1444,7 +1453,29 @@ export class Game {
     it.on = !it.on; this.e.audio.play('morse_click', { volume: 0.25 });
     this.refreshHotbar();
   }
-  potOnStove() { const s = this.anchor('IA_stove'); return !!s && this.inv.world.some((i) => i.kind === 'pot' && Math.hypot(i.pos[0] - s.x, i.pos[2] - s.z) < 0.4 && Math.abs(i.pos[1] - (s.y - 0.05)) < 0.35); }
+  stovePot() { const s = this.anchor('IA_stove'); return s ? this.inv.world.find((i) => i.kind === 'pot' && Math.hypot(i.pos[0] - s.x, i.pos[2] - s.z) < 0.4 && Math.abs(i.pos[1] - (s.y - 0.05)) < 0.35) : null; }
+  potOnStove() { return !!this.stovePot(); }
+  useStove() {
+    const pot = this.stovePot();
+    if (!pot) { this.ui.toast('Set the enamel pot on the burner first.', 2.5); return; }
+    if (pot.heating) { this.ui.toast(`${pot.heating === 'coffee' ? 'Brewing' : 'Boiling'}… ${Math.ceil(pot.heatLeft)} seconds.`, 2); return; }
+    const can = this.inv.find('canteen'), grounds = this.inv.find('coffee', (i) => i.n > 0), choices = [];
+    if (can?.fill > 0 && pot.fill < 0.999 && pot.brew !== 'coffee') choices.push({ label: 'Pour canteen water into the pot', act: () => pourWater(can, pot) });
+    if (pot.fill > 0 && pot.brew !== 'coffee') {
+      choices.push({ label: 'Boil the water', act: () => heatPot(pot, 'water') });
+      if (can && can.fill < 0.999) choices.push({ label: pot.raw ? 'Fill the canteen with untreated water' : 'Fill the canteen with clean water', act: () => pourWater(pot, can) });
+      if (!pot.raw && grounds) choices.push({ label: 'Add coffee powder and brew', act: () => heatPot(pot, 'coffee', grounds) });
+    }
+    if (pot.fill > 0 && pot.brew === 'coffee') choices.push({ label: 'Pour a cup of coffee', act: () => {
+      const amount = Math.min(0.25, pot.fill); pot.fill = Math.max(0, pot.fill - amount); if (pot.fill < 0.001) { pot.fill = 0; pot.brew = null; }
+      this.surv.drink(amount); this.surv.warmth = 1; this.surv.fatigue.coffee(); this.e.audio.play('drink', { volume: 0.6 }); return true;
+    } });
+    if (!choices.length) { this.ui.toast('The pot is empty. You need water in your canteen.', 3); return; }
+    this.openModal(() => this.ui.choose('The enamel pot', choices, (choice) => {
+      this.closedModal(); if (this.stovePot() !== pot) return;
+      if (choice.act()) { if (pot.heating) this.e.audio.play('stove_on', { volume: 0.5 }); else this.e.audio.sfx('cloth', { volume: 0.25 }); this.refreshHotbar(); }
+    }, () => this.closedModal()));
+  }
   toggleFlashlight() {
     if (this._flick) { this.e.audio.play('morse_click', { volume: 0.3 }); return; }   // the lights are dead: the switch just clicks
     const FL = this.e.lights.flashlight;
@@ -1459,12 +1490,12 @@ export class Game {
   /** Left click: use whatever is in your hand. */
   useActive(down) {
     const it = this.inv.activeItem; if (!it) return;
-    if (it.kind === 'binoculars') { if (down) { this.binocular = !this.binocular; this.binocAt = this.e.time.value; } return; }
+    if (it.kind === 'binoculars') { if (down) this.ui.toast('Hold B to use the binoculars.', 1.8); return; }
     if (!down) return;
     if (it.kind === 'canteen') {
       if (this.surv.water > 0.95 && it.fill > 0) { this.ui.toast('You\'re not thirsty.', 1.6); return; }
       const raw = !!it.raw;
-      if (this.inv.sip(it)) { this.surv.drink(SURV.sip); if (raw) this.surv.drinkRaw(0.18); this.surv.drinkCold(); this.surv.fatigue.water(); if (!(it.fill > 0)) { it.raw = false; this.ui.toast('That\'s the last of it. The spring will fill it.', 2.2); } this.e.audio.play('drink', { volume: 0.9 }); }
+      if (this.inv.sip(it)) { this.surv.drink(SURV.sip); if (raw) this.drinkUnpurified(0.18); this.surv.drinkCold(); this.surv.fatigue.water(); if (!(it.fill > 0)) { it.raw = false; this.ui.toast('That\'s the last of it. The spring will fill it.', 2.2); } this.e.audio.play('drink', { volume: 0.9 }); }
       else this.ui.toast('The canteen is empty. Fill it at the spring.', 2.5);
       this.refreshHotbar();
     } else if (it.kind === 'water') {   // the sealed district jug: clean, cold, six long drinks
@@ -1478,14 +1509,18 @@ export class Game {
     } else if (it.kind === 'key') { this.ui.toast('A brass padlock key on a manila tag. Typed on it: F.C. 2410-110.', 3);
     } else if (it.kind === 'food') {
       if (this.surv.food > 0.85 && (this.health ?? 1) > 0.95) { this.ui.toast('You\'re not hungry.', 1.6); return; }   // (hurt, you'll eat anyway: it heals)
-      this.surv.eat(SURV.meal); this.inv.useOne(it); this.e.audio.play('eat', { volume: 0.9 }); this.health = Math.min(1, (this.health ?? 1) + 0.15); this.limp = Math.max(0, (this.limp || 0) - 0.2);   // food heals: a tin puts some of you back
+      this.surv.eat(SURV.meal); this.finishTin(it); this.e.audio.play('eat', { volume: 0.9 }); this.health = Math.min(1, (this.health ?? 1) + 0.15); this.limp = Math.max(0, (this.limp || 0) - 0.2);
       if (this.surv.food > 0.9) this.ui.toast('You\'re full.', 2); this.syncItems();
     } else if (it.kind === 'flashlight') this.toggleFlashlight();
     else if (it.kind === 'camera') this.toggleCamera();
-    else if (it.kind === 'fuel') this.ui.toast(it.fill > 0.01 ? 'Pour it at the generator in the shed (E). G sets it down anywhere.' : 'Empty. G sets it down.', 3);
+    else if (it.kind === 'fuel') this.ui.toast(it.fill > 0.01 ? 'Gasoline. G sets it down.' : 'Empty. G sets it down.', 2.5);
     else if (it.kind === 'backpack') this.openPack();
     else if (it.kind === 'clock') { this.ui.toast(`The alarm clock says ${fmtHour(this.clock.hour)}. It gains a minute a day.`, 3); this.e.audio.play('morse_click', { volume: 0.15 }); }
-    else if (it.kind === 'pot') this.ui.toast(this.potOnStove() ? 'It\'s on the burner.' : 'The enamel coffee pot. Set it on the stove\'s burner (G) to make coffee.', 3);
+    else if (it.kind === 'pot') this.ui.toast(this.inv.label(it) + '. Set it on the burner to use it.', 3);
+    else if (it.kind === 'coffee') this.ui.toast('Coffee powder. Add it to clean water in the pot at the stove.', 3);
+    else if (it.kind === 'emptycan') this.ui.toast('Empty. Keep it, set it down (G), or hold Q and release to throw.', 3);
+    else if (it.kind === 'trashbag') this.ui.toast('Hold the bag and use E on discarded cans to collect them.', 3);
+    else if (it.kind === 'medkit' || it.kind === 'bandage') this.useMedicine(it);
     else if (it.kind === 'oldcan') this.ui.toast(['Bent nails and a single brass washer.', 'Empty. It smells of kerosene.', 'Buttons, a fishing fly, a 1978 penny.'][((+it.id.slice(1)) || 0) % 3], 3);
     else if (it.kind === 'pills') {
       if (!(it.n > 0)) { this.ui.toast('The bottle is empty.', 2.5); return; }
@@ -1501,11 +1536,41 @@ export class Game {
     else if (it.kind === 'lantern') this.toggleLantern(it);
     else if (it.kind === 'tent') this.pitchTent(it);
   }
+  /** Untreated water has a sharp, brief consequence: thirty seconds of sickness and two percent of the water meter.
+   * Boiling clears it before a sip, and a later sip refreshes—not stacks—the short effect. */
+  drinkUnpurified(strength) {
+    this.surv.drinkRaw(strength);
+  }
+  finishTin(it) {
+    const p = this.player(), pos = [p.position.x - Math.sin(p.yaw) * 0.55, p.position.y, p.position.z - Math.cos(p.yaw) * 0.55];
+    return this.inv.eatTin(it, pos);
+  }
+  useMedicine(it) {
+    if (it.kind === 'medkit' && !(it.n > 0)) { this.ui.toast('The first-aid kit is empty.', 2); return; }
+    if ((this.health ?? 1) >= 0.999 && !(this.limp > 0)) { this.ui.toast('You don\'t need treatment.', 2); return; }
+    const kit = it.kind === 'medkit';
+    this.health = Math.min(1, (this.health ?? 1) + (kit ? 0.55 : 0.2)); this.limp = Math.max(0, (this.limp || 0) - (kit ? 1 : 0.5));
+    if (kit) it.n--; else this.inv.useOne(it);
+    this.e.audio.sfx('cloth', { volume: 0.45 }); this.ui.toast(kit ? 'You clean and dress the injury.' : 'You wrap the injury firmly.', 2.5); this.syncItems();
+  }
+  /** Put on something you wear (the mackinaw): off its peg / the ground, onto you. No slot. */
+  wear(it) {
+    if (this.inv.items.some((o) => o !== it && o.where === 'worn' && o.kind === it.kind)) { this.ui.toast('You\'re already wearing one.', 2); return; }
+    Object.assign(it, { where: 'worn', slot: null, pos: null, hook: null, leftAt: null }); this.e.audio.sfx('cloth', { volume: 0.5 }); this.syncItems(); this.refreshHotbar();
+    if (!this.flags.woreJacket) { this.flags.woreJacket = true; this.ui.toast('Tillman\'s mackinaw. It still smells of woodsmoke. (I: take it off)', 4); }
+  }
+  /** Take it off: it goes down at your feet (E puts it back on). */
+  unwear(it) {
+    const p = this.player().position; Object.assign(it, { where: 'world', pos: this.iv ? this.iv.settle([p.x + Math.sin(this.player().yaw + Math.PI) * 0.1, p.y + 0.3, p.z]) : [p.x, p.y, p.z], rotY: this.player().yaw, hook: null, leftAt: this.absHour ? this.absHour() : null });
+    this.e.audio.sfx('cloth', { volume: 0.5 }); this.syncItems(); this.refreshHotbar();
+  }
+  get wearingJacket() { return !!(this.inv && this.inv.items.some((o) => o.where === 'worn' && o.kind === 'jacket')); }
   openPack() {
     const render = () => this.ui.pack({
       hands: [0, 1, 2].map((i) => this.slotView(this.inv.hand(i))), pack: Array.from({ length: PACK_SLOTS }, (_, i) => this.slotView(this.inv.packSlot(i))),
-      worn: this.inv.wearingPack, active: this.inv.active, stats: { water: this.surv.water, food: this.surv.food }, prints: this.photos.prints.length,
+      worn: this.inv.wearingPack, wearing: this.inv.items.filter((i) => i.where === 'worn').map((i) => ({ id: i.id, label: KINDS[i.kind].name, icon: this.iv.icons[i.kind] || '' })), active: this.inv.active, stats: { water: this.surv.water, food: this.surv.food }, prints: this.photos.prints.length,
     }, (where, i) => {
+      if (where === 'wear') { const w = this.inv.get(i); if (w) this.unwear(w); render(); return; }
       const it = where === 'hand' ? this.inv.hand(i) : this.inv.packSlot(i);
       if (!it) { if (where === 'hand') this.inv.select(i); render(); this.refreshHotbar(); return; }
       if (where === 'hand' && it.kind === 'backpack') { this.ui.toast('To take the pack off, set it down (G).', 2.5); return; }
@@ -1666,7 +1731,7 @@ export class Game {
       s.o.position.set(s.base.x + sl[0] * u + inw[0] * v, s.base.y, s.base.z + sl[2] * u + inw[2] * v);
     }
     // the cab door swings to its state (E); its collider only while it's shut
-    if (this._door === undefined) { this._door = e.world.objects.get('FL_cab_door') || null; this._doorCol = e.world.colliders.find((c) => c.name === 'COL_wall_cab_door') || null; this._doorA = this.flags.doorShut ? 0 : 1; }
+    if (!this._door && (this._doorTry = (this._doorTry || 0) - dt) <= 0) { this._doorTry = 1; this._door = e.world.objects.get('FL_cab_door') || null; this._doorCol = e.world.colliders.find((c) => c.name === 'COL_wall_cab_door') || null; this._doorA = this.flags.doorShut ? 0 : 1; }
     if (this._door) {
       const tgt = this.flags.doorShut ? 0 : 1; this._doorA += Math.sign(tgt - this._doorA) * Math.min(Math.abs(tgt - this._doorA), dt * 1.4);
       const k = this._doorA * this._doorA * (3 - 2 * this._doorA);
@@ -1674,12 +1739,14 @@ export class Game {
     }
     if (this._doorCol) this._doorCol.enabled = !!this.flags.doorShut && this._doorA < 0.15;
     this.updateGate(dt);
+    this.updateCupboards(dt);
     if (this.woods) { const cam = e.camera; this.woods.update(dt, { t: e.time.value, cam: cam.position, fwd: cam.getWorldDirection(this._fwdNW || (this._fwdNW = new THREE.Vector3())), pos: this.pos(), torch: e.lights.flashlight.on,
       night: this.night, busy: this.ui.modalOpen() || !!e.uiBlocking || this.radio.busy, chase: !!this.weeper.triggered, bear: (this.bearFear || 0) > 0.3, wind: e.sky.weather ? e.sky.weather.wind : 0.3 }); }
     if (this.landmarks) this.landmarks.update(dt, { cam: e.camera.position });
     // coffee on the stove
-    if (this.boil != null) { this.boil += dt / 20; if (this.boil >= 1) { const c = this.inv.get(this.boilCan); if (c) c.raw = false; this.boil = null; this.boilCan = null; this.ui.toast('Boiled, cooled, back in the canteen. Safe to drink.', 3); this.refreshHotbar(); } }
-    if (this.coffee != null && this.coffee < 1) { this.coffee = Math.min(1, this.coffee + dt / 25); if (this.coffee >= 1) e.audio.sfx('knock_one', { position: this.anchor('IA_stove') || undefined, volume: 0.15 }); }
+    { const pot = this.stovePot(), done = tickPot(pot, dt, true);
+      this.coffee = pot?.heating ? 1 - pot.heatLeft / (pot.heating === 'coffee' ? 25 : 20) : null;
+      if (done) { this.ui.toast(done === 'coffee' ? 'The coffee is ready.' : 'The water is purified.', 2.5); this.refreshHotbar(); } }
     // the camera on the south shelf appears at dusk on day 1 (a real item: E picks it up)
     if ((this.flags.cameraOut || this.weeper.triggered) && !this.photos.hasCamera && this.iv.templates.camera && !this.inv.items.some((i) => i.kind === 'camera')) {
       const a = this.anchor('IA_camera_shelf') || new THREE.Vector3(-0.62, 30.9, 1.865);
@@ -1710,17 +1777,16 @@ export class Game {
     // CO
     // body: temperature, thirst, hunger
     const Pl = this.player(), wx = e.sky.weather, ha = this.anchor('IA_heater');
-    for (const ev of this.surv.tick(Math.max(0, hTo - hFrom), { hour: dayHour(this.clock.hour), y: Pl.position.y, zone: Pl.zone, rain: wx.rain, fog: wx.fog, wind: wx.wind,
+    for (const ev of this.surv.tick(Math.max(0, hTo - hFrom), { seconds: dt, hour: dayHour(this.clock.hour), y: Pl.position.y, zone: Pl.zone, rain: wx.rain, fog: wx.fog, wind: wx.wind,
       heater: this.co.heater, open: this.co.open, inWater: !!Pl.inWater, jog: e.input.isDown('jog') && Pl.stamina > 0.05, night: this.night,
-      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood, shelter: !!this.restIn || !!(this.woods && this.woods.inside(Pl.position.x, Pl.position.z)), kinH: this.clock.held ? dt / 73 : 0, sun: (this._sunT = (this._sunT || 0) - dt) <= 0 ? (this._sunT = 0.5, this._sun = this.sunOn()) : (this._sun || 0) })) {
+      nearHeater: ha ? Pl.position.distanceTo(ha) < 1.6 : false, resting: !!this.resting, sitting: !!this.sitting, co: this.co.blood, jacket: this.wearingJacket, shelter: !!this.restIn || !!(this.woods && this.woods.inside(Pl.position.x, Pl.position.z)), kinH: this.clock.held ? dt / 73 : 0, sun: (this._sunT = (this._sunT || 0) - dt) <= 0 ? (this._sunT = 0.5, this._sun = this.sunOn()) : (this._sun || 0) })) {
       if (ev === 'thirsty') this.ui.toast('Your mouth is dry. Drink something: the canteen, or the spring.', 4);
       if (/^tired[123]$/.test(ev) || ev === 'rested') this.say(S.LINES[ev]);
       if (ev === 'crash') this.say(S.LINES.coffeeCrash);
       if (ev === 'pill_on') this.say(S.LINES.pillOn);
       if (ev === 'pill_off') this.say(S.LINES.pillOff);
-      if (ev === 'hungry') { const cabTins = this.inv.world.some((i) => i.kind === 'food' && i.pos && i.pos[1] > 29.5 && Math.abs(i.pos[0]) < 2.1 && Math.abs(i.pos[2]) < 2.1), carried = this.inv.find('food');
-        this.ui.toast(carried ? 'Your stomach is knotted. Eat something: you have a tin with you.' : cabTins ? 'Your stomach is knotted. There are tins on the shelf in the cab.' : 'Your stomach is knotted, and you\'re out of food up here.', 4); }
-      if (ev === 'freezing') this.ui.toast('You\'re shaking. Get inside: the heater, dry off, something hot.', 4);
+      if (ev === 'hungry') this.ui.toast('Your stomach is knotted.', 3);
+      if (ev === 'freezing') this.ui.toast('You\'re shaking.', 3);
     }
     // injuries mend slowly on their own, quickly asleep; a limp fades
     if (this.health < 1 && e.time.value - (this.hurtAt ?? -99) > 8) this.health = Math.min(1, this.health + dt * (this.resting ? 1 / 25 : this.sitting ? 1 / 90 : 1 / 240));
@@ -2021,10 +2087,26 @@ export class Game {
     return this._bed;
   }
   /** The fence gate swings between the way the model stands it (open, swung out) and shut across the gap. */
+  updateCupboards(dt) {
+    if (!this._cupboards || Object.keys(this._cupboards).length < 2) {
+      this._cupboards ||= {};
+      for (const name of ['tents', 'stove']) {
+        if (this._cupboards[name]) continue;
+        const obj = this.e.world.objects.get('FL_cupboard_' + name);
+        if (obj) this._cupboards[name] = { obj, base: obj.quaternion.clone(), a: this.flags['cupboard_' + name] ? 1 : 0 };
+      }
+    }
+    for (const [name, c] of Object.entries(this._cupboards)) {
+      const target = this.flags['cupboard_' + name] ? 1 : 0;
+      c.a += Math.sign(target - c.a) * Math.min(Math.abs(target - c.a), dt * 2.5);
+      this._cupQ ||= new THREE.Quaternion(); this._cupY ||= new THREE.Vector3(0, 1, 0);
+      c.obj.quaternion.copy(c.base).multiply(this._cupQ.setFromAxisAngle(this._cupY, -1.8 * c.a));
+    }
+  }
   updateGate(dt) {
     const e = this.e;
-    if (this._gate === undefined) {
-      const g = this._gate = e.world.objects.get('FL_gate') || null;
+    if (!this._gate && (this._gateTry = (this._gateTry || 0) - dt) <= 0) {   // (the tower streams in: keep looking until the gate is there)
+      this._gateTry = 1; const g = this._gate = e.world.objects.get('FL_gate') || null;
       if (g) {
         this._gateOpenQ = g.quaternion.clone(); this._gateShutQ = new THREE.Quaternion(); this._gateA = this.flags.gateShut ? 0 : 1;
         g.quaternion.slerpQuaternions(this._gateShutQ, this._gateOpenQ, this._gateA);   // (a save loaded with it shut: drawn shut)

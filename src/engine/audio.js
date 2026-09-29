@@ -69,8 +69,14 @@ function renderStep(surface, part, v) {
     if (part === 'heel') { burstInto(out, sr, 0, 0.05, 1, R, { lp: 200, brown: true }); burstInto(out, sr, 0.002, 0.03, 0.3, R, { bp: [650, 1.2] }); grains(out, sr, 10, (r) => r() * 0.05, [1800, 5200], [0.0006, 0.002], 0.07, R); }
     else if (part === 'toe') { burstInto(out, sr, 0, 0.03, 0.35, R, { lp: 320, brown: true }); burstInto(out, sr, 0.001, 0.02, 0.3, R, { bp: [1100, 1.2] }); grains(out, sr, 6, (r) => r() * 0.04, [2200, 6000], [0.0005, 0.0018], 0.08, R); }
     else { burstInto(out, sr, 0, 0.16, 0.3, R, { hp: 800, lp: 4500, env: 'swell' }); grains(out, sr, 8, (r) => r() * 0.14, [2500, 6000], [0.0005, 0.0015], 0.05, R); }
+  } else if (surface === 'stone') {   // a boot on bare rock / concrete: a hard, dry click, almost no body, a little grit under the sole; nothing rings
+    if (part === 'heel') { burstInto(out, sr, 0, 0.0025, 0.9, R, { hp: 1400 }); burstInto(out, sr, 0.0005, 0.018, 0.55, R, { lp: 260, brown: true }); burstInto(out, sr, 0.001, 0.012, 0.35, R, { bp: [2600, 1.4] }); grains(out, sr, 9, (r) => 0.004 + r() * 0.05, [3000, 8000], [0.0003, 0.0012], 0.05, R); }
+    else if (part === 'toe') { burstInto(out, sr, 0, 0.0018, 0.5, R, { hp: 2200 }); burstInto(out, sr, 0.0005, 0.01, 0.25, R, { bp: [3200, 1.6] }); grains(out, sr, 6, (r) => 0.003 + r() * 0.04, [3500, 8500], [0.0003, 0.001], 0.04, R); }
+    else { burstInto(out, sr, 0, 0.14, 0.22, R, { hp: 2000, lp: 8000, env: 'swell' }); grains(out, sr, 22, (r) => r() * 0.15, [2800, 8000], [0.0003, 0.001], 0.07, R); }   // grit scraped on rock
   } else if (surface === 'water') {
     const big = part === 'heel' ? 1 : part === 'toe' ? 0.6 : 0.4;
+    burstInto(out, sr, 0.002, part === 'scuff' ? 0.22 : 0.09, 0.45 * big, R, { bp: [3200, 0.9], env: part === 'scuff' ? 'swell' : 'exp' });   // the splash itself: bright spray over the plunge
+    for (let k = 0; k < (part === 'heel' ? 5 : 2); k++) { const t0 = 0.12 + R() * 0.3; burstInto(out, sr, t0, 0.02, 0.12 * big * R(), R, { bp: [1800 + R() * 2400, 2.5] }); }   // what's thrown up, falling back
     burstInto(out, sr, 0, part === 'scuff' ? 0.3 : 0.16, 0.7 * big, R, { bp: [1100, 0.8], env: part === 'scuff' ? 'swell' : 'exp' });
     burstInto(out, sr, 0.004, 0.12, 0.6 * big, R, { lp: 280, brown: true });
     for (let k = 0; k < (part === 'heel' ? 7 : 4); k++) {   // Minnaert bubbles, rising as they reach the surface
@@ -295,11 +301,11 @@ function renderValve(v) {   // a gas valve turning: a metal click and a short ri
   modes(out, sr, 0, [[2900, 0.02, 1], [5100, 0.012, 0.5]], 0.5, R); burstInto(out, sr, 0.03, 0.3, 0.25, R, { hp: 3000, env: 'swell' });
   fadeEdges(out, sr, 0.0005, 0.04); return Float32Array.from(normPeak(out, 0.5));
 }
-const VARS = { wood_heel: 5, wood_toe: 5, wood_scuff: 3, gravel_heel: 5, gravel_toe: 5, gravel_scuff: 3, dirt_heel: 5, dirt_toe: 5, dirt_scuff: 3, water_heel: 4, water_toe: 4, water_scuff: 3, wet_heel: 3,
+const VARS = { wood_heel: 5, wood_toe: 5, wood_scuff: 3, gravel_heel: 5, gravel_toe: 5, gravel_scuff: 3, dirt_heel: 5, dirt_toe: 5, dirt_scuff: 3, water_heel: 4, water_toe: 4, water_scuff: 3, wet_heel: 3, stone_heel: 5, stone_toe: 5, stone_scuff: 3,
   creak_board: 4, creak_stair: 3, creak_hinge: 3, creak_hinge_short: 2, latch: 3, thump: 2, sash_up: 2, sash_down: 2, squelch: 3, tick: 2, perc: 4, hopper: 3, buzz: 2, thunder: 3, whump: 2, valve: 2 };
 function renderWorld(key) {
   const [name, vs] = key.split('#'), v = +vs || 0;
-  const step = /^(wood|gravel|dirt|water|wet)_(heel|toe|scuff)$/.exec(name);
+  const step = /^(wood|gravel|dirt|water|wet|stone)_(heel|toe|scuff)$/.exec(name);
   if (step) return { data: [renderStep(step[1], step[2], v)], sr: SR_HIT };
   const one = (f, sr = SR_HIT) => ({ data: [f()], sr });
   switch (name) {
@@ -585,7 +591,7 @@ export function createAudio(engine, opts = {}) {
     o.start(tt); vib.start(tt); n.start(tt, Math.random() * 3); o.stop(tt + dur + 0.05); vib.stop(tt + dur + 0.05); n.stop(tt + dur + 0.05);
   }
   const now = () => ctx.currentTime;
-  const HEEL = { wood: 0.9, gravel: 0.8, dirt: 0.75, water: 0.9, wet: 0.5 }, TOE = { wood: 0.5, gravel: 0.55, dirt: 0.45, water: 0.5 }, SCUFF = { wood: 0.35, gravel: 0.45, dirt: 0.35, water: 0.4 };
+  const HEEL = { wood: 0.9, gravel: 0.8, dirt: 0.75, water: 0.9, wet: 0.5, stone: 0.8 }, TOE = { wood: 0.5, gravel: 0.55, dirt: 0.45, water: 0.5, stone: 0.5 }, SCUFF = { wood: 0.35, gravel: 0.45, dirt: 0.35, water: 0.4, stone: 0.4 };
   /** A layered footstep into dest: heel, then toe (closer together when jogging), sometimes a scuff; pitch / gain varied. */
   function stepLayers(surf, d, v, jog = false, bodyGain = 1, t0 = null) {
     const t = t0 ?? now() + 0.004, rate = 0.92 + Math.random() * 0.16, gv = v * (0.85 + Math.random() * 0.3);
@@ -602,6 +608,7 @@ export function createAudio(engine, opts = {}) {
     footstep_dirt: (d, v) => stepLayers('dirt', d, v),
     footstep_gravel: (d, v) => stepLayers('gravel', d, v),
     footstep_water: (d, v) => stepLayers('water', d, v),
+    footstep_stone: (d, v) => stepLayers('stone', d, v),
     footstep_wet: (d, v) => { shot(svar('wet_heel'), d, { gain: 0.8 * v, rate: 0.9 + Math.random() * 0.2 }); },
     splash: (d, v) => { stepLayers('water', d, v * 1.2); const t = now(); burst(d, { type: 'lowpass', f: 420, a: 0.01, d: 0.25, v: 0.3 * v, brown: true, t }); },
     // a floorboard taking weight: slow stick-slip through the board's modes, low and dry
@@ -715,6 +722,7 @@ export function createAudio(engine, opts = {}) {
       const v = (jog ? 1.2 : 0.8) * (carrying ? 1.2 : 1);
       const wet = A.ambience.rain > 0.4 && surface !== 'wood' && surface !== 'water';
       if (surface === 'water') { stepLayers('water', bus.sfx, v * 1.1, jog); return; }
+      if (surface === 'stone') { stepLayers('stone', bus.sfx, v * 0.7, jog); return; }   // rock and concrete: hard and dry, never the hollow boards
       const surf = surface === 'wood' ? 'wood' : surface === 'gravel' ? 'gravel' : 'dirt';
       // the recorded Kenney step (when loaded) is the body under the synthesized heel + toe for wood and the forest floor
       const body = surf !== 'gravel' && playSample('footstep_' + surf, bus.sfx, v * (surf === 'wood' ? 0.6 : 0.3), surf === 'wood' ? 0.94 : 1);

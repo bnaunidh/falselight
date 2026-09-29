@@ -3,10 +3,11 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=0a1e69d327a2184c';
+import { KINDS } from './items.js?v=1cb1ae6820f9d8bb';
 import { makeTentBag } from './tents.js?v=8256affaddf0bab6';
 import { makeCacheKey, makeFilmPack, makeWaterJug } from './fireCache.js?v=e8cfe5ff077d6729';
-const PROC = { tentBag: makeTentBag, cacheKey: makeCacheKey, filmPack: makeFilmPack, waterJug: makeWaterJug };   // items built here rather than loaded
+import { makeJacket } from './jacket.js?v=c7013253cfd4258d';
+const PROC = { tentBag: makeTentBag, cacheKey: makeCacheKey, filmPack: makeFilmPack, waterJug: makeWaterJug, jacket: makeJacket };   // items built here rather than loaded
 import { createSurfaces } from './surfaces.js?v=a693dd057324b286';
 
 export function createItemsView(engine) {
@@ -51,6 +52,7 @@ export function createItemsView(engine) {
         let o = meshes.get(it.id);
         if (!o) { o = V.spawn(it); if (!o) continue; added.push(it); }
         o.position.set(it.pos[0], it.pos[1], it.pos[2]); o.rotation.set(0, it.rotY || 0, 0);
+        if (it.kind === 'jacket' && !it.hook) { o.rotation.set(-Math.PI / 2, it.rotY || 0, 0, 'YXZ'); o.position.y += 0.07; }   // off its peg it lies flat on its back
       }
       return { added, removed };
     },
@@ -68,7 +70,8 @@ export function createItemsView(engine) {
     set(meshes.get(item.id)); if (vm && vmKind === 'lantern' && item.where === 'hand') set(vm);
   };   // (the beam shows it's on; a lens glow read as a halo from behind)
   const HOLD = { lantern: [0.19, -0.3, -0.38], clock: [0.12, -0.12, -0.24], pot: [0.15, -0.2, -0.3], oldcan: [0.12, -0.13, -0.24], fuel: [0.17, -0.17, -0.3], flashlight: [0.125, -0.12, -0.25], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
-    canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23], pills: [0.1, -0.1, -0.21], tent: [0.13, -0.17, -0.3], key: [0.1, -0.1, -0.21], film: [0.11, -0.11, -0.23], water: [0.14, -0.19, -0.3] };
+    canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23], pills: [0.1, -0.1, -0.21], tent: [0.13, -0.17, -0.3], key: [0.1, -0.1, -0.21], film: [0.11, -0.11, -0.23], water: [0.14, -0.19, -0.3],
+    medkit: [0.13, -0.15, -0.28], bandage: [0.11, -0.12, -0.23], coffee: [0.12, -0.14, -0.24], emptycan: [0.12, -0.13, -0.24], trashbag: [0.17, -0.22, -0.34] };
   V.hold = (kind, t = 0, moving = 0) => {
     if (kind !== vmKind || (!vm && kind && T[kind] && HOLD[kind])) {
       if (vm) { camera.remove(vm); vm = null; }
@@ -137,7 +140,7 @@ export function createItemsView(engine) {
   }
   const DOWN = new THREE.Vector3(0, -1, 0);
   // pegs: IA_hook_<name>_<px|nx|pz|nz> anchors (the outward direction in three axes)
-  const HANG = { backpack: 0.93, canteen: 0.9, binoculars: 0.85, camera: 0.85, flashlight: 0.95, lantern: 0.97 };
+  const HANG = { backpack: 0.93, canteen: 0.9, binoculars: 0.85, camera: 0.85, flashlight: 0.95, lantern: 0.97, jacket: 0.97 };
   let hooks = null;
   function hookList() {
     if (hooks) return hooks;

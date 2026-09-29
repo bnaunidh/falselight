@@ -56,7 +56,7 @@
 //   moveCabItem(kind, pos, rotY)       move one of the cab's things (it must be lying in the cab) → bool
 //   dogReact(kind, pos)                'growl' | 'whimper', toward pos → bool (false: no tamed dog close)
 import { clamp, lerp, smooth, dist, dist2d, lerp3 } from './util.js?v=d92670d68201cefe'
-import { LINES } from './content/story.js?v=7e5059850648baf0'
+import { LINES } from './content/story.js?v=9dd49fbd51ba06df'
 
 export const DIR = {
   minGap: 20,                 // s: no two events start closer than this, whatever they are
@@ -660,6 +660,7 @@ export class Director {
     this.count[e.id] = (this.count[e.id] || 0) + 1; if (e.fam === 'dread') this.nTonight++
     if (e.fam === 'dread' && c.fatigue && c.fatigue.suppress > 0.9 && this.once('pillStill')) { const t0 = this.t; this.watch(90, (c2) => (c2.t >= t0 + 7 ? (this.say(LINES.pillStill), true) : false)) }   // the pill doesn't stop what's real
     this.lastId = e.id; this.lastFam = e.fam; this.lastT = this.t
+    if (this.onStart) { try { this.onStart(e) } catch (err) { /* the game's hook */ } }
     this.log.push({ t: this.t, id: e.id, fam: e.fam, tier: e.tier ?? null, phase: this.period, level: c.level, lh: c.lh })
     return true
   }

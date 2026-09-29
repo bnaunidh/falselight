@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { loadGLB } from '../engine/world.js?v=0cb07d852ed67db5';
-import { DogBrain, DOG } from './dogBrain.js?v=70d748b337aa8ef4';
+import { DogBrain, DOG } from './dogBrain.js?v=ac2d6b651d847f4f';
 
 // gait clips as baked in Blender (char_dog.py): metres travelled per cycle
 const STRIDE = { walk: 0.484, trot: 0.857 };
@@ -241,16 +241,17 @@ export async function createDog(engine, hooks = {}) {
   let pending = null, petted = false;
   const I = engine.interact;
   const playing = () => H.isPlay() && H.walkMode();
+  const food = () => (brain.tamed && H.foodHeld ? H.foodHeld() : H.foodInHands());   // a stray: any tin you have on you; your own dog: only one you hold out
   const offMain = I.register({
     id: 'dog:main', anchor: headAnchor, radius: 0.6, reach: 2.6,
     label: () => {
-      if (H.foodInHands()) return brain.tamed ? `E — Give ${DOG.name} the beans` : 'E — Offer the beans';
+      if (food()) return brain.tamed ? `E — Give ${DOG.name} the beans` : 'E — Offer the beans';
       return brain.mode === 'stay' ? `E — Pet ${DOG.name}   ·   hold E — Come` : `E — Pet ${DOG.name}   ·   hold E — Stay`;
     },
-    enabled: () => playing() && V.ready && brain.canOffer() && (brain.tamed || !!H.foodInHands()) && sameRoom(),
+    enabled: () => playing() && V.ready && brain.canOffer() && (brain.tamed || !!food()) && sameRoom(),
     onUse: () => {
-      const food = H.foodInHands();
-      if (food) { if (brain.offer()) { H.eatFood(food); showTin(); } return; }
+      const tin = food();
+      if (tin) { if (brain.offer()) { H.eatFood(tin); showTin(); } return; }
       if (brain.tamed) pending = { t: 0 };
     },
   });
@@ -272,6 +273,7 @@ export async function createDog(engine, hooks = {}) {
   // ---------------------------------------------------------------- per frame (allocation-free)
   const ctx = { player: [0, 0, 0], vel: [0, 0], jog: false, food: false, night: false, zone: 'trail', weeper: null, heater: null, play: true };
   const heater = { pos: [0, 30, 0], yaw: Math.PI };
+  const bed = { pos: [-0.65, 30.595, -1.55], approach: [-0.65, 30, -0.92], yaw: -Math.PI / 2 };
   const wpos = [0, 0, 0];
   const post = { sit: 0, lie: 0, eat: 0 }, sm = { look: 0, lyaw: 0, lpitch: 0, alert: 0, wag: 0, hack: 0 };
   let phase = 0, clock = 0, hasLast = false, animAcc = 0, animN = 0;
@@ -291,6 +293,8 @@ export async function createDog(engine, hooks = {}) {
     const hx = ha ? ha.x : HEATER_FALLBACK[0], hz = ha ? ha.z : HEATER_FALLBACK[2];
     heater.pos[0] = hx - 0.55; heater.pos[1] = 30.0; heater.pos[2] = hz; heater.yaw = Math.PI;
     ctx.heater = heater;
+    // The foot of the actual Blender cot; leave its pillow end free for the player.
+    ctx.bed = W.anchors.has('IA_bed') ? bed : null;
     // hold E: a pat, or (held) stay / come
     if (pending) {
       if (engine.input.isDown('interact')) { pending.t += dt; if (pending.t >= HOLD_E) { pending = null; brain.command('toggle'); } }

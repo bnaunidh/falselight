@@ -13,11 +13,16 @@ export const KINDS = {
   binoculars: { name: 'Binoculars', model: 'prop_binoculars', pack: true },
   canteen:    { name: 'Canteen', model: 'prop_canteen', pack: true },
   food:       { name: 'Tin of beans', model: 'prop_food_tin', pack: true, stack: 6 },
-  tent:       { name: 'Emergency tent', proc: 'tentBag', pack: true },   // a two-man A-frame in a stuff sack: pitch it anywhere outside, three times (it.uses)   // tins stack: up to six in one slot (it.n)
+  tent:       { name: 'Emergency tent', model: 'prop_emergency_tent', pack: true },
+  medkit:     { name: 'First-aid kit', model: 'prop_medkit', pack: true },
+  bandage:    { name: 'Bandage', model: 'prop_bandage', pack: true, stack: 4 },
+  coffee:     { name: 'Coffee tin', model: 'prop_coffee_tin', pack: true },
+  emptycan:   { name: 'Empty bean tin', model: 'prop_empty_can', pack: true, trash: true },
+  trashbag:   { name: 'Trash bag', model: 'prop_trash_bag', pack: true },
   // the cab's own things: move them, shelve them, take them with you
   clock:      { name: 'Alarm clock', model: 'prop_alarm_clock', pack: true, scale: 0.72 },
   pot:        { name: 'Coffee pot', model: 'prop_pot_enamel', pack: false, scale: 0.78 },
-  oldcan:     { name: 'Rusted can', model: 'prop_can_rusted', pack: true, scale: 0.8 },
+  oldcan:     { name: 'Rusted can', model: 'prop_can_rusted', pack: true, scale: 0.8, trash: true },
   lantern:    { name: 'Hurricane lantern', model: 'prop_lantern', pack: false, light: true },
   // Tillman's prescription, left on the cab shelf: chlorpromazine 25 mg (src/game/fatigue.js pill()): an amber pharmacy vial,
   // white ridged cap, a typed Cascade Pharmacy label (prop_pill_bottle, props_custom.py).
@@ -25,21 +30,30 @@ export const KINDS = {
   // Tillman's fire cache (src/game/northWoods.js + fireCache.js, which builds these three models in code):
   key:        { name: 'Padlock key', proc: 'cacheKey', pack: true },     // brass, on a manila tag: F.C. 2410-110 (the station desk)
   film:       { name: 'Film pack', proc: 'filmPack', pack: true },       // ten exposures for the instant camera (use it: photos.packLeft += 10)
-  water:      { name: 'Water jug', proc: 'waterJug', pack: true },       // a sealed gallon of district water: clean (never makes you sick)
+  water:      { name: 'Water jug', proc: 'waterJug', pack: true },
+  jacket:     { name: 'Wool mackinaw', proc: 'jacket', pack: false, wear: true },   // Tillman's: E puts it on (worn, no slot); warm, keeps off wind and rain; hot in the sun       // a sealed gallon of district water: clean (never makes you sick)
 }
 export const PILLS = { full: 6, label: 'R. TILLMAN · CHLORPROMAZINE 25 MG · TAKE ONE AS DIRECTED · MAY CAUSE DROWSINESS' }
 /** Where the cab's movable things start (three coords; settled onto whatever is under them). [kind, pos, rotY, since (the
  *  inventory version that added it: older saves get only what's newer), extra fields] */
 export const CAB_ITEMS = [
-  ['clock', [1.78, 31.0, -1.875], 0], ['pot', [1.74, 31.05, 1.62], 0.4],
+  ['clock', [1.78, 31.0, -1.875], 0], ['pot', [1.74, 31.05, 1.62], 0.4, 1, { fill: 0 }],
   ['oldcan', [0.45, 30.4, -1.875], 0.3], ['oldcan', [0.59, 30.4, -1.875], 1.9], ['oldcan', [-1.73, 30.55, 1.865], 0.8],
   ['lantern', [-1.15, 31.0, 1.865], 2.9], ['lantern', [8.3, 1.62, 5.72], 1.2],   // one on the cab's south shelf, one on the shed shelf
   ['pills', [0.89, 31.3, -1.87], 0.5, 2, { n: PILLS.full }],   // beside the tins on the north shelf
-  ['tent', [-1.62, 30.1, 1.55], 0.2, 3, { uses: 3 }], ['tent', [-1.62, 30.1, 1.3], 0.35, 3, { uses: 3 }],   // two spares in the corner by the south shelf
+  ['tent', [1.75, 30.125, -0.96], 0, 3, { uses: 3, cabinet: 'tents', settle: false }],
+  ['tent', [1.75, 30.125, -0.77], 0, 3, { uses: 3, cabinet: 'tents', settle: false }],
+  ['tent', [1.75, 30.125, -0.58], 0, 3, { uses: 3, cabinet: 'tents', settle: false }],
   // not the cab: the fire cache's padlock key, on the trailhead station's desk beside the fax (northWoods.stationKeySpot)
   ['key', [33.28, -31.6, 382.72], 1.2, 4],
+  // and not the cab: Tillman's mackinaw, still on its peg in the fuel shed (IA_hook_shed2_nx faces -x)
+  ['jacket', [9.98, 0.83, 7.4], -Math.PI / 2, 5, { hook: 'IA_hook_shed2_nx', settle: false }],
+  ['medkit', [-1.48, 30.48, 1.86], 0, 6, { n: 2, settle: false }],
+  ['bandage', [-1.15, 30.48, 1.86], 0, 6, { n: 3, settle: false }],
+  ['coffee', [1.72, 30.14, 1.48], -Math.PI / 2, 6, { n: 8, cabinet: 'stove', settle: false }],
+  ['trashbag', [1.73, 30.14, 1.80], 0, 6, { collected: 0, cabinet: 'stove', settle: false }],
 ]
-const CAB_V = 4
+const CAB_V = 6
 export const CANTEEN_SIPS = 4
 export const JUG_SIPS = 6   // a gallon jug: six long drinks
 
@@ -49,7 +63,18 @@ export class Inventory {
     this.active = s.active ?? 0
     this.nextId = s.nextId ?? 1
     this.cabV = s.cabV ?? 0
-    if (this.cabV < CAB_V && s.items) this.addCabItems(this.cabV)   // a save from before (some of) the cab's things were movable
+    if (this.cabV < CAB_V && s.items) {
+      // Move only untouched cabin supplies; never relocate a player's carried or pitched tent.
+      const tents = CAB_ITEMS.filter((q) => q[0] === 'tent'); let nextTent = 0
+      for (const it of this.items) {
+        if (it.kind === 'pot') { it.fill = 0; it.raw = false }
+        if (it.kind !== 'tent' || it.where !== 'world' || !it.pos || it.leftAt != null || (it.uses ?? 3) !== 3) continue
+        const oldCorner = it.pos[0] < -1.4 && it.pos[1] > 29 && it.pos[2] > 1.1 && it.pos[2] < 1.7
+        const interim = it.pos[0] > 1.3 && it.pos[0] < 1.85 && it.pos[1] > 29 && Math.abs(it.pos[2] + 0.84) < 0.05
+        if ((oldCorner || interim) && nextTent < tents.length) Object.assign(it, { pos: [...tents[nextTent++][1]], rotY: 0, cabinet: 'tents', settle: false })
+      }
+      this.addCabItems(this.cabV)
+    }
   }
   addCabItems(from = 0) {
     for (const [kind, pos, rotY, since = 1, extra = {}] of CAB_ITEMS) if (since > from) this.create(kind, { where: 'world', pos: [...pos], rotY, settle: true, on: false, ...extra })
@@ -63,7 +88,6 @@ export class Inventory {
     inv.create('binoculars', { where: 'pack', slot: 1 })
     inv.create('canteen', { where: 'pack', slot: 2, fill: 1 })
     inv.create('food', { where: 'pack', slot: 3 })
-    inv.create('tent', { where: 'pack', slot: 4, uses: 3 })   // yours: for emergencies (shelter, a few hours' sleep out there)
     for (const p of where.fuel || []) inv.create('fuel', { where: 'world', pos: p, rotY: Math.random() * 6.28, fill: 1 })
     for (const p of where.food || []) inv.create('food', { where: 'world', pos: p, rotY: Math.random() * 6.28 })
     inv.addCabItems()
@@ -89,6 +113,7 @@ export class Inventory {
   /** Pick a world item up: hands first (the active slot if it's empty), the pack for small things when your hands are full. */
   take(id) {
     const it = this.get(id); if (!it || it.where !== 'world') return { ok: false, why: 'gone' }
+    if (it.kind === 'tent' && this.items.some((o) => o !== it && o.kind === 'tent' && o.where !== 'world')) return { ok: false, why: 'You can only carry one emergency tent at a time.' }
     const cap = KINDS[it.kind] && KINDS[it.kind].stack
     if (cap) {   // onto a stack you're already carrying (hands first, then the pack)
       const st = this.items.find((o) => o !== it && o.kind === it.kind && (o.where === 'hand' || (o.where === 'pack' && this.wearingPack)) && (o.n || 1) < cap)
@@ -99,9 +124,9 @@ export class Inventory {
       }
     }
     const h = this.freeHand()
-    if (h >= 0) { Object.assign(it, { where: 'hand', slot: h, pos: null, hook: null }); this.active = h; return { ok: true, to: 'hand' } }
+    if (h >= 0) { Object.assign(it, { where: 'hand', slot: h, pos: null, hook: null, cabinet: null }); this.active = h; return { ok: true, to: 'hand' } }
     const p = KINDS[it.kind].pack ? this.freePack() : -1
-    if (p >= 0) { Object.assign(it, { where: 'pack', slot: p, pos: null, hook: null }); return { ok: true, to: 'pack' } }
+    if (p >= 0) { Object.assign(it, { where: 'pack', slot: p, pos: null, hook: null, cabinet: null }); return { ok: true, to: 'pack' } }
     return { ok: false, why: KINDS[it.kind].pack ? 'Your hands and pack are full. Set something down (G).' : 'Your hands are full. Set something down (G).' }
   }
   /** Put a carried item down in the world. */
@@ -132,6 +157,21 @@ export class Inventory {
   remove(id) { this.items = this.items.filter((i) => i.id !== id) }
   /** Use one from a stack (a tin eaten): the item goes when the last one does. */
   useOne(it) { if ((it.n || 1) > 1) it.n--; else this.remove(it.id) }
+  /** Eating keeps the empty tin. Stacked food frees no slot, so the extra tin is set beside you if necessary. */
+  eatTin(it, dropPos) {
+    if (!it || it.kind !== 'food') return null
+    if ((it.n || 1) === 1) { it.kind = 'emptycan'; delete it.n; return it }
+    this.useOne(it)
+    const can = this.create('emptycan', { pos: [...dropPos] })
+    this.take(can.id)
+    return can
+  }
+  collectTrash(id, bag) {
+    const it = this.get(id)
+    if (!it || !KINDS[it.kind]?.trash || !bag || bag.kind !== 'trashbag' || this.get(bag.id) !== bag || bag.where !== 'hand') return false
+    if ((bag.collected || 0) >= 30) return false
+    this.remove(id); bag.collected = (bag.collected || 0) + 1; return true
+  }
   /** One pill out of the bottle (false when it's empty). */
   takePill(it) { if (!it || it.kind !== 'pills' || !(it.n > 0)) return false; it.n--; return true }
   sip(it) { if (!it || (it.kind !== 'canteen' && it.kind !== 'water') || it.fill <= 0) return false; it.fill = clamp(it.fill - 1 / (it.kind === 'water' ? JUG_SIPS : CANTEEN_SIPS)); if (it.fill < 1e-3) it.fill = 0; return true }
@@ -139,7 +179,10 @@ export class Inventory {
     if (!it) return ''
     const k = KINDS[it.kind]; if (!k) return it.kind
     if (it.kind === 'fuel') return k.name + (it.fill > 0.99 ? ' (full, 5 L)' : it.fill > 0.01 ? ` (${Math.round(it.fill * 50) / 10} L)` : ' (empty)')
-    if (it.kind === 'canteen') return k.name + (it.fill > 0 ? ` (${Math.round(it.fill * CANTEEN_SIPS)}/${CANTEEN_SIPS})` : ' (empty)')
+    if (it.kind === 'canteen') return k.name + (it.fill > 0 ? ` (${Math.round(it.fill * 100)}%, ${it.raw ? 'untreated' : 'clean'})` : ' (empty)')
+    if (it.kind === 'pot') return k.name + (it.heating ? ` (${it.heating === 'coffee' ? 'brewing' : 'boiling'})` : it.fill > 0 ? ` (${it.brew === 'coffee' ? 'coffee' : it.raw ? 'untreated water' : 'clean water'})` : ' (empty)')
+    if (it.kind === 'medkit' || it.kind === 'coffee') return k.name + ` (${it.n || 0} uses left)`
+    if (it.kind === 'trashbag') return k.name + ` (${it.collected || 0}/30 pieces)`
     if (it.kind === 'lantern') return k.name + (it.on ? ' (lit)' : '')
     if (it.kind === 'pills') return k.name + (it.n > 0 ? ` (${it.n} left)` : ' (empty)')
     if (it.kind === 'tent') { const u = it.uses ?? 3; return k.name + (u > 0 ? ` (${u} pitch${u === 1 ? '' : 'es'} left)` : ' (worn out)') }

@@ -7,7 +7,7 @@ import { createSky } from './sky.js?v=68a95a40cff6b4bd';
 import { createLights } from './lights.js?v=792a7514929cb178';
 import { createPost } from './post.js?v=44767cb562821303';
 import { createEntities, createView, createInteract } from './entities.js?v=8f9567db8a1d7143';
-import { createAudio } from './audio.js?v=c1349688caf5e45f';
+import { createAudio } from './audio.js?v=cd53442455b0c9b1';
 import { createPhoto } from './photo.js?v=d4ecc9fcde07cf48';
 import { createMountains } from './mountains.js?v=6559f3372d4228da';
 import { loadq, tryTakeJSON } from './loadq.js?v=3479c8521344c615';
@@ -60,7 +60,7 @@ export async function createEngine(canvas, opts = {}) {
   // Resolves once the title's set (stream stage A) is built; everything else keeps downloading in the background, most
   // urgent first, and E.stream.ready(stage) says when a stage is in (src/engine/stream.js).
   E.loadWorld = async (onProgress = () => {}) => {
-    E.manifest = (await tryTakeJSON('assets/manifest.json?v=eed2e6ece49f4eb0', PRIO.A)) || E.manifest;   // (the site build stamps this URL with ?v=<hash>)
+    E.manifest = (await tryTakeJSON('assets/manifest.json?v=6fac2db966cc7ab4', PRIO.A)) || E.manifest;   // (the site build stamps this URL with ?v=<hash>)
     loadq.setFiles(E.manifest.files);
     const S = E.stream = createStream(E.manifest);
     const layout = null;   // (the plan reads the prop list from the manifest on the site; the dev server loads on demand)

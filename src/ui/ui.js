@@ -176,7 +176,7 @@ export function createUI(root = document.getElementById('ui')) {
     }
     if (kind === 'controls') {
       const m = openModal(`<div class="paper controls2"><h2>Controls</h2><div class="kgrid">${o.controls.map(([k, v]) => `<div><kbd>${esc(k)}</kbd><span>${esc(v)}</span></div>`).join('')}</div>
-        <p class="note2">The searchlight is on the cab roof: work it from the cab or the catwalk. Hold the Morse key while you're on it to flash: <b>··· ——— ···</b>. Every key can be changed in Settings → Keys.</p>
+        <p class="note2">Hold the Morse key while using the searchlight to flash: <b>··· ——— ···</b>. Every key can be changed in Settings → Keys.</p>
         <div class="menu"><button data-a="back">Back</button></div></div>`, 'center', () => { if (!left) { left = true; o.onBack(); } });
       let left = false;
       m.querySelector('[data-a=back]').onclick = () => { if (!left) { left = true; o.onBack(); } };
@@ -233,7 +233,13 @@ export function createUI(root = document.getElementById('ui')) {
       const epi = kind === 'end' && o.paras ? `<div class="epi">${o.paras.map((t, i) => `<p style="animation-delay:${2.2 + i * 3.2}s">${esc(t)}</p>`).join('')}<p class="last" style="animation-delay:${2.8 + o.paras.length * 3.2}s">${esc(o.last || '')}</p></div>` : '';
       const m = openModal(`<div class="title ${kind}"><h1>${kind === 'death' ? '' : 'FALSE LIGHT'}</h1><div class="sub big">${esc(o.text)}</div>${epi}${o.detail ? `<div class="detail"${epi ? ` style="animation:fl-epi 1.5s ${3.6 + (o.paras.length + 1) * 3.2}s both"` : ''}>${esc(o.detail)}</div>` : ''}
         <div class="menu">${kind === 'death' ? '<button data-a="retry">Try again</button>' : ''}<button data-a="title">Title</button></div></div>`, 'full');
-      m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => o.onAction(b.dataset.a));
+      let done = false, tick = null; const act = (a) => { if (done) return; done = true; clearInterval(tick); o.onAction(a); };
+      m.querySelectorAll('button[data-a]').forEach((b) => b.onclick = () => act(b.dataset.a));
+      if (kind === 'death' && o.auto) {   // you die, you start again: from where you last were safe, by itself unless you pick the title
+        const b = m.querySelector('button[data-a=retry]'); let left = o.auto;
+        const show = () => { if (b) b.textContent = `Starting again · ${left}`; }; show();
+        tick = setInterval(() => { left--; if (left <= 0) act('retry'); else show(); }, 1000);
+      }
     }
   };
   // The loading bar lives on the boot poster that index.html paints before any script (#fl-boot). U.loading(f, label) sets
@@ -300,7 +306,7 @@ export function createUI(root = document.getElementById('ui')) {
     if (sv.last.sub !== sub) { sv.sm.textContent = sub; sv.last.sub = sub; }
     const hp = o.health == null ? 1 : o.health;
     const vals = { w: o.water, f: o.food, h: hp, s: o.sleep == null ? null : o.sleep };
-    sv.rings.w.el.classList.toggle('sick', (o.sick || 0) > 0.05); sv.rings.w.el.title = (o.sick || 0) > 0.05 ? 'Water (sick from untreated water: you get thirsty faster)' : 'Water';
+    sv.rings.w.el.classList.toggle('sick', (o.sick || 0) > 0.05); sv.rings.w.el.title = (o.sick || 0) > 0.05 ? 'Water (untreated water: 30-second sickness, 2% hydration lost)' : 'Water';
     let loud = tcls !== 'ok';
     for (const k in vals) {
       const R = sv.rings[k], v = vals[k];
@@ -328,10 +334,11 @@ export function createUI(root = document.getElementById('ui')) {
     const m = openModal(`<div class="paper packsheet"><h2>What you're carrying</h2>
       <h3>Hands</h3><div class="row">${d.hands.map((s, i) => cell(s, 'hand', i, i === d.active)).join('')}</div>
       <h3>Backpack</h3>${d.worn ? `<div class="row">${d.pack.map((s, i) => cell(s, 'pack', i)).join('')}</div>` : '<p class="off">You set the pack down somewhere. Its five slots are with it: go back for it (E).</p>'}
+      ${d.wearing && d.wearing.length ? `<h3>Wearing</h3><div class="row">${d.wearing.map((w) => `<button class="cell" data-w="wear" data-i="${esc(w.id)}" title="Take it off">${w.icon ? `<img src="${w.icon}" alt="">` : ''}<span>${esc(w.label)}</span></button>`).join('')}</div>` : ''}
       ${d.prints ? `<p class="tip">Your prints (${d.prints}) are together in the logbook: Tab → Photos. They don't take a slot.</p>` : ''}
       <p class="tip">Click a thing to move it between your hands and the pack. In the world: <b>G</b> sets what's in your hand down anywhere, <b>E</b> picks things up, <b>click</b> uses it (drink, eat, light).</p>
       <div class="close">I / Esc</div></div>`, 'center', onClose);
-    m.querySelectorAll('button.cell').forEach((b) => b.onclick = () => onPick(b.dataset.w, +b.dataset.i));
+    m.querySelectorAll('button.cell').forEach((b) => b.onclick = () => onPick(b.dataset.w, b.dataset.w === 'wear' ? b.dataset.i : +b.dataset.i));
   };
   // the throw: a small meter under the crosshair while Q is held
   const chg = $('div', 'fl-charge', root, '<i></i>');

@@ -316,7 +316,7 @@ export const OBJECTIVES = {
   d1_radio:     { text: 'Radio in to Silver Fork', hint: 'The radio is on the desk. E to call.' },
   d1_rules:     { text: 'Read Tillman\'s rules', hint: 'A card taped to the fire finder, middle of the cab.' },
   d1_fuel:      { text: 'Carry a can of fuel up to the cab', hint: 'The cans are by the shed door at the base. E picks one up; carry it up and set it down anywhere up top with G. (Rule 2)' },
-  d1_smoke:     { text: 'Get an azimuth on the smoke to the east', hint: 'From the catwalk look east-northeast, around 070°: a grey-brown column over the far ridges (B raises the binoculars from your pack and shows the bearing; B again lowers them). Then the fire finder: A / D turns the ring, put the hair on the smoke, E to radio it.' },
+  d1_smoke:     { text: 'Get an azimuth on the smoke to the east', hint: 'From the catwalk look east-northeast, around 070°: a grey-brown column over the far ridges (hold B to raise the binoculars and show the bearing; release B to lower them). Then the fire finder: A / D turns the ring, put the hair on the smoke, E to radio it.' },
   d1_camera:    { text: 'Check the shelf by the south window', hint: 'Something is there that wasn\'t this morning.' },
   d1_generator: { text: 'Start the generator before dark', hint: 'In the shed at the base (E on it). The searchlight and the cab lamp run off it, and a tank lasts about one night of idling.' },
   d1_dusk:      { text: 'Wait for dark in the cab', hint: 'The searchlight is on the roof. F takes it from anywhere in the cab or on the catwalk.' },

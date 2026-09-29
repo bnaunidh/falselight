@@ -33,7 +33,8 @@ export class Survival {
     this.cabF = s.cabF ?? null
     this.wet = s.wet ?? 0
     this.warmth = s.warmth ?? 0   // a hot drink: fades over about an hour and a half
-    this.sick = s.sick ?? 0       // untreated water (spring, creek): 0..1, thirst runs faster; it passes over ~8 game hours
+    this.sick = s.sick ?? 0
+    this.sickSeconds = Math.max(0, Math.min(30, s.sickSeconds ?? (this.sick > 0 ? 30 : 0)))
     this.chill = 0                // a long drink of cold water: a few degrees colder for a while
     this.airF = 55; this.feelsF = 55; this.warming = false; this.mph = 0
     this.warned = { ...(s.warned || {}) }
@@ -51,19 +52,22 @@ export class Survival {
     const inCab = ctx.zone === 'cab', shelter = !!ctx.shelter   // shelter: in a pitched tent (no wind, no rain, a few degrees kept in)
     // wind: exposed up the tower, sheltered in the timber, none inside
     const high = ctx.zone === 'catwalk' || (ctx.zone === 'stairs' && ctx.y > 12)
-    this.mph = inCab || shelter ? 0 : (ctx.wind || 0) * 22 * (high ? 1.25 + ctx.y / 90 : ctx.zone === 'trail' ? 0.45 : 0.7)
+    this.mph = inCab || shelter ? 0 : (ctx.wind || 0) * 22 * (high ? 1.25 + ctx.y / 90 : ctx.zone === 'trail' ? 0.45 : 0.7) * (ctx.jacket ? 0.55 : 1)   // wool over you: the wind half gets through
     // getting wet (wading the creek, rain) and drying (fast by the heater)
     if (ctx.inWater) this.wet = Math.min(1, this.wet + dtH * 6)
-    else if (!inCab && !shelter && ctx.rain > 0.05) this.wet = Math.min(0.6, this.wet + ctx.rain * dtH * 0.8)
+    else if (!inCab && !shelter && ctx.rain > 0.05) this.wet = Math.min(ctx.jacket ? 0.3 : 0.6, this.wet + ctx.rain * dtH * (ctx.jacket ? 0.3 : 0.8))
     else this.wet = Math.max(0, this.wet - dtH * (inCab ? (ctx.heater ? 1.2 : 0.4) : 0.2))
     this.airF = inCab ? this.cabF : out
     this.warmth = Math.max(0, this.warmth - dtH * 0.7)
-    this.chill = Math.max(0, this.chill - dtH * 1.5); this.sick = Math.max(0, this.sick - dtH / 8)
-    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet + 7 * this.warmth - 5 * this.chill + (shelter && !inCab ? 7 : 0) + (!inCab && !shelter ? 10 * (ctx.sun || 0) - 3 * (1 - (ctx.sun || 0)) * (ctx.night ? 0 : 1) : 0)   // sun on you: hot; deep shade: cool
+    this.chill = Math.max(0, this.chill - dtH * 1.5)
+    // Active play seconds, independent of accelerated sleep and the story clock's objective gates.
+    this.sickSeconds = Math.max(0, this.sickSeconds - Math.max(0, ctx.seconds ?? dtH * 73))
+    if (this.sickSeconds < 1e-6) { this.sickSeconds = 0; this.sick = 0 }
+    this.feelsF = (inCab ? this.cabF + (ctx.nearHeater && ctx.heater ? 5 : 0) : windChill(out, this.mph)) - 9 * this.wet + 7 * this.warmth - 5 * this.chill + (ctx.jacket ? (inCab ? 4 : 9) : 0) + (shelter && !inCab ? 7 : 0) + (!inCab && !shelter ? 10 * (ctx.sun || 0) - 3 * (1 - (ctx.sun || 0)) * (ctx.night ? 0 : 1) : 0)   // sun on you: hot; deep shade: cool
     this.warming = inCab && ctx.heater && this.cabF > out + 3
     // thirst + hunger (worse jogging, or sweating in a hot cab)
     const hot = this.feelsF > 74 ? 1.4 : 1
-    this.water = clamp(this.water - SURV.thirst * dtH * (ctx.jog ? 1.6 : 1) * hot * (1 + 1.4 * this.sick))   // sick: it goes through you
+    this.water = clamp(this.water - SURV.thirst * dtH * (ctx.jog ? 1.6 : 1) * hot)
     this.food = clamp(this.food - SURV.hunger * dtH * (ctx.jog ? 1.3 : 1))
     const once = (k, cond, reset) => { if (cond && !this.warned[k]) { this.warned[k] = true; ev.push(k) } else if (reset) this.warned[k] = false }
     once('thirsty', this.water < SURV.lowWater, this.water > SURV.lowWater + 0.1)
@@ -77,11 +81,11 @@ export class Survival {
   /** 1 = fine, lower = you're running on empty (slower, no jogging at 0). */
   get vigor() { return clamp(Math.min(this.water / SURV.lowWater, this.food / SURV.lowFood, 1) * 0.3 + 0.7) * this.fatigue.speedMul }   // (wrecked / the pill: slower)
   drink(amount) { this.water = clamp(this.water + amount) }
-  /** Untreated water: k 0..1 (the spring ~0.3, the creek ~0.55). */
-  drinkRaw(k) { this.sick = clamp(this.sick + k) }
+  /** One untreated drink: 2 percentage points of hydration, 30 active seconds of sickness. */
+  drinkRaw(k = 0.3) { this.sick = Math.max(this.sick, clamp(k)); this.sickSeconds = 30; this.water = clamp(this.water - 0.02) }
   /** It was cold: you feel it. */
   drinkCold() { this.chill = clamp(this.chill + 0.35) }
   eat(amount) { this.food = clamp(this.food + amount) }
   get icon() { return this.warming || this.warmth > 0.3 || this.feelsF >= 66 ? 'fire' : this.feelsF < 40 ? 'snow' : 'therm' }
-  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warmth: this.warmth, sick: this.sick, warned: { ...this.warned }, fatigue: this.fatigue.toJSON() } }
+  toJSON() { return { water: this.water, food: this.food, cabF: this.cabF, wet: this.wet, warmth: this.warmth, sick: this.sick, sickSeconds: this.sickSeconds, warned: { ...this.warned }, fatigue: this.fatigue.toJSON() } }
 }
