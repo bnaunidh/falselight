@@ -3,9 +3,9 @@
 // where G will put it, the surface finder (floors, tables, shelves, the ground), and inventory icons rendered from the
 // real models.
 import * as THREE from 'three';
-import { KINDS } from './items.js?v=1cb1ae6820f9d8bb';
+import { KINDS } from './items.js?v=5ccc36aa54b6ef0b';
 import { makeTentBag } from './tents.js?v=8256affaddf0bab6';
-import { makeCacheKey, makeFilmPack, makeWaterJug } from './fireCache.js?v=e8cfe5ff077d6729';
+import { makeCacheKey, makeFilmPack, makeWaterJug } from './fireCache.js?v=5ca4de81f93a8df6';
 import { makeJacket } from './jacket.js?v=c7013253cfd4258d';
 const PROC = { tentBag: makeTentBag, cacheKey: makeCacheKey, filmPack: makeFilmPack, waterJug: makeWaterJug, jacket: makeJacket };   // items built here rather than loaded
 import { createSurfaces } from './surfaces.js?v=a693dd057324b286';
@@ -53,6 +53,7 @@ export function createItemsView(engine) {
         if (!o) { o = V.spawn(it); if (!o) continue; added.push(it); }
         o.position.set(it.pos[0], it.pos[1], it.pos[2]); o.rotation.set(0, it.rotY || 0, 0);
         if (it.kind === 'jacket' && !it.hook) { o.rotation.set(-Math.PI / 2, it.rotY || 0, 0, 'YXZ'); o.position.y += 0.07; }   // off its peg it lies flat on its back
+        if(it.kind==='trap')for(const [name,sign] of [['L',-1],['R',1]]){const jaw=o.getObjectByName('FL_trap_jaw_'+name);if(jaw){if(!jaw.userData.restQ)jaw.userData.restQ=jaw.quaternion.clone();jaw.quaternion.copy(jaw.userData.restQ);if(it.trapState==='sprung')jaw.rotateZ(sign*Math.PI*.43);}}
       }
       return { added, removed };
     },
@@ -71,7 +72,7 @@ export function createItemsView(engine) {
   };   // (the beam shows it's on; a lens glow read as a halo from behind)
   const HOLD = { lantern: [0.19, -0.3, -0.38], clock: [0.12, -0.12, -0.24], pot: [0.15, -0.2, -0.3], oldcan: [0.12, -0.13, -0.24], fuel: [0.17, -0.17, -0.3], flashlight: [0.125, -0.12, -0.25], camera: [0.12, -0.12, -0.25], binoculars: [0.1, -0.13, -0.25],
     canteen: [0.12, -0.13, -0.24], food: [0.11, -0.11, -0.23], pills: [0.1, -0.1, -0.21], tent: [0.13, -0.17, -0.3], key: [0.1, -0.1, -0.21], film: [0.11, -0.11, -0.23], water: [0.14, -0.19, -0.3],
-    medkit: [0.13, -0.15, -0.28], bandage: [0.11, -0.12, -0.23], coffee: [0.12, -0.14, -0.24], emptycan: [0.12, -0.13, -0.24], trashbag: [0.17, -0.22, -0.34] };
+    medkit: [0.13, -0.15, -0.28], bandage: [0.11, -0.12, -0.23], coffee: [0.12, -0.14, -0.24], emptycan: [0.12, -0.13, -0.24], trashbag: [0.17, -0.22, -0.34], trap:[.12,-.28,-.48] };
   V.hold = (kind, t = 0, moving = 0) => {
     if (kind !== vmKind || (!vm && kind && T[kind] && HOLD[kind])) {
       if (vm) { camera.remove(vm); vm = null; }

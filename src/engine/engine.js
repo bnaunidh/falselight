@@ -1,27 +1,22 @@
 // FALSE LIGHT — engine assembly (contract §3). createEngine -> loadWorld -> start. Also stepFrames for headless tests.
 import * as THREE from 'three';
 import { createInput } from './input.js?v=18bc18106d93c298';
-import { createWorld, loadGLB } from './world.js?v=0cb07d852ed67db5';
+import { createWorld, loadGLB } from './world.js?v=f72bf2c303254cc4';
 import { createPlayer } from './player.js?v=1dc0031345c6950f';
 import { createSky } from './sky.js?v=68a95a40cff6b4bd';
 import { createLights } from './lights.js?v=792a7514929cb178';
 import { createPost } from './post.js?v=44767cb562821303';
-import { createEntities, createView, createInteract } from './entities.js?v=8f9567db8a1d7143';
-import { createAudio } from './audio.js?v=cd53442455b0c9b1';
+import { createEntities, createView, createInteract } from './entities.js?v=b5bcb59c17f83bbc';
+import { createAudio } from './audio.js?v=7ce46a68a1f43df1';
 import { createPhoto } from './photo.js?v=d4ecc9fcde07cf48';
 import { createMountains } from './mountains.js?v=6559f3372d4228da';
 import { loadq, tryTakeJSON } from './loadq.js?v=3479c8521344c615';
 import { createStream, PRIO } from './stream.js?v=f7881cfe4ef01982';
-
-export const QUALITY = {
-  low: { pr: 0.75, prMin: 0.5, msaa: false, aniso: 4, shadowMap: 1024, shadowExtent: 35, treeLod0: 28, treeLod1: 90, treeLod2: 800, plants: 28, debris: 60, terrainLod0: 90, spotShadows: false, flashShadows: false, lampShadows: false, terrainTex: 512 },
-  // medium is meant to look properly good: full-ish resolution with MSAA, sharp textures at grazing angles, real shadows
-  medium: { pr: 1.3, prMin: 0.8, msaa: true, aniso: 8, shadowMap: 2048, shadowExtent: 55, treeLod0: 44, treeLod1: 150, treeLod2: 1500, plants: 50, debris: 110, terrainLod0: 150, spotShadows: true, flashShadows: false, lampShadows: false, terrainTex: 1024 },
-  high: { pr: 1.75, prMin: 0.9, msaa: true, aniso: 16, shadowMap: 4096, shadowExtent: 70, treeLod0: 60, treeLod1: 200, treeLod2: 2000, plants: 70, debris: 150, terrainLod0: 200, spotShadows: true, flashShadows: true, lampShadows: true, terrainTex: 1024 },
-};
+import {QUALITY,qualityName,applyQualityResources} from './quality.js?v=da7ec5f545e60526';
+export {QUALITY} from './quality.js?v=da7ec5f545e60526';
 
 export async function createEngine(canvas, opts = {}) {
-  const qname = opts.quality || 'high';
+  const qname = qualityName(opts.quality);
   const quality = { ...QUALITY[qname] };
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -30,7 +25,7 @@ export async function createEngine(canvas, opts = {}) {
   const camera = new THREE.PerspectiveCamera(68, 16 / 9, 0.05, 12000);
   scene.add(camera);
   const E = {
-    renderer, scene, camera, quality, qualityName: qname, adaptive: true, _pr: null, msaa: quality.msaa, manifest: { models: {}, data: {}, textures: {}, hdri: {} },
+    renderer, scene, camera, quality, qualityName: qname, requestedQuality:qname, adaptive: true, _pr: null, msaa: quality.msaa, manifest: { models: {}, data: {}, textures: {}, hdri: {} },
     time: { value: 0 }, paused: false, uiBlocking: false, frame: 0, fps: 0,
     _cbs: [], onUpdate(fn) { E._cbs.push(fn); return () => { const i = E._cbs.indexOf(fn); if (i >= 0) E._cbs.splice(i, 1); }; },
   };
@@ -60,7 +55,7 @@ export async function createEngine(canvas, opts = {}) {
   // Resolves once the title's set (stream stage A) is built; everything else keeps downloading in the background, most
   // urgent first, and E.stream.ready(stage) says when a stage is in (src/engine/stream.js).
   E.loadWorld = async (onProgress = () => {}) => {
-    E.manifest = (await tryTakeJSON('assets/manifest.json?v=6fac2db966cc7ab4', PRIO.A)) || E.manifest;   // (the site build stamps this URL with ?v=<hash>)
+    E.manifest = (await tryTakeJSON('assets/manifest.json?v=5d122f86c17e86ec', PRIO.A)) || E.manifest;   // (the site build stamps this URL with ?v=<hash>)
     loadq.setFiles(E.manifest.files);
     const S = E.stream = createStream(E.manifest);
     const layout = null;   // (the plan reads the prop list from the manifest on the site; the dev server loads on demand)
@@ -77,6 +72,7 @@ export async function createEngine(canvas, opts = {}) {
     E.player = createPlayer(E);
     E.post = createPost(E);
     E.photo = createPhoto(E);
+    applyQualityResources(E);
     resize();
     E.player.teleport('SP_stair_foot');
     S.seal();
@@ -91,7 +87,7 @@ export async function createEngine(canvas, opts = {}) {
   E.fpsCap = 60; E.idle = false; E.saverMode = 'auto'; E.onBattery = false;
   E.saving = () => E.saverMode === 'on' || (E.saverMode === 'auto' && E.onBattery);
   E.frameCap = () => (E.paused ? 6 : E.idle ? 30 : E.saving() ? 30 : E.fpsCap || 0);
-  try { navigator.getBattery && navigator.getBattery().then((b) => { const f = () => { const was = E.saving(); E.onBattery = !b.charging; if (was !== E.saving()) { E._pr = null; resize(); } }; f(); b.addEventListener('chargingchange', f); }).catch(() => {}); } catch (e) { /* no battery API */ }
+  try { navigator.getBattery && navigator.getBattery().then((b) => { const f = () => { const was = E.saving(); E.onBattery = !b.charging; if(E.requestedQuality==='max'&&E.setQuality)E.setQuality('max');else if (was !== E.saving()) { E._pr = null; resize(); } }; f(); b.addEventListener('chargingchange', f); }).catch(() => {}); } catch (e) { /* no battery API: charging reminder stays in Settings */ }
   function tick(dt) {
     E.time.value += dt;
     const t = E.time.value;
@@ -145,7 +141,12 @@ export async function createEngine(canvas, opts = {}) {
   E.setPaused = (b) => { E.paused = b; };
   E.resize = resize;
   E.stepFrames = (n = 1, dt = 1 / 60) => { for (let i = 0; i < n; i++) { if (!E.paused) tick(dt); } render(dt); last = performance.now(); };
-  E.setQuality = (name) => { Object.assign(quality, QUALITY[name]); E.qualityName = name; E._pr = null; resize(); };
+  E.setQuality = (name) => {
+    E.requestedQuality=qualityName(name);
+    const effective=E.requestedQuality==='max'&&E.onBattery?'medium':E.requestedQuality;
+    Object.assign(quality,{spotMap:1024,flashMap:512,lampMap:512,grain:.055},QUALITY[effective]);E.qualityName=effective;
+    E._pr=null;E._pendingPr=null;slowS=fastS=0;applyQualityResources(E);resize();
+  };
   E.debug = {
     teleport(name) { return E.player.teleport(name); },
     fly(b) { E.player.fly = b; E.player.freeRoam = b; },

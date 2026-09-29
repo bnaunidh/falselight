@@ -245,6 +245,12 @@
    "tex": [],
    "anchors": []
   },
+  "prop_bear_trap": {
+   "path": "models/prop_bear_trap.glb",
+   "bytes": 31632,
+   "tex": [],
+   "anchors": []
+  },
   "prop_binoculars": {
    "path": "models/prop_binoculars.glb",
    "bytes": 316472,
@@ -730,6 +736,14 @@
     "tex/87268d93f8ef1cd5.webp"
    ],
    "anchors": []
+  },
+  "prop_trapper_cabin": {
+   "path": "models/prop_trapper_cabin.glb",
+   "bytes": 162616,
+   "tex": [],
+   "anchors": [
+    "IA_trapper_note"
+   ]
   },
   "prop_trash_bag": {
    "path": "models/prop_trash_bag.glb",
@@ -1571,6 +1585,10 @@
    "c2fb6afe622d0906",
    60652
   ],
+  "models/prop_bear_trap.glb": [
+   "7cb6d5f254ef8ed9",
+   31632
+  ],
   "models/prop_binoculars.glb": [
    "990f22b79a0775ef",
    316472
@@ -1718,6 +1736,10 @@
   "models/prop_tent_collapsed.glb": [
    "2da721e12b934fd4",
    25060
+  ],
+  "models/prop_trapper_cabin.glb": [
+   "336f9cd87aee72ad",
+   162616
   ],
   "models/prop_trash_bag.glb": [
    "266a894737bdec2e",

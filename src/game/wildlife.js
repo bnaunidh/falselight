@@ -13,8 +13,8 @@
 //   wild.animals: [{ id, kind: 'deer'|'bear', role, root, position: Vector3, act, state }] · wild.nearestDeer(pos, maxDist)
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { loadGLB } from '../engine/world.js?v=0cb07d852ed67db5';
-import { WildlifeBrain, WILD, resolvePlaces } from './wildlifeBrain.js?v=a9bc56ad7a7616bd';
+import { loadGLB } from '../engine/world.js?v=f72bf2c303254cc4';
+import { WildlifeBrain, WILD, resolvePlaces } from './wildlifeBrain.js?v=f0568469bbc610f5';
 
 const CLIPS = { deer: ['idle', 'walk', 'run', 'graze', 'alert'], bear: ['idle', 'walk', 'run', 'rear', 'huff', 'forage'] };
 const POSE = { deer: { graze: 1, alert: 1 }, bear: { rear: 1, huff: 1, forage: 1 } };   // clips the brain's `act` picks when standing
@@ -295,6 +295,7 @@ export async function createWildlife(engine, hooks = {}) {
     ctx.playerSafe = zone === 'cab' || zone === 'catwalk' || zone === 'stairs' || (Math.abs(p.x - tower.x) < 7.5 && Math.abs(p.z - tower.z) < 7.5) || (!!Pl.onStructure && p.y > gy + 1.2);
     ctx.indoor = zone === 'cab';
     ctx.night = !!H.night();
+    ctx.bearTrapped = !!H.bearTrapped?.();
     ctx.rain = H.rain ? +H.rain() || 0 : engine.sky && engine.sky.weather ? +engine.sky.weather.rain || 0 : 0;
     const w = H.weeperNear();
     if (w) { wpos[0] = w.x; wpos[1] = w.y; wpos[2] = w.z; ctx.weeper = wpos; } else ctx.weeper = null;

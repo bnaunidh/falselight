@@ -633,7 +633,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}, strea
   prog(0.45, 'tower');
   const glass = [];
   const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
-  const ANISO = Math.min(engine.renderer.capabilities.getMaxAnisotropy ? engine.renderer.capabilities.getMaxAnisotropy() : 8, engine.quality.aniso || 8);
+  const anisotropy = () => Math.min(engine.renderer.capabilities.getMaxAnisotropy ? engine.renderer.capabilities.getMaxAnisotropy() : 8, engine.quality.aniso || 8);
   // While the game builds its item templates (W.holdRegistration(itemsReady), main.js) a world model that lands waits
   // before registering: the templates' loader saves and restores the colliders/anchors around itself, and a bench or a
   // streamed prop registering in between used to be cut off (walk-through). Templates never touch world state at all.
@@ -659,7 +659,7 @@ export async function createWorld(engine, manifest, onProgress = () => {}, strea
           const mats = Array.isArray(o.material) ? o.material : [o.material];
           for (const m of mats) {
             if (!m) continue;
-            for (const k of TEX_SLOTS) if (m[k] && m[k].anisotropy !== ANISO) { m[k].anisotropy = ANISO; m[k].needsUpdate = true; }   // planks and bark stay sharp at grazing angles
+            const ANISO=anisotropy();for (const k of TEX_SLOTS) if (m[k] && m[k].anisotropy !== ANISO) { m[k].anisotropy = ANISO; m[k].needsUpdate = true; }   // planks and bark stay sharp at grazing angles
             if (m.name === 'FL_glass') {
               m.transparent = true; m.opacity = 0.16; m.roughness = 0.06; m.metalness = 0; m.depthWrite = false; m.envMapIntensity = 1.6; glassFresnel(m, 0.6); glass.push(m); o.castShadow = false;
               if (/^FL_sash_/.test(n)) { o.material = sashGlass(m); glass.push(o.material); }   // the panes that open: their own weathered glass (and a frame, from the game)

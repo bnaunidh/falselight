@@ -5,9 +5,9 @@ import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=e1921a4d4894c1b4
 import { Objectives } from './objectives.js?v=9b4ecf1404219fd0';
 import { Radio } from './radio.js?v=b7caebeac794988c';
 import { Fuel, FUEL } from './fuel.js?v=c503ffa055b08bd7';
-import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=1cb1ae6820f9d8bb';
+import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=5ccc36aa54b6ef0b';
 import { Survival, SURV } from './survival.js?v=d00b6b0653de46ed';
-import { createItemsView } from './itemsView.js?v=e41b97bf97f8d859';
+import { createItemsView } from './itemsView.js?v=f83a6f4fb2ae9c52';
 import { createChill } from './chill.js?v=ec826bfe80729529';
 import { createPlume } from './smokePlume.js?v=7b5942b988989140';
 import { FireFinder, spokenBearing } from './firefinder.js?v=5de3274a9333ec2e';
@@ -23,20 +23,22 @@ import { createSaves } from './saves.js?v=9b2daabbbb6263ff';
 import { createRng } from './rng.js?v=d4fee6ae2c2692f2';
 import { canSend, send as sendPrint, isProof } from './sending.js?v=912afb8ed504e6bd';
 import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d92670d68201cefe';
-import * as S from './content/story.js?v=9dd49fbd51ba06df';
-import { createDog, setDogName } from './dog.js?v=53bbce25c503c90c';
-import { createWildlife } from './wildlife.js?v=21bfc0c3d12ab06c';
+import * as S from './content/story.js?v=6c8a01b774ad2f1c';
+import { createDog, setDogName } from './dog.js?v=438a74e93f443e3c';
+import { createWildlife } from './wildlife.js?v=a1a5440315b78c05';
 import { Fear, registerFearSounds } from './fear.js?v=7313292ea4947f94';
 import { epilogue } from './content/ending.js?v=eb9d7293a71584ff';
-import { Director, sosLamp } from './director.js?v=4c091ce6fee8aef1';
+import { Director, sosLamp } from './director.js?v=6a28c4644b7eddeb';
 import { createPhotoBoard } from './photoBoard.js?v=171437e75704cdce';
 import { makeTent } from './tents.js?v=8256affaddf0bab6';
 import { makeSpringFlow } from './spring.js?v=841fcca15db5856c';
 import { Follower } from './follower.js?v=9830b5f962ff68ec';
 import * as NW from './northWoods.js?v=38b24fd4e4e18620';
-import { createFireCache } from './fireCache.js?v=e8cfe5ff077d6729';
-import { createLandmarks } from './landmarks.js?v=2313a59f6c3ed484';
+import { createFireCache } from './fireCache.js?v=5ca4de81f93a8df6';
+import { createLandmarks } from './landmarks.js?v=56aaf46f2eff1dc8';
 import { fillFromSource, pourWater, heatPot, tickPot } from './water.js?v=caa3f7db15705bfd';
+import { TRAPPER, trapFor, armTrap, disarmTrap, releaseTrap, tickTraps } from './traps.js?v=4df4ed7c0f218f54';
+import { createTrapperCabin } from './trapper.js?v=dfd4beeb39475090';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -125,6 +127,7 @@ export class Game {
 
     e.player.onLand = (drop, v) => this.onLand(drop, v);
     this.itemsReady = this.iv.load().then(() => { try { this.iv.buildSurfaces(); } catch (err) { console.warn('surfaces', err); } this.syncItems(); }).catch((err) => console.warn('items', err));
+    this.trapperReady=this.itemsReady.then(()=>createTrapperCabin(e)).then(c=>{this.trapper=c;if(c){this.stockTraps();this.iv.buildSurfaces();}}).catch(err=>console.warn('trapper cabin',err));
     // Juniper, the stray on the spring trail (src/game/dog.js + dogBrain.js)
     this.dog = null;
     this.dogReady = createDog(e, {
@@ -142,6 +145,13 @@ export class Game {
       isPlay: () => this.state === 'play',
       walkMode: () => this.mode === 'walk' && !this.placing && !this.camRaised,
       night: () => !!this.clock && this.night,
+      trapped: () => !!this.inv && !!trapFor(this.inv.items,'dog'),
+      dogHealth: () => (this.flags ? this.flags.dogHP ?? 1 : 1),
+      dogOrders: (cmd, mode) => this.openModal(() => this.ui.choose((this.dog && this.dog.name) || 'Juniper', [
+        { label: 'Sit', act: () => cmd('sit') }, { label: 'Follow me', act: () => cmd('come') }, { label: 'Go on, wander', act: () => cmd('wander') },
+      ].map((o) => ({ ...o, label: o.label + ((mode === 'stay' && o.label === 'Sit') || (mode === 'follow' && o.label === 'Follow me') || (mode === 'wander' && o.label === 'Go on, wander') ? '  ✓' : '') })), (c) => { this.closedModal(); c.act(); }, () => this.closedModal())),
+      onBaitEaten: () => { const it = this._dogBait && this.inv.get(this._dogBait); if (it && it.where === 'world') { this.inv.useOne(it); this.syncItems(); } this._dogBait = null; },
+      freeTrap: () => {const trap=trapFor(this.inv.items,'dog');if(trap)this.freeTrap(trap);},
       // she senses every REAL threat (never a hallucination: if she's calm, it isn't there): the Weeper, the watchers at the
       // tree line, the bear. The nearest one within her range is the one she stares down.
       weeperNear: () => this.nearestThreat(),
@@ -163,6 +173,7 @@ export class Game {
     // deer, the black bear, birds / owls / coyotes (src/game/wildlife.js + wildlifeBrain.js)
     this.wildlife = null;
     this.wildReady = createWildlife(e, {
+      bearTrapped: () => !!this.inv && !!trapFor(this.inv.items,'bear'),
       isPlay: () => this.state === 'play',
       night: () => !!this.clock && this.night,
       dog: () => this.dog,
@@ -258,6 +269,7 @@ export class Game {
     this.proofs = 0;
     this.hikers = []; this.lostWatchers = []; this.keyer = new MorseKeyer();
     this.inv = this.startInventory(phase); this.surv = new Survival(); this.placing = null;
+    this._trapPrevious={};this.stockTraps();
   }
   /** Your kit + what's at the lookout: three cans by the shed door, tins on the cab shelf. */
   startInventory(phase = 'day1') {
@@ -1001,9 +1013,11 @@ export class Game {
         e.audio.play(this.flags['cupboard_' + name] ? 'door_open' : 'door_close', { volume: 0.3, position: this.anchor(anchor) });
       }, () => true, 0.16);
     }
-    reg('books', 'IA_books', 'E — Take a book off the shelf', () => {
-      const b = S.BOOKS[(this.bookI = ((this.bookI ?? -1) + 1) % S.BOOKS.length)];
-      this.openModal(() => this.ui.note(b.title, b.text, () => this.closedModal()));
+    reg('books', 'IA_books', 'E — The bookshelf', () => {   // the real books, the lookouts' own, and the Bible
+      const all = [...S.SHELF, ...S.BOOKS.map((b) => ({ title: b.title, author: '', pages: [b.text] }))];
+      this.openModal(() => this.ui.choose('The shelf', all.map((b) => ({ label: b.title + (b.author ? ' — ' + b.author.split(' · ')[0] : ''), book: b })), (c) => {
+        this.closedModal(); this.openModal(() => this.ui.book(c.book, (i, sewn) => { if (sewn && c.book.bible) this.flags.bibleRead = true; }, () => this.closedModal()));
+      }, () => this.closedModal()));
     }, () => true, 0.5);
 
     // the creek: anywhere along it, if you're down at the water (untreated, and worse than the spring)
@@ -1083,6 +1097,7 @@ export class Game {
     In.onAction('interact', (d) => {
       if (!d || this.state !== 'play') return;
       if (this.ui.modalOpen()) { this.ui.closeModal(); return; }
+      const caught=this.inv&&trapFor(this.inv.items,'player');if(caught){this.freeTrap(caught);return;}
       if (this.chill && this.chill.sitting) { this.chill.stand(); return; }
       if (this.mode === 'finder') { this.reportFinder(); return; }
       if (this.mode === 'searchlight') { this.slLit = !this.slLit; return; }
@@ -1177,9 +1192,9 @@ export class Game {
       if (this.itemIA.has(it.id)) { this.itemIA.get(it.id).t.anchor.copy(top); continue; }
       const id = it.id;
       const t = { id: 'item:' + id, anchor: top, radius: it.cabinet ? 0.10 : it.kind === 'backpack' || it.kind === 'fuel' ? 0.45 : 0.22, reach: 2.6,
-        label: () => { const x = this.inv.get(id); return x ? (KINDS[x.kind]?.trash && this.inv.inHands('trashbag') ? 'E — Bag the ' : KINDS[x.kind]?.wear ? 'E — Put on the ' : 'E — Pick up the ') + this.inv.label(x).replace(/^./, (c) => c.toLowerCase()) : ''; },
+        label: () => { const x = this.inv.get(id); if(x?.kind==='trap')return x.caught ? `E — Free ${x.caught==='dog'?(this.dog?.name||'the dog'):x.caught==='player'?'your foot':'the bear'}` : x.trapState==='armed'?'E — Disarm bear trap':'E — Bear trap';return x ? (KINDS[x.kind]?.trash && this.inv.inHands('trashbag') ? 'E — Bag the ' : KINDS[x.kind]?.wear ? 'E — Put on the ' : 'E — Pick up the ') + this.inv.label(x).replace(/^./, (c) => c.toLowerCase()) : ''; },
         enabled: () => { const x = this.inv.get(id); return this.state === 'play' && this.mode === 'walk' && !this.placing && !!x && x.where === 'world' && (!x.cabinet || !!this.flags['cupboard_' + x.cabinet]); },
-        onUse: () => this.pickUp(id) };
+        onUse: () => it.kind==='trap'?this.useTrap(it):this.pickUp(id) };
       this.itemIA.set(id, { t, off: this.e.interact.register(t) });
     }
     this.player().carrying = this.inv.carryingHeavy ? 'fuel' : null;
@@ -1192,7 +1207,7 @@ export class Game {
     const a = this.inv.activeItem, pl = this.placing && this.inv.get(this.placing.id);
     const packN = this.inv.items.filter((i) => i.where === 'pack').length;
     this.ui.hotbar({ slots: [0, 1, 2].map((i) => this.slotView(this.inv.hand(i))), active: this.inv.active,
-      label: pl ? `Setting down: ${this.inv.label(pl)} — click or G · wheel turns it · right-click cancels` : a ? this.inv.label(a) : '',
+      label: trapFor(this.inv.items,'player') ? 'Caught in a trap — E to free your foot' : pl ? `Setting down: ${this.inv.label(pl)} — click or G · wheel turns it · right-click cancels` : a ? this.inv.label(a) : '',
       pack: this.inv.wearingPack ? `pack ${packN}/${PACK_SLOTS} · I` : 'pack set down somewhere' });
   }
   pickUp(id) {
@@ -1415,6 +1430,7 @@ export class Game {
       f.t += dt; f.v.y -= 9.8 * dt;
       const step = f.v.clone().multiplyScalar(dt), len = step.length(); if (len < 1e-6) continue;
       dir.copy(step).divideScalar(len);
+      if (!f.hitAnimal) { const who = this.thrownHits(f.pos, step); if (who) { f.hitAnimal = who; this.thrownStruck(who, it, f); f.v.set(f.v.x * -0.12, Math.min(0, f.v.y), f.v.z * -0.12); continue; } }
       const hit = S && S.cast(f.pos, dir, len + 0.05);
       const gy = e.world.heightAt(f.pos.x + step.x, f.pos.z + step.z);
       if (hit) {
@@ -1426,8 +1442,33 @@ export class Game {
       if (f.t > 8) f.done = true;
       it.pos = [f.pos.x, f.pos.y, f.pos.z];   // (it lands ON what it hit: no settle, that could snap it up to a shelf above)
     }
+    for (const f of this.flying) if (f.done) this.thrownLanded(f);
     this.flying = this.flying.filter((f) => !f.done);
     this.syncItems();
+  }
+  /** A thrown thing on its way: does it hit Juniper or the bear? (a body-sized capsule round each) → 'dog' | 'bear' | null */
+  thrownHits(p, step) {
+    const q = p.clone().add(step), near = (c, r, h) => { for (const s of [p, q]) if (Math.hypot(s.x - c[0], s.z - c[2]) < r && s.y > c[1] && s.y < c[1] + h) return true; return false; };
+    const d = this.dog && this.dog.brain && this.dog.brain.pos; if (d && near(d, 0.42, 0.75)) return 'dog';
+    const b = this.wildlife && this.wildlife.brain && this.wildlife.brain.bear; if (b && b.pos && near(b.pos, 0.9, 1.3)) return 'bear';
+    return null;
+  }
+  thrownStruck(who, it, f) {
+    const e = this.e, food = it.kind === 'food', heavy = !!(KINDS[it.kind] && KINDS[it.kind].heavy) || it.kind === 'fuel' || it.kind === 'trap';
+    e.audio.sfx('body_soft', { position: f.pos.clone(), volume: 0.6 });
+    if (who === 'dog') {
+      if (!food) { this.flags.dogHP = Math.max(0.15, (this.flags.dogHP ?? 1) - (heavy ? 0.2 : 0.07)); e.audio.play('dog_whine', { position: this.dog.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 1 }); if (this.dog.brain) this.dog.brain.trust = Math.max(0, this.dog.brain.trust - 0.4); }
+    } else {
+      const W = this.wildlife.brain;
+      if (!food && W.bearLeave) { const p = this.player().position; e.audio.play('bear_huff', { position: V3(W.bear.pos), volume: 1 }); W.bearLeave(p.x, p.z, true); }   // hit, it huffs and goes: black bears mostly do
+    }
+  }
+  /** Where it came down: food near Juniper, she goes and eats it; near the bear, the bear does (and forgets you a while). */
+  thrownLanded(f) {
+    const it = this.inv.get(f.id); if (!it || it.where !== 'world' || it.kind !== 'food') return;
+    const p = it.pos, dog = this.dog && this.dog.brain, bear = this.wildlife && this.wildlife.brain && this.wildlife.brain.bear;
+    if (bear && bear.pos && Math.hypot(bear.pos[0] - p[0], bear.pos[2] - p[2]) < 30 && this.wildlife.brain.setBait(p, () => { const x = this.inv.get(it.id); if (x && x.where === 'world') { this.inv.useOne(x); this.syncItems(); } })) return;
+    if (dog && !(this.inv && trapFor(this.inv.items, 'dog')) && Math.hypot(dog.pos[0] - p[0], dog.pos[2] - p[2]) < 14 && Math.abs(dog.pos[1] - p[1]) < 3 && dog.bait(p)) this._dogBait = it.id;
   }
   cancelPlace() { this.placing = null; this.iv && this.iv.ghost(null); this.refreshHotbar(); }
   toggleCamera() {
@@ -1452,6 +1493,43 @@ export class Game {
   toggleLantern(it) {
     it.on = !it.on; this.e.audio.play('morse_click', { volume: 0.25 });
     this.refreshHotbar();
+  }
+  stockTraps() {
+    if(!this.inv||!this.trapper||this.flags.trapStocked)return;
+    // A flag, not an item count: carrying away all three must never replenish them.
+    this.flags.trapStocked=true;
+    for(let n=0;n<3;n++){const x=TRAPPER.x+.9+n*.65,z=TRAPPER.z+3.2;this.inv.create('trap',{pos:[x,this.e.world.heightAt(x,z)+.025,z],trapState:'safe',settle:false});}
+    this.syncItems();
+  }
+  useTrap(it) {
+    if(it.caught){this.freeTrap(it);return;}
+    if(it.trapState==='armed'){disarmTrap(it);this.e.audio.sfx('metal',{volume:.35});this.syncItems();return;}
+    this.openModal(()=>this.ui.choose('Bear trap',[
+      {label:'Pick it up',act:()=>this.pickUp(it.id)},
+      {label:'Arm it — anything can be caught',act:()=>{armTrap(it);this.e.audio.sfx('metal',{volume:.5});this.ui.toast('Armed. Step clear.',2);this.syncItems();}},
+    ],c=>{this.closedModal();if(it.where==='world'&&!it.caught)c.act();},()=>this.closedModal()));
+  }
+  freeTrap(it) {
+    const who=releaseTrap(it);if(!who)return;
+    this.e.audio.sfx('metal',{volume:.6});this.syncItems();
+    if(who==='dog'){this.dog?.brain.command('come');this.e.audio.play('dog_whine',{position:this.dog?.position,volume:.7});this.ui.toast(`${this.dog?.name||'The dog'} is free.`,3);}
+    else if(who==='player'){this.player().speedMul=1;this.ui.toast('Your foot is free. The wound needs dressing.',3);}
+    else this.ui.toast('The bear is free. Back away.',3);
+  }
+  updateTraps(dt) {
+    this.stockTraps();
+    const actors={player:this.pos(),dog:this.dog?.brain.pos,bear:this.wildlife?.brain.bear?.pos};
+    for(const ev of tickTraps(this.inv.items,dt,actors,this._trapPrevious||{})) {
+      this.e.audio.sfx('metal',{position:V3(ev.item.pos),volume:.9});
+      if(ev.type==='caught') {
+        if(ev.who==='player'){this.hurt(.22,'trap');this.ui.toast('Caught in a trap — E to free your foot.',5);}
+        else if(ev.who==='dog'){this.flags.dogHP=Math.max(0.15,(this.flags.dogHP??1)-0.25);this.e.audio.play('dog_whine',{position:V3(ev.item.pos),volume:1});this.ui.toast(`${this.dog?.name||'The dog'} is caught. Open the trap to free her.`,5);}
+        else this.e.audio.play('bear_huff',{position:V3(ev.item.pos),volume:1});
+      }
+      this.syncItems();
+    }
+    this._trapPrevious={};for(const [who,p]of Object.entries(actors))if(p)this._trapPrevious[who]=p.slice();
+    const playerTrap=trapFor(this.inv.items,'player');if(playerTrap)this.player().velocity?.set(0,0,0);
   }
   stovePot() { const s = this.anchor('IA_stove'); return s ? this.inv.world.find((i) => i.kind === 'pot' && Math.hypot(i.pos[0] - s.x, i.pos[2] - s.z) < 0.4 && Math.abs(i.pos[1] - (s.y - 0.05)) < 0.35) : null; }
   potOnStove() { return !!this.stovePot(); }
@@ -1491,6 +1569,7 @@ export class Game {
   useActive(down) {
     const it = this.inv.activeItem; if (!it) return;
     if (it.kind === 'binoculars') { if (down) this.ui.toast('Hold B to use the binoculars.', 1.8); return; }
+    if(it.kind==='trap'){if(down)this.ui.toast('Set the trap down with G, then E to arm it.',3);return;}
     if (!down) return;
     if (it.kind === 'canteen') {
       if (this.surv.water > 0.95 && it.fill > 0) { this.ui.toast('You\'re not thirsty.', 1.6); return; }
@@ -1791,7 +1870,9 @@ export class Game {
     // injuries mend slowly on their own, quickly asleep; a limp fades
     if (this.health < 1 && e.time.value - (this.hurtAt ?? -99) > 8) this.health = Math.min(1, this.health + dt * (this.resting ? 1 / 25 : this.sitting ? 1 / 90 : 1 / 240));
     this.limp = Math.max(0, this.limp - dt / 45);
-    Pl.speedMul = Math.max(0.6, this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1));   // (never so slow you can't get away)
+    if ((this.flags.dogHP ?? 1) < 1 && !(this.inv && trapFor(this.inv.items, 'dog'))) this.flags.dogHP = Math.min(1, this.flags.dogHP + dt / 600);   // Juniper mends too (ten minutes)
+    this.updateTraps(dt);
+    Pl.speedMul = trapFor(this.inv.items,'player') ? 0 : Math.max(0.6, this.surv.vigor * (1 - 0.45 * this.limp) * (this.health < 0.3 ? 0.8 : 1));
     this.survT = (this.survT || 0) - dt;
     if (this.survT <= 0) { this.survT = 0.25; this.ui.survival({ feels: this.surv.feelsF, air: this.surv.airF, icon: this.surv.icon, water: this.surv.water, food: this.surv.food, wet: this.surv.wet, mph: this.surv.mph, health: this.health, bpm: this.fear.bpm, sick: this.surv.sick, sleep: this.fatigueHUD ? this.fatigueHUD() : null }); this.refreshHotbar(); }
     // items: the thing in your hand, the placing ghost, wheel = switch hands (or turn what you're placing)

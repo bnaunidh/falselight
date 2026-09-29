@@ -639,6 +639,21 @@ export class WildlifeBrain {
   inShed(p) { return !!this.shed && Math.hypot(p[0] - this.shed[0], p[2] - this.shed[1]) < WILD.shedShelter && p[1] < this.ground(p[0], p[2]) + 2.5 }
   bearUpdate(dt, ctx, pSpeed) {
     const B = WILD.bear, b = this.bear, pl = ctx.player, safe = !!ctx.playerSafe || this.inShed(pl)
+    if(ctx.bearTrapped){b.speed=0;b.act='huff';b.state='trapped';this.fearLevel=0;return}
+    if(b.state==='trapped')this.bearLeave(pl[0],pl[2],true)
+    // food thrown its way: it goes to it and eats, and forgets you for a while (in reach, and not while you're in its face)
+    if (this.bait) {
+      const bt = this.bait, dB = Math.hypot(bt.pos[0] - b.pos[0], bt.pos[2] - b.pos[2])
+      if (!bt.taken && dB > 40) this.bait = null
+      else {
+        b.state = 'bait'; b.run = 0
+        if (dB > 1.2 && !bt.taken) { this.move(b, bt.pos[0], bt.pos[2], B.travelSpeed, dt, B, B.turn); b.act = 'walk'; return }
+        if (!bt.taken) { bt.taken = true; if (bt.onEat) bt.onEat() }
+        b.speed = 0; b.act = 'forage'; bt.eatT = (bt.eatT || 0) + dt
+        if (bt.eatT > 16) { this.bait = null; b.ignoreT = Math.max(b.ignoreT, 30); b.mood = 0; this.bearLeave(pl[0], pl[2], false) }
+        return
+      }
+    }
     const d = d3(b.pos, pl), dxz = d2(b.pos, pl)
     // how fast YOU are coming at it (your velocity toward it; its own charge doesn't count)
     const vel = ctx.vel
@@ -822,6 +837,8 @@ export class WildlifeBrain {
     else if (b.task === 'forage') this.pickSpot(this.bearSpots, true, ignore > 0)   // somewhere away from you
     this.bearEnter('calm')
   }
+  /** Food on the ground (a thrown tin): the bear goes for it. onEat when it gets there (the game takes the tin away). */
+  setBait(pos, onEat) { if (!this.bear || this.bear.state === 'trapped') return false; this.bait = { pos: pos.slice(), onEat, taken: false, eatT: 0 }; return true }
   bearLeave(fx, fz, retreat) {
     const B = WILD.bear, b = this.bear
     this.awayFrom(b.pos[0], b.pos[2], fx, fz, B.leave[0], B.leave[1], B, this._t)

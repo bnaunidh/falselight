@@ -6,8 +6,8 @@
 //   dog.update(dt, t) every frame while playing · dog.toJSON() / dog.restore(json) in the save
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { loadGLB } from '../engine/world.js?v=0cb07d852ed67db5';
-import { DogBrain, DOG } from './dogBrain.js?v=ac2d6b651d847f4f';
+import { loadGLB } from '../engine/world.js?v=f72bf2c303254cc4';
+import { DogBrain, DOG } from './dogBrain.js?v=3aa4e4b4240d3b88';
 
 // gait clips as baked in Blender (char_dog.py): metres travelled per cycle
 const STRIDE = { walk: 0.484, trot: 0.857 };
@@ -245,11 +245,14 @@ export async function createDog(engine, hooks = {}) {
   const offMain = I.register({
     id: 'dog:main', anchor: headAnchor, radius: 0.6, reach: 2.6,
     label: () => {
+      if(H.trapped?.())return `E — Free ${brain.tamed?DOG.name:'the dog'} from the trap`;
       if (food()) return brain.tamed ? `E — Give ${DOG.name} the beans` : 'E — Offer the beans';
-      return brain.mode === 'stay' ? `E — Pet ${DOG.name}   ·   hold E — Come` : `E — Pet ${DOG.name}   ·   hold E — Stay`;
+      const hp = H.dogHealth ? H.dogHealth() : 1, tag = brain.tamed ? `${DOG.name}  ♥ ${Math.round(hp * 100)}%${hp < 0.5 ? ' (hurt)' : ''}   ·   ` : '';   // looking at her: her name and how she is
+      return `${tag}E — Pet ${DOG.name}   ·   hold E — Sit / Follow / Wander`;
     },
-    enabled: () => playing() && V.ready && brain.canOffer() && (brain.tamed || !!food()) && sameRoom(),
+    enabled: () => playing() && V.ready && (H.trapped?.() || brain.canOffer() && (brain.tamed || !!food())) && sameRoom(),
     onUse: () => {
+      if(H.trapped?.()){pending=null;H.freeTrap?.();return;}
       const tin = food();
       if (tin) { if (brain.offer()) { H.eatFood(tin); showTin(); } return; }
       if (brain.tamed) pending = { t: 0 };
@@ -287,6 +290,7 @@ export async function createDog(engine, hooks = {}) {
     ctx.vel[0] = P.velocity ? P.velocity.x : 0; ctx.vel[1] = P.velocity ? P.velocity.z : 0;
     ctx.jog = !!(engine.input && engine.input.isDown('jog'));
     ctx.food = !!H.foodInHands(); ctx.night = !!H.night(); ctx.zone = P.zone;
+    ctx.trapped = !!H.trapped?.();
     const w = H.weeperNear();
     if (w) { wpos[0] = w.x; wpos[1] = w.y; wpos[2] = w.z; ctx.weeper = wpos; } else ctx.weeper = null;
     const ha = W.anchors.get('IA_heater');
@@ -297,7 +301,7 @@ export async function createDog(engine, hooks = {}) {
     ctx.bed = W.anchors.has('IA_bed') ? bed : null;
     // hold E: a pat, or (held) stay / come
     if (pending) {
-      if (engine.input.isDown('interact')) { pending.t += dt; if (pending.t >= HOLD_E) { pending = null; brain.command('toggle'); } }
+      if (engine.input.isDown('interact')) { pending.t += dt; if (pending.t >= HOLD_E) { pending = null; if (H.dogOrders) H.dogOrders((c) => brain.command(c), brain.mode); else brain.command('toggle'); } }
       else { pending = null; brain.pet(); }
     }
     clock += dt;
@@ -394,6 +398,8 @@ export async function createDog(engine, hooks = {}) {
       case 'tamed': if (H.onTamed) H.onTamed(); else H.toast(LINES.tamed, 5); break;
       case 'pet': if (!petted) { petted = true; H.toast(LINES.firstPet, 2.5); } break;
       case 'stay': H.toast(LINES.stay, 2.5); break;
+      case 'wander': H.toast(`${DOG.name} noses off into the brush, never far.`, 2.5); break;
+      case 'baitEaten': if (H.onBaitEaten) H.onBaitEaten(); break;
       case 'come': H.toast(LINES.come, 2.5); break;
       case 'warn': H.onDogWarn({ name: DOG.name, tamed: ev.tamed, distance: ev.distance, playerDistance: ev.playerDistance }); break;
       case 'door': {   // shut out (or in): tell the player once per minute at most, only if they're close enough to hear

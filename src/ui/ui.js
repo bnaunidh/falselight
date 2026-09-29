@@ -120,6 +120,34 @@ export function createUI(root = document.getElementById('ui')) {
     const m = openModal(`<div class="paper note"><h2>${esc(title)}</h2><p>${esc(text).replace(/\n/g, '<br>')}</p><div class="close">E / Esc</div></div>`, 'center', onClose);
     return m;
   };
+  /** A book off the shelf, page by page (← → or the corners). A page: a string or { text, sewn }. ⟨pencil⟩ lines are someone's
+   *  handwriting in the margin. The sewn leaves are other paper: thin, off-white, typewritten, a cut stub at the gutter. */
+  U.book = (book, onPage, onClose) => {
+    let i = 0;
+    const line = (l) => { const pen = l.startsWith('⟨pencil⟩'); const t = esc(pen ? l.slice(8) : l).replace(/^(\d+) /, '<sup>$1</sup> '); return pen ? `<div class="bk-pen">${t}</div>` : `<div>${t || '&nbsp;'}</div>`; };
+    const render = () => {
+      const pg = book.pages[i], sewn = typeof pg === 'object' && pg.sewn, text = typeof pg === 'string' ? pg : pg.text;
+      m.innerHTML = `<div class="paper note book${sewn ? ' sewn' : ''}"><h2>${esc(book.title)}</h2><div class="bk-by">${esc(book.author || '')}</div>
+        <div class="bk-page">${text.split('\n').map(line).join('')}</div>
+        <div class="bk-nav"><button data-d="-1" ${i ? '' : 'disabled'}>←</button><span>${i + 1} / ${book.pages.length}</span><button data-d="1" ${i < book.pages.length - 1 ? '' : 'disabled'}>→</button></div><div class="close">E / Esc</div></div>`;
+      m.querySelectorAll('button[data-d]').forEach((b) => b.onclick = () => turn(+b.dataset.d));
+      if (onPage) onPage(i, sewn);
+    };
+    const turn = (d) => { const n = Math.max(0, Math.min(book.pages.length - 1, i + d)); if (n !== i) { i = n; render(); } };
+    const key = (e) => { if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') turn(1); else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') turn(-1); };
+    window.addEventListener('keydown', key);
+    const m = openModal('', 'center', () => { window.removeEventListener('keydown', key); if (onClose) onClose(); });
+    if (!document.getElementById('fl-book-css')) { const st = document.createElement('style'); st.id = 'fl-book-css'; st.textContent = `
+      .fl-modal .book{max-width:560px}.fl-modal .book .bk-by{opacity:.6;font-style:italic;margin:-6px 0 12px}
+      .fl-modal .book .bk-page{font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.55;min-height:220px}
+      .fl-modal .book .bk-page sup{font-size:10px;opacity:.7;margin-right:2px}
+      .fl-modal .book .bk-pen{font-family:'Bradley Hand','Segoe Print','Chalkboard SE',cursive;color:#4a4a55;transform:rotate(-1.2deg);margin-top:10px}
+      .fl-modal .book .bk-nav{display:flex;gap:14px;align-items:center;justify-content:center;margin-top:14px}.fl-modal .book .bk-nav button{min-width:44px}
+      .fl-modal .book.sewn{background:linear-gradient(90deg,#d8d2bf 0,#d8d2bf 7px,#b9b19a 7px,#b9b19a 9px,#ecebe0 9px),#ecebe0;box-shadow:inset 0 0 40px rgba(120,110,80,.18)}
+      .fl-modal .book.sewn .bk-page{font-family:'Courier New',Courier,monospace;font-size:14px;letter-spacing:.2px;color:#2b2a26}
+      .fl-modal .book.sewn .bk-page sup{color:#8a2a1c;opacity:.9;position:relative;left:-3px;top:-1px}`; document.head.appendChild(st); }
+    render(); return m;
+  };
   U.logbook = (data, onClose, page = 'tasks') => {
     const tabs = [['tasks', 'Today'], ['rules', 'Rules'], ['tillman', 'Tillman'], ['mine', 'My log'], ['photos', 'Photos']];
     const render = (pg) => {
@@ -184,7 +212,8 @@ export function createUI(root = document.getElementById('ui')) {
     }
     if (kind === 'settings') {
       const m = openModal(`<div class="paper settings"><h2>Settings</h2>
-        <label>Quality <select data-k="quality">${['low', 'medium', 'high'].map((q) => `<option ${q === o.quality ? 'selected' : ''}>${q}</option>`).join('')}</select></label>
+        <label>Quality <select data-k="quality">${['low', 'medium', 'high', 'max'].map((q) => `<option ${q === o.quality ? 'selected' : ''}>${q}</option>`).join('')}</select></label>
+        <p class="note2">Max: sharper shadows, longer forest detail and up to 2× resolution. Use while plugged in; it falls back to medium when the browser detects battery power. Terrain texture changes take effect on the next launch.</p>
         <label>Mouse sensitivity <input data-k="sens" type="range" min="0.4" max="2.5" step="0.1" value="${o.sens}"></label>
         <label>Sound <select data-k="sound"><option value="off" ${o.sound ? '' : 'selected'}>off</option><option value="on" ${o.sound ? 'selected' : ''}>on</option></select></label>
         <label>Volume <input data-k="volume" type="range" min="0" max="1" step="0.05" value="${o.volume}"></label>

@@ -370,6 +370,44 @@ export function coDistort(text, level, seed = 7) {
 }
 
 // the books on the cab shelf (E on the shelf flips through them in turn)
+/** Real books on the cab shelf (public domain, quoted exactly), and the lookout's Bible. A page: a string, or { text, sewn: true }
+ *  for the leaves someone cut out and replaced with their own, set out like scripture so a glance wouldn't catch it. */
+export const SHELF = [
+  { title: 'The Holy Bible', author: 'King James Version · a Gideon copy, the spine split', bible: true, pages: [
+    'GENESIS 1\n\n1 In the beginning God created the heaven and the earth.\n2 And the earth was without form, and void; and darkness was upon the face of the deep. And the Spirit of God moved upon the face of the waters.\n3 And God said, Let there be light: and there was light.\n4 And God saw the light, that it was good: and God divided the light from the darkness.\n5 And God called the light Day, and the darkness he called Night. And the evening and the morning were the first day.',
+    'GENESIS 19\n\n15 And when the morning arose, then the angels hastened Lot, saying, Arise, take thy wife, and thy two daughters, which are here; lest thou be consumed in the iniquity of the city.\n17 And it came to pass, when they had brought them forth abroad, that he said, Escape for thy life; look not behind thee, neither stay thou in all the plain; escape to the mountain, lest thou be consumed.\n24 Then the LORD rained upon Sodom and upon Gomorrah brimstone and fire from the LORD out of heaven;\n26 But his wife looked back from behind him, and she became a pillar of salt.\n\n⟨pencil⟩look not behind thee — underlined twice',
+    'PSALM 91\n\n5 Thou shalt not be afraid for the terror by night; nor for the arrow that flieth by day;\n6 Nor for the pestilence that walketh in darkness; nor for the destruction that wasteth at noonday.\n\nISAIAH 43\n\n2 When thou passest through the waters, I will be with thee; and through the rivers, they shall not overflow thee: when thou walkest through the fire, thou shalt not be burned; neither shall the flame kindle upon thee.',
+    'MATTHEW 6\n\n22 The light of the body is the eye: if therefore thine eye be single, thy whole body shall be full of light.\n23 But if thine eye be evil, thy whole body shall be full of darkness. If therefore the light that is in thee be darkness, how great is that darkness!\n\nII CORINTHIANS 11\n\n14 And no marvel; for Satan himself is transformed into an angel of light.',
+    { sewn: true, text: 'THE BOOK OF THE MOUNTAIN · CHAPTER 1\n\n1 In the eighth month, on the ninth day, a light is kindled upon the burnt ground, and it calleth after the manner of a man that is lost.\n2 Count before thou answerest; for there shall be two, and one of them is not of men.\n3 And by the water there sitteth one that weepeth, and his face is hid in his hands. Look not upon him; for whoso seeth his face, him shall he seek, and he shall come for him in the night.\n4 And they that are taken shall stand at the edge of the trees, and they shall not move while thine eye is upon them.' },
+    { sewn: true, text: 'THE BOOK OF THE MOUNTAIN · CHAPTER 2\n\n1 Four days shall the keeper keep the light, and the voice in the box shall speak unto him morning and evening.\n2 But on the fifth day the voice in the box shall cease, and the lamps of the valley shall go out one by one, and there shall be no answer.\n3 And they that stood at the edge of the trees shall come unto the foot of the stair; and the stair shall be counted, and the count shall not be the same.\n4 And the smoke that was far off shall come near, and the sun shall be as blood at noonday.' },
+    { sewn: true, text: 'THE BOOK OF THE MOUNTAIN · CHAPTER 3\n\n1 And on the seventh day the mountain shall burn, as it burned in the days of my fathers, and in my day also.\n2 Then take thy dog, and all that thou hast, and flee down unto the road; tarry not in the tower, for the tower is a lamp, and it shall draw them.\n3 Look not behind thee; for they shall follow after thee through the smoke, and they go upon bare feet, and they are not weary.\n4 Keep a light in thine hand, and the mouth of stone shall be opened unto thee, and thou shalt pass through the mountain, and come out on the other side.\n5 These things I saw in the year of the burning, and I went down by the old road with my dog, and I lived.\n\nO. T. · West L.O. · Aug. 1950\n\n⟨pencil⟩It came again in \'80. The card says don\'t answer it. I didn\'t. — J.H.' },
+    'REVELATION 22\n\n5 And there shall be no night there; and they need no candle, neither light of the sun; for the Lord God giveth them light: and they shall reign for ever and ever.',
+  ] },
+  { title: 'Walden', author: 'Henry David Thoreau, 1854', pages: [
+    'The mass of men lead lives of quiet desperation.',
+    'I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived.\n\n⟨pencil⟩E.M. \'73 — and then what',
+  ] },
+  { title: 'To Build a Fire', author: 'Jack London, 1908', pages: [
+    'Day had broken cold and grey, exceedingly cold and grey, when the man turned aside from the main Yukon trail and climbed the high earth-bank, where a dim and little-travelled trail led eastward through the fat spruce timberland.',
+    '⟨pencil⟩Listen to the dog. — R.T.',
+  ] },
+  { title: 'The Call of the Wild', author: 'Jack London, 1903', pages: [
+    'Buck did not read the newspapers, or he would have known that trouble was brewing, not alone for himself, but for every tide-water dog, strong of muscle and with warm, long hair, from Puget Sound to San Diego.',
+  ] },
+  { title: 'Tales · The Tell-Tale Heart', author: 'Edgar Allan Poe, 1843', pages: [
+    'True!—nervous—very, very dreadfully nervous I had been and am; but why will you say that I am mad?',
+  ] },
+  { title: 'Songs of a Sourdough', author: 'Robert W. Service, 1907', pages: [
+    'There are strange things done in the midnight sun\n    By the men who moil for gold;\nThe Arctic trails have their secret tales\n    That would make your blood run cold;\nThe Northern Lights have seen queer sights,\n    But the queerest they ever did see\nWas that night on the marge of Lake Lebarge\n    I cremated Sam McGee.',
+  ] },
+  { title: 'Moby-Dick', author: 'Herman Melville, 1851', pages: [
+    'Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.',
+  ] },
+  { title: 'Poems', author: 'Emily Dickinson, 1890', pages: [
+    'Because I could not stop for Death,\nHe kindly stopped for me;\nThe carriage held but just ourselves\nAnd Immortality.',
+  ] },
+];
+
 export const BOOKS = [
   { title: 'Lookout Handbook · USFS Region 6, rev. 1962', text: 'REPORTING A SMOKE. Take the azimuth with the fire finder to the nearest degree. Give the landmark nearest the smoke, the colour of the smoke, and whether it is drifting.\n\nWhite smoke is usually light fuel. Black or brown is heavier: timber, slash, a structure.\n\nReport every smoke. A false alarm costs a phone call. A missed one costs a mountain.\n\n(In pencil, in the margin: "and you can see further at dusk than you think.")' },
   { title: 'Birds of the Northwest · a field guide, water-stained', text: 'STELLER\'S JAY. Crested, dark blue and black. Bold at camps. Loud harsh "shook-shook-shook"; mimics hawks.\n\nUnderlined twice, in Tillman\'s hand: Jays go quiet before weather.\n\nUnder that, newer ink: And before other things.' },

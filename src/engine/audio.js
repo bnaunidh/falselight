@@ -762,7 +762,7 @@ export function createAudio(engine, opts = {}) {
       const windV = am.wind * (inCab ? 0.25 : 0.32) * gf;
       if (hasRec('wind')) { set(rec.wind.gain, windV); rec.windSrc.playbackRate.value = 0.94 + 0.08 * gn; set(beds.wind.out.gain, 0); } else set(beds.wind.out.gain, am.wind * (inCab ? 0.22 : 0.18) * gf);
       const forestness = inCab ? 0.12 : catwalk ? 0.4 : 1 - hgt * 0.5;
-      beds.rustle.set(am.wind * gf * 0.24 * forestness * (1 - am.rain * 0.4), dt);
+      beds.rustle.set(inCab ? 0 : am.wind * gf * (hasRec('wind') ? 0.07 : 0.18) * forestness * (1 - am.rain * 0.4), dt);   // (synthesized noise: under the real wind recording it only read as hiss / 'static')
       const wh = Math.pow(Math.max(0, A.gust - 0.3), 2) * 0.9 * hgt * (inCab ? 0.25 + 0.4 * openK : catwalk ? 1.2 : 0.8);
       set(beds.wind.whistle.gain, Math.min(0.2, wh)); beds.wind.w1.frequency.value = 820 * (0.85 + 0.3 * A.gust); beds.wind.w2.frequency.value = 1240 * (0.88 + 0.26 * A.gust);
       set(beds.wind.moan.gain, Math.min(0.32, Math.max(0, A.gust - 0.2) * 0.52 * hgt * (inCab ? 0.6 : 1))); beds.wind.mo.frequency.value = 250 * (0.9 + 0.25 * A.gust);
@@ -787,7 +787,7 @@ export function createAudio(engine, opts = {}) {
       beds.generator.set(am.generator * 0.3 * (1 - (am.genSputter || 0) * 0.5 * Math.random()), dt);
       // the cab: heater hiss, the stove's roar (and the percolator), the lamp's hum, the alarm clock
       const cabK = inCab ? 1 : zone === 'catwalk' ? 0.25 : 0;
-      beds.heater.place(); beds.heater.set(am.heater * 0.09 * (inCab ? 1 : 0.3), dt);
+      beds.heater.place(); beds.heater.set(am.heater * 0.05 * (inCab ? 1 : 0.3), dt);
       beds.stove.place(); beds.stove.set(am.stove * 0.12 * (inCab ? 1 : 0.3), dt);
       beds.hum.place(); beds.hum.set(am.lamp * 0.012 * cabK, dt);
       if (heard && am.stove > 0.05 && cabK > 0) { percT -= dt; if (percT <= 0) { const c = am.coffee || 0; const blup = c > 0.5; shot(sbuf('perc#' + (blup ? (Math.random() * 3) | 0 : 3)), beds.stove.g || bus.amb, { gain: blup ? 0.5 + c * 0.5 : 0.35, rate: 0.9 + Math.random() * 0.2 }); percT = blup ? 0.25 + Math.random() * (1.4 - c) : 1.5 + Math.random() * 3; } }

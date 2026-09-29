@@ -160,10 +160,29 @@ export class DogBrain {
   command(c) {
     if (!this.tamed) return false
     if (c === 'toggle') c = this.mode === 'stay' ? 'come' : 'stay'
-    if (c === 'stay') { this.mode = 'stay'; this.stayT = 0; this.detour = null; this.atHeater = false; this.emit('stay'); return true }
+    if (c === 'stay' || c === 'sit') { this.mode = 'stay'; this.stayT = 0; this.detour = null; this.atHeater = false; this.emit('stay'); return true }
+    if (c === 'wander') { if (inCab(this.pos)) return this.command('stay'); this.mode = 'wander'; this.wanderAt = this.pos.slice(); this.wt = null; this.detour = null; this.atHeater = false; this.emit('wander'); return true }
     this.mode = 'follow'; this.coming = true; this.comeT = 2.5; this.stillT = 0
     if (!this.crumbs.count || this.sd < this.crumbs.s(this.crumbs.first) - 1e-6) this.needSnap = true
     this.emit('come'); return true
+  }
+  /** Food thrown or set down near her: she trots to it and eats it (an offering, for taming), then goes back. */
+  bait(pos) {
+    if (this.eatT > 0 || (this.detour && this.detour.then !== 'back')) return false
+    this.detour = { to: [pos[0], pos[1], pos[2]], then: 'food', back: this.tamed ? null : this.pos.slice() }; this.atHeater = false; this.atBed = false; this.bedRoute = null
+    return true
+  }
+  /** Wander: nose about near where you told her to, until you call her. */
+  wanderTick(dt, ctx) {
+    const A = this.wanderAt || (this.wanderAt = this.pos.slice()), w = this.wt || (this.wt = { pause: 1, to: null })
+    if (w.pause > 0) { w.pause -= dt; this.accelTo(0, dt); this.posture = 'stand'; this.act = 'sniff'; return 0 }
+    if (!w.to) { const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 7, x = A[0] + Math.cos(a) * r, z = A[2] + Math.sin(a) * r; const g = this.opts.ground ? this.opts.ground(x, z) : A[1]; w.to = [x, Number.isFinite(g) ? g : A[1], z] }
+    const to = w.to, dx = to[0] - this.pos[0], dz = to[2] - this.pos[2], L = Math.hypot(dx, dz)
+    if (L < 0.15 || Math.abs(to[1] - this.pos[1]) > 2.5) { w.to = null; w.pause = 2 + Math.random() * 5; return 0 }
+    this.posture = 'stand'; this.act = 'walk'; this.accelTo(Math.min(DOG.walkSpeed * 0.7, L + 0.2), dt)
+    const step = Math.min(this.speed * dt, L); this.pos[0] += (dx / L) * step; this.pos[2] += (dz / L) * step
+    const g = this.opts.ground ? this.opts.ground(this.pos[0], this.pos[2]) : to[1]; if (Number.isFinite(g)) this.pos[1] = g
+    this.turnTo(Math.atan2(dx, dz), dt, 5); return 0
   }
   tame() {
     if (this.tamed) return
@@ -186,7 +205,7 @@ export class DogBrain {
     else this.lastPlayer = [0, 0, 0]
     this.lastPlayer[0] = pl[0]; this.lastPlayer[1] = pl[1]; this.lastPlayer[2] = pl[2]
     // breadcrumbs (only once she's yours)
-    if (this.tamed) {
+    if (this.tamed && !ctx.trapped) {
       if (jumped || !this.crumbs.count) this.onPlayerJump(pl)
       else { const c = this.crumbs.get(this.crumbs.last, this._q); if (d3(c, pl) >= DOG.crumbStep) this.crumbs.push(pl[0], pl[1], pl[2]) }
     }
@@ -199,7 +218,10 @@ export class DogBrain {
     this.weeperTick(dt, ctx)
     const dist = d2(this.pos, pl)
     let target = 0   // desired speed along whatever she's walking
-    if (this.stareT > 0) { this.stareT -= dt; target = 0 }
+    if (ctx.trapped) { this.speed=0;this.posture='lie';this.act='trapped';this.atBed=false;this.bedRoute=null;this.stareT=0 }
+    else if (this.detour && (this.detour.then === 'food' || this.detour.then === 'back')) { if (this.eatT > 0) { this.posture = 'eat'; this.act = 'eat'; this.accelTo(0, dt) } else target = this.detourTick(dt) }
+    else if (this.stareT > 0) { this.stareT -= dt; target = 0 }
+    else if (this.tamed && this.mode === 'wander') target = this.wanderTick(dt, ctx)
     else if (!this.tamed) target = this.strayTick(dt, ctx, dist, pSpeed)
     else target = this.tamedTick(dt, ctx, dist, pSpeed)
     // look + wag + alert (the view smooths these)
@@ -436,6 +458,8 @@ export class DogBrain {
     this.posture = 'stand'; this.act = this.detour.then === 'heater' ? 'to-heater' : 'rejoin'
     if (L < 0.06) {
       this.pos[0] = to[0]; this.pos[1] = to[1]; this.pos[2] = to[2]
+      if (this.detour.then === 'food') { const back = this.detour.back; this.detour = back ? { to: back, then: 'back' } : null; this.offers++; this.eatT = DOG.eatTime; this.posture = 'eat'; this.speed = 0; this.trust = Math.min(DOG.trustMax, this.trust + (this.tamed ? 0.25 : 0.5)); this.emit('baitEaten'); this.emit('ate', { offers: this.offers, tamed: this.tamed }); if (this.tamed && this.mode !== 'wander') this.needSnap = true; return 0 }
+      if (this.detour.then === 'back') { this.detour = null; return 0 }
       if (this.detour.then === 'heater') { this.atHeater = true; this.detour = null; this.posture = 'lie'; this.accelTo(0, dt); if (heater) this.turnTo(heater.yaw, dt, 3) }
       else { this.sd = this.detour.s; this.ci = this.detour.i; this.detour = null }
       return 0

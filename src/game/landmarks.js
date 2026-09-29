@@ -12,8 +12,8 @@
 //     (the week's last morning: the forest burns and Walt's truck drives you out through it; tunnelRoute() is its way).
 // The pure half (where, what blocks, the truck's route) is at the top; node tests it (tests/landmarks.test.mjs).
 import * as THREE from 'three';
-import { loadGLB } from '../engine/world.js?v=0cb07d852ed67db5';
-import { MB, Bins, M4, memberM, WP, WB, canvasTex, decalMat, sceneMaterials, cullTrees, rng, hash, smooth, scuff, SERIF, SANS } from './fireCache.js?v=e8cfe5ff077d6729';
+import { loadGLB } from '../engine/world.js?v=f72bf2c303254cc4';
+import { MB, Bins, M4, memberM, WP, WB, canvasTex, decalMat, sceneMaterials, cullTrees, rng, hash, smooth, scuff, SERIF, SANS } from './fireCache.js?v=5ca4de81f93a8df6';
 import { nearestOnLine, pointAt, lineLength } from './northWoods.js?v=38b24fd4e4e18620';
 
 const V3 = THREE.Vector3;

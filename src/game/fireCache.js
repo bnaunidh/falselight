@@ -10,7 +10,7 @@
 // own instanced sapling set (no new draw calls, the same wind and LOD dissolve). Everything is built once, at init, in a
 // few ms; far away it's hidden (no draw calls). Origin of the building: centre of the floor at the ground, door on +z.
 import * as THREE from 'three';
-import { loadGLB } from '../engine/world.js?v=0cb07d852ed67db5';
+import { loadGLB } from '../engine/world.js?v=f72bf2c303254cc4';
 import { NORTH_WOODS as NWD, CACHE_LOCAL, CACHE_FLOOR, CACHE_SHELVES, cacheToWorld, worldToCache, inCache, blowdownLine, thicketPlants,
   pointAt, ROAD_LEN, SIGN_S, scareStep, SCARE_BEATS, scareReady, cacheLock, cacheStock, discover, doorPrompt, doorAct, toolboxPrompt } from './northWoods.js?v=38b24fd4e4e18620';
 

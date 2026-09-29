@@ -19,6 +19,7 @@ export const KINDS = {
   coffee:     { name: 'Coffee tin', model: 'prop_coffee_tin', pack: true },
   emptycan:   { name: 'Empty bean tin', model: 'prop_empty_can', pack: true, trash: true },
   trashbag:   { name: 'Trash bag', model: 'prop_trash_bag', pack: true },
+  trap:       { name: 'Bear trap', model: 'prop_bear_trap', pack: false, heavy: true },
   // the cab's own things: move them, shelve them, take them with you
   clock:      { name: 'Alarm clock', model: 'prop_alarm_clock', pack: true, scale: 0.72 },
   pot:        { name: 'Coffee pot', model: 'prop_pot_enamel', pack: false, scale: 0.78 },
@@ -113,6 +114,7 @@ export class Inventory {
   /** Pick a world item up: hands first (the active slot if it's empty), the pack for small things when your hands are full. */
   take(id) {
     const it = this.get(id); if (!it || it.where !== 'world') return { ok: false, why: 'gone' }
+    if (it.kind === 'trap' && (it.trapState === 'armed' || it.caught)) return {ok:false,why:'Disarm the trap and free anything caught before lifting it.'}
     if (it.kind === 'tent' && this.items.some((o) => o !== it && o.kind === 'tent' && o.where !== 'world')) return { ok: false, why: 'You can only carry one emergency tent at a time.' }
     const cap = KINDS[it.kind] && KINDS[it.kind].stack
     if (cap) {   // onto a stack you're already carrying (hands first, then the pack)
@@ -183,6 +185,7 @@ export class Inventory {
     if (it.kind === 'pot') return k.name + (it.heating ? ` (${it.heating === 'coffee' ? 'brewing' : 'boiling'})` : it.fill > 0 ? ` (${it.brew === 'coffee' ? 'coffee' : it.raw ? 'untreated water' : 'clean water'})` : ' (empty)')
     if (it.kind === 'medkit' || it.kind === 'coffee') return k.name + ` (${it.n || 0} uses left)`
     if (it.kind === 'trashbag') return k.name + ` (${it.collected || 0}/30 pieces)`
+    if (it.kind === 'trap') return k.name + (it.caught ? ' (sprung)' : it.trapState === 'armed' ? ' (armed)' : ' (disarmed)')
     if (it.kind === 'lantern') return k.name + (it.on ? ' (lit)' : '')
     if (it.kind === 'pills') return k.name + (it.n > 0 ? ` (${it.n} left)` : ' (empty)')
     if (it.kind === 'tent') { const u = it.uses ?? 3; return k.name + (u > 0 ? ` (${u} pitch${u === 1 ? '' : 'es'} left)` : ' (worn out)') }
