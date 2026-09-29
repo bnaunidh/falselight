@@ -123,6 +123,8 @@ export async function createSky(engine, manifest, onProgress = () => {}, stream 
       hemi.intensity = L('amb') * (1 - storm * 0.3);
       // fog
       const fc = La('fog'); const fogCol = new THREE.Color(fc[0], fc[1], fc[2]).multiplyScalar(1 - storm * 0.35);
+      const sm = S.weather.smoke || 0;   // wildfire smoke (the last days of the week): the air goes brown-orange, the sun goes red
+      if (sm > 0) { fogCol.lerp(new THREE.Color(0.66, 0.37, 0.17).multiplyScalar(night ? 0.4 : 1), sm * 0.75); sun.color.lerp(new THREE.Color(1.0, 0.5, 0.25), sm * 0.7); U.uExp.value *= 1 - sm * 0.25; }
       scene.fog.color.copy(fogCol); U.uFog.value.copy(fogCol);
       scene.fog.density = 0.002 + S.weather.fog * 0.0075 + S.weather.rain * 0.003 + (night ? 0.002 : 0);
       // lightning

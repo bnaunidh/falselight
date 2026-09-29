@@ -310,6 +310,43 @@ export const FINDS = {
 }
 
 // ---------------------------------------------------------------- objectives (the logbook tracker)
+// ---- the rest of the week (days 3–7). The fire comes closer every day; on the fifth the district goes quiet; on the
+// seventh the mountain burns and you run for Walt's truck.
+const J = (text) => ({ who: 'JOANNE', text, radio: true })
+const WR = (text) => ({ who: WHO.DRIVER, text, radio: true })
+export const WEEK = {
+  // new fires, nearer each day (bearing from the cab, distance in metres): the one you report that day / see that night
+  fires: { 3: { name: 'Hatchet Creek', b: 322, d: 3600 }, 4: { name: 'West Slope', b: 255, d: 1900 }, 5: { name: 'Tamarack West', b: 248, d: 1200 }, 6: { name: 'Cold Creek Draw', b: 205, d: 650 }, 7: { name: 'Below the Knoll', b: 190, d: 260 } },
+  morning: {
+    3: [D('Tamarack, Silver Fork. Morning check.'), Y('Silver Fork, Tamarack. Go ahead.'), D('Hatchet Peak crowned out overnight. It made two miles on the wind, northeast, toward Hatchet Creek. Nothing for you to do but keep your eyes on it.'), D('And Mrs. Everly called. Dale Everly\'s mother. She\'s coming up Monday with some flowers for the overlook. Silver Fork clear.')],
+    4: [D('Tamarack, Silver Fork. Morning check.'), Y('Silver Fork, Tamarack. Go ahead.'), D('Hatchet fire made four miles yesterday. We\'ve got crews on the north side and nobody on yours. Walt\'s bringing fuel and film, he\'ll leave it by the shed.'), D('Watch your west slope today, Tamarack. The \'80 burn started low on that side. Silver Fork clear.')],
+    5: [D('Tamarack, Silver Fork.'), Y('Silver Fork, Tamarack. Go ahead.'), D('Tamarack, the Hatchet fire\'s jumped the— … —both draws, if it gets into the— … tell Walt to—')],
+    6: [J('Tamarack, this is Joanne. Not the district. It\'s Sunday, there\'s nobody here but me and the line\'s half gone.'), J('It\'s coming up your west side. Walt\'s going to try the road for you at first light tomorrow. Be at the lot. Bring the dog if you\'ve got one.'), J('And keep it lit tonight. Whatever else. Silver Fork clear.')],
+    7: [WR('Tamarack! Tamarack, it\'s Walt. It\'s in the draw right below you and it\'s coming up fast.'), WR('I\'m at the lot with the truck. Get down here. Don\'t pack, don\'t stop, don\'t look at anything. Bring the dog.')],
+  },
+  smokeCall: {
+    3: [D('Tamarack, Silver Fork. Pilot\'s reporting a spot fire out ahead of the Hatchet fire. Can you give me an azimuth?'), Y('Copy. Stand by.')],
+    4: [D('Tamarack, we\'ve got smoke reported on your west slope, low. Azimuth?'), Y('Copy. Stand by.')],
+  },
+  evening: {
+    3: [D('Tamarack, Silver Fork. Evening check. The Hatchet fire\'s laid down for the night. Anything glows, you call it. Silver Fork clear.')],
+    4: [D('Tamarack, Silver Fork. Evening check. Anything on your west slope tonight, you call it in. You don\'t go to it. Silver Fork clear.')],
+  },
+  radioDead: 'Nothing. Not even the carrier.',
+  evacEnd: {
+    text: 'You made it out.',
+    paras: [
+      'Walt had the engine running before you reached the truck. He didn\'t say anything. He drove.',
+      'The fire came over the knoll behind you while you were still on the gravel. In the mirror the tower stood up out of the smoke, and the lamp in the cab was still lit. Nobody had turned it off.',
+      'The gate at the tunnel was standing open. Nobody had opened it for you either. Walt drove into the dark without slowing down, and on the other side it was raining.',
+    ],
+    dog: (name) => `${name} rode the whole way with her head on your knee.`,
+    noDog: 'You looked back once, at the lot. Walt said not to.',
+    last: 'The Tamarack lookout burned on August 15, 1983. It was not rebuilt.',
+  },
+  deathFire: 'The fire came up the draw faster than anyone could run.',
+}
+
 export const OBJECTIVES = {
   d1_walk:      { text: 'Walk up to the tower', hint: 'Follow the trail uphill from the lot. Map: M.' },
   d1_climb:     { text: 'Climb to the cab', hint: 'Up the stairs under the tower, out through the hatch onto the catwalk, then into the cab through the door.' },
@@ -344,6 +381,19 @@ export const OBJECTIVES = {
   end:          { text: 'The truck comes Thursday.', hint: 'End of the first two nights.' },
   d2_cache:     { text: 'Find the old fire cache Walt mentioned', hint: 'Tillman walked there along the old phone line. His logbook is on the desk in the cab.', optional: true },
 }
+for (let n = 3; n <= 6; n++) Object.assign(OBJECTIVES, {
+  ['d' + n + '_smoke']: { text: 'New smoke. Get an azimuth on it and call it in.', hint: 'From the catwalk with the binoculars (hold B), then the fire finder (F), then E to radio it.' },
+  ['d' + n + '_fuel']: { text: 'Carry a can up for tonight', hint: 'Cans by the shed door, or whatever\'s left. Set it down anywhere up top (G).' },
+  ['d' + n + '_generator']: { text: 'Start the generator before dark', hint: 'In the shed at the base.' },
+  ['d' + n + '_dusk']: { text: 'Get back up to the cab before dark', hint: 'The stairs are not yours after dark.', urgent: true },
+  ['n' + n + '_fire']: { text: 'A glow. Get an azimuth.', hint: 'Fire finder, then E to radio it.' },
+  ['n' + n + '_refuel']: { text: 'Fuel is low. Refuel the generator.', hint: 'Carry a can down to the shed. E at the generator pours it.', urgent: true },
+  ['n' + n + '_dawn']: { text: 'Keep the light until first light', hint: 'Stay in the cab.', optional: true },
+})
+Object.assign(OBJECTIVES, {
+  e_trail: { text: 'Get down to Walt\'s truck at the lot. Now.', hint: 'Down the stairs, the trail south, over the creek, down to the trailhead. Don\'t stop moving.', urgent: true },
+  e_dog: { text: 'Bring the dog', hint: 'Hold E on her: Follow me. She keeps up if you don\'t lose her.', optional: true },
+})
 
 export const PROOF_GOAL = 6
 
@@ -352,7 +402,7 @@ export const UI = {
   title: 'FALSE LIGHT',
   subtitle: 'Tamarack Lookout · Silver Fork Ranger District · August 1983',
   // (the Controls card is written from the live key bindings: main.js controlsList)
-  death: { woods: 'You stood still in the dark, off the trail, too long. The steps behind you didn\'t stop.', cold: 'You lay down for a minute in the dark. The mountain kept you.', bear: 'You ran. It covered the ground between you before you\'d taken ten steps.', weeper: 'He found who he was looking for.', fall: 'You fell too far. Nobody came up the trail until morning.', generic: 'You didn\'t make it to first light.' },
+  death: { woods: 'You stood still in the dark, off the trail, too long. The steps behind you didn\'t stop.', cold: 'You lay down for a minute in the dark. The mountain kept you.', bear: 'You ran. It covered the ground between you before you\'d taken ten steps.', weeper: 'He found who he was looking for.', fall: 'You fell too far. Nobody came up the trail until morning.', generic: 'You didn\'t make it to first light.', fire: 'The fire came up the draw faster than anyone could run.' },
 }
 
 /** CO makes the logbook subtly wrong. Deterministic per word so it doesn't flicker. */

@@ -3,11 +3,11 @@
 // the engine exists; the live backdrop fades in once the title's set is in (stage A); New game / Continue wait only for
 // stage B (the cab, the trailhead, the item templates: the game is built then); the rest of the forest streams in during
 // day 1, and the day-1 clock holds before dusk until the night (stage D) is in.
-import { createEngine } from './engine/engine.js?v=8f8ca431b18b3fda';
+import { createEngine } from './engine/engine.js?v=a183ce1e82db0650';
 import { createUI } from './ui/ui.js?v=3714ae20e380a639';
-import { Game } from './game/bridge.js?v=2360f77ff48e1e64';
+import { Game } from './game/bridge.js?v=13b063d337d52ad8';
 import { createSaves } from './game/saves.js?v=9b2daabbbb6263ff';
-import { UI as WORDS } from './game/content/story.js?v=6c8a01b774ad2f1c';
+import { UI as WORDS } from './game/content/story.js?v=8a128137a13c2f76';
 import { ACTIONS, keyName } from './engine/input.js?v=18bc18106d93c298';
 import { registerAnimalSounds } from './engine/animalSounds.js?v=98d47a28f0d0689d';
 import { registerScareSounds } from './engine/scareSounds.js?v=03d6d9f843586f50';
@@ -141,7 +141,7 @@ function begin(a) {
 // the title's living backdrop (once the world is in): dusk going to night around the tower, the lamp lit in the cab
 function titleScene() {
   if (!engine.sky || !engine.lights) return;
-  engine.sky.setTime(engine.sky.tex.night ? 20.9 : 20.2); engine.sky.setWeather({ fog: 0.5, rain: 0, wind: 0.45, lightning: 0 });   // (no night sky yet: stay at dusk)
+  engine.sky.setTime(engine.sky.tex.night ? 20.9 : 20.2); engine.sky.setWeather({ fog: 0.5, rain: 0, wind: 0.45, lightning: 0, smoke: 0 });   // (no night sky yet: stay at dusk)
   engine.lights.cabLamp.on = true;
 }
 function title() {

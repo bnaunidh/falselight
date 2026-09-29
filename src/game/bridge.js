@@ -1,7 +1,7 @@
 // FALSE LIGHT — the game: wires the pure rules (clock, objectives, fuel, morse, hikers, the Weeper, photos,
 // sending, CO, the Other Lookout) to the engine and the UI, and runs the Day 1 → Night 2 script.
 import * as THREE from 'three';
-import { Clock, PHASES, isNight, nextPhase } from './clock.js?v=e1921a4d4894c1b4';
+import { Clock, PHASES, isNight, nextPhase, phaseNum } from './clock.js?v=deb71b13e068dca0';
 import { Objectives } from './objectives.js?v=9b4ecf1404219fd0';
 import { Radio } from './radio.js?v=b7caebeac794988c';
 import { Fuel, FUEL } from './fuel.js?v=c503ffa055b08bd7';
@@ -15,7 +15,7 @@ import { Photos, classifyShot } from './photos.js?v=906e4971034689fb';
 import { CO } from './co.js?v=9ead21a45ac25ec2';
 import { Weeper, WEEPER, lookupChance } from './weeper.js?v=6b69a68c55ae4878';
 import { OtherLookout } from './otherLookout.js?v=0482db7491c3449c';
-import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=18e59aa7385b32c4';
+import { LostHikerWatcher, LOST, spreadPath } from './lostHiker.js?v=3e2335cb092f9e8c';
 import { GuidedHiker } from './hikers.js?v=f35fccff86b9ceca';
 import { MorseKeyer, isSOS } from './morse.js?v=bfbb6739aba0c883';
 import { normalizeLayout } from './layout.js?v=38319fe0e0d604c0';
@@ -23,12 +23,12 @@ import { createSaves } from './saves.js?v=9b2daabbbb6263ff';
 import { createRng } from './rng.js?v=d4fee6ae2c2692f2';
 import { canSend, send as sendPrint, isProof } from './sending.js?v=912afb8ed504e6bd';
 import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d92670d68201cefe';
-import * as S from './content/story.js?v=6c8a01b774ad2f1c';
+import * as S from './content/story.js?v=8a128137a13c2f76';
 import { createDog, setDogName } from './dog.js?v=438a74e93f443e3c';
 import { createWildlife } from './wildlife.js?v=a1a5440315b78c05';
 import { Fear, registerFearSounds } from './fear.js?v=7313292ea4947f94';
 import { epilogue } from './content/ending.js?v=eb9d7293a71584ff';
-import { Director, sosLamp } from './director.js?v=6a28c4644b7eddeb';
+import { Director, sosLamp } from './director.js?v=ed9dfc3842a08feb';
 import { createPhotoBoard } from './photoBoard.js?v=171437e75704cdce';
 import { makeTent } from './tents.js?v=8256affaddf0bab6';
 import { makeSpringFlow } from './spring.js?v=841fcca15db5856c';
@@ -86,6 +86,10 @@ export class Game {
       return map[n] ? map[n]() : null;
     };
     this.placeholders();
+    { const T = this.L.places.tower || [0, 0, 0], wf = (this.e.world.layout.fireSites || (this.e.world.layout.fireSites = []));   // the week's fires, nearer every day
+      for (const k of Object.keys(S.WEEK.fires)) { const F = S.WEEK.fires[k], r = F.b * Math.PI / 180, x = T[0] + Math.sin(r) * F.d, z = T[2] - Math.cos(r) * F.d, y = this.e.world.heightAt(x, z) + 20;
+        if (!this.L.fireSites.some((q) => q.name === F.name)) this.L.fireSites.push({ name: F.name, bearingDeg: F.b, distance: F.d, y });
+        if (!wf.some((q) => q.name === F.name)) wf.push({ name: F.name, bearingDeg: F.b, distance: F.d, position: [x, y, z] }); } }
     // Tillman's fire cache up the old phone line, the ruin of the first lookout, the closed road and the tunnel (built here,
     // once: the cache's shelves have to be item surfaces before buildSurfaces)
     { const snd = (n, p, v) => { if (e.audio.has(n)) e.audio.play(n, { position: p, volume: v }); };
@@ -389,12 +393,13 @@ export class Game {
     if (['coming', 'stairs', 'door', 'hunting', 'screaming'].includes(this.weeper.state)) { this.weeper.state = isNight(phase) ? 'screaming' : 'seen_day'; this.weeper.timer = 0; this.weeper.progress = 0; }   // by day he waits for dark
     const sky = e.sky;
     sky.setWeather(phase === 'night2' ? { rain: 0.15, wind: 0.55, fog: 0.35, lightning: 0.012 } : phase === 'night1' ? { rain: 0, wind: 0.35, fog: 0.3, lightning: 0 } : phase === 'day2' ? { rain: 0.25, wind: 0.4, fog: 0.5, lightning: 0 } : { rain: 0, wind: 0.3, fog: 0.3, lightning: 0 });
+    { const N = phaseNum(phase); if (N >= 3) sky.setWeather({ rain: 0, wind: 0.3 + 0.08 * (N - 2), fog: Math.min(0.8, 0.35 + 0.08 * (N - 2) + (phase === 'day7' ? 0.12 : 0)), lightning: 0, smoke: phase === 'day7' ? 1 : 0.14 * (N - 2) }); else sky.setWeather({ smoke: 0 }); }   // smoke, thicker every day
     e.lights.cabLamp.on = isNight(phase) && !this.flags.lampOff;
     const P = this.player();
     if (phase === 'day1') { P.teleport(this.anchor('SP_trailhead') || 'SP_stair_foot'); P.lookAt(V3(this.L.places.trailhead || [22, -32, 380]).add(new THREE.Vector3(-8, 1.5, -40))); }
     else if (phase === 'day2' || phase === 'end') { P.teleport(this.anchor('SP_cab_bed') || new THREE.Vector3(-1, 30, -0.7)); P.lookAt(new THREE.Vector3(0, 31.4, 3)); }
     else { P.teleport(this.anchor('SP_cab_bed') || new THREE.Vector3(-1, 30, -0.7)); P.lookAt(new THREE.Vector3(2, 31.4, 2)); }
-    if (phase === 'night2' && this.weeper.state === 'seen_day') this.weeper.nightFell();
+    if (isNight(phase) && phase !== 'night1' && this.weeper.state === 'seen_day') this.weeper.nightFell();
     if (cp) {   // resuming a secret checkpoint: put everything back exactly as it was
       this.clock.setHour(cp.hour); this.obj.load(cp.obj || []); this.fired = new Set(cp.fired || []);
       this.truckVisible = !!cp.truckVisible; this.slLit = !!cp.slLit;
@@ -415,25 +420,51 @@ export class Game {
     this.script('start');
     this.refreshTracker();
   }
+  /** The last morning: the fire is in the draw below the knoll. Walt is at the lot with the truck. Run. */
+  startEvac() {
+    const e = this.e; this.truckVisible = true; this.flags.evac = true;
+    this.say(S.WEEK.morning[7]); this.add('e_trail'); if (this.dog && this.dog.tamed) this.add('e_dog', { optional: true });
+    for (const k of [3, 4, 5, 6, 7]) { const F = S.WEEK.fires[k]; this.flags['fire_' + F.name] = true; this.flags['fireReported_' + F.name] = true; e.world.setFire(F.name, k >= 6 ? 1 : 0.8); }
+    const fp = (e.world.layout.fireSites || []).find((q) => q.name === S.WEEK.fires[7].name); if (fp && this.smoke) this.smoke.setSource(V3(fp.position));
+    e.audio.music.setMood && e.audio.music.setMood('chase', 2);
+    this.fear.spike(0.5, 'fire');
+  }
+  evacTick(dt, z) {
+    const e = this.e, P = this.player(), h = this.clock.hour;
+    // the heat: past about 09:30 it's on the trail with you
+    if (h > 9.5 && P.position.y < 25) { this.bodyHeat = Math.min(1, (this.bodyHeat || 0) + dt * 0.02); if (Math.random() < dt * 0.5) this.fear.spike(0.25, 'fire'); }
+    if (this.dog && this.dog.tamed && this.dog.position.distanceTo(P.position) < 12 && z === 'trailhead') this.complete('e_dog');
+    if (z === 'trailhead' && !this.obj.isDone('e_trail') && P.position.distanceTo(this.anchor('IA_truck') || P.position) < 8) this.complete('e_trail');
+  }
+  /** E at Walt's truck on the last morning: in, and out through the tunnel. Not without her, unless you mean it. */
+  getIn() {
+    const d = this.dog, P = this.player().position, withDog = !!(d && d.tamed && d.position.distanceTo(P) < 15);
+    if (d && d.tamed && !withDog && !this._leaveDog) { this._leaveDog = true; this.ui.toast(`${this.flags.dogName || 'Juniper'} isn't with you. E again to go without her.`, 4); return; }
+    this.flags.dogOut = withDog; this.complete('e_trail'); if (withDog) this.complete('e_dog');
+    if (this.landmarks && this.landmarks.openTunnel) this.landmarks.openTunnel(true);
+    this.state = 'transition'; this.ui.fade(1, '<b>The road out</b>Monday, August 15, 1983');
+    setTimeout(() => this.finish({ evac: true }), 3500);
+  }
   endPhase() {
     const M = this.e.audio.music;
     if (isNight(this.clock.phase)) M.sting('dawn');   // relief: the night is over
     M.setMood('silent', 2);                            // update() doesn't run during the transition; finish() overrides with the title
     const n = nextPhase(this.clock.phase);
-    if (n === 'end' || this.clock.phase === 'night2') { this.finish(); return; }
+    if (n === 'end') { this.finish(); return; }
     // a chapter card while it's dark, so the jump from the night to the morning (you, in the bunk) reads as sleep, not a glitch
     const was = this.clock.phase, D = PHASES[n], card = isNight(was) ? `<b>First light</b>You get a few hours in the bunk before the day starts.<br>${D.date}` : `<b>Dusk</b>${D.date}`;
     this.ui.fade(1, card);
-    setTimeout(() => { this.startPhase(n); setTimeout(() => this.ui.fade(0), isNight(was) ? 2600 : 1400); }, 900);
+    setTimeout(() => { this.clearWorldEntities(); this.startPhase(n); setTimeout(() => this.ui.fade(0), isNight(was) ? 2600 : 1400); }, 900);
     this.state = 'transition';
   }
-  finish() {
+  finish(o = {}) {
     this.state = 'end'; this.e.uiBlocking = false; if (this.ui.modalOpen()) this.ui.closeModal(); this.e.input.unlock(); this.e.audio.music.setMood('title', 8);
     const pr = this.photos.prints, sent = pr.filter((p) => p.sent).length;
     const E = epilogue({ proofs: this.proofs, goal: S.PROOF_GOAL, savedN1: !!this.flags.savedN1, lostN1: !!this.flags.lostN1, falseWalked: !!this.flags.falseWalked,
       gateOpenedByIt: !!this.flags.gateOpenedByIt, faceSent: pr.some((p) => p.forbidden && p.sent), faceKept: pr.some((p) => p.forbidden && !p.sent && !p.seen), faceSeen: pr.some((p) => p.forbidden && !p.sent && p.seen),
       dogName: this.dog && this.dog.tamed ? (this.flags.dogName || 'Juniper') : null, prints: pr.length, sent, treeSeen: !!this.flags.treeSeen });
-    this.ui.screen('end', { text: E.text, paras: E.paras, last: E.last, detail: E.detail,
+    if (o.evac) { const X = S.WEEK.evacEnd, name = this.flags.dogName || 'Juniper'; E.paras = [...X.paras, this.flags.dogOut ? X.dog(name) : X.noDog]; E.detail = null; E.text = X.text; E.last = X.last; }
+    this.ui.fade(0); this.ui.screen('end', { text: E.text, paras: E.paras, last: E.last, detail: E.detail,
       onAction: (a) => { this.ui.closeModal(); this.calmBody(); this.onTitle && this.onTitle(); } });
   }
   die(kind) {
@@ -523,7 +554,7 @@ export class Game {
       const g = this.anchor('IA_generator') || new THREE.Vector3(9.3, 0.7, 6.8);
       this.inv.create('fuel', { pos: [g.x - 0.9, g.y, g.z + 0.9], rotY: 1.2, settle: true }); this.syncItems();
     }
-    if (!this.fuel.power) this.add(this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel', { urgent: true });
+    if (!this.fuel.power) this.add('n' + phaseNum(this.clock.phase) + '_refuel', { urgent: true });
   }
   /** What ends the Weeper right now: send the print he's already in, or photograph him (and then send that). */
   weeperTask() { const c = this.weeper.carrier; return c && c !== 'next' ? 'weeper_send' : 'weeper_photo'; }
@@ -565,6 +596,20 @@ export class Game {
         if (what.length || film) setTimeout(() => this.ui.toast(`${what.length ? `Walt left ${what.join(' and ')} by the shed door.` : 'Walt came by.'}${film ? ' And a fresh film pack: 10 more shots.' : ''}`, 4.5), 6000);
         this.syncItems(); }
       if (ph === 'night2') { this.say(S.LINES.night2Start); this.add('n2_dawn', { optional: true }); this.nightFuelCheck(); }
+      const N = phaseNum(ph);
+      if (N >= 3 && N <= 6 && !this.night) {   // the rest of the week, by day
+        if (S.WEEK.morning[N]) this.say(S.WEEK.morning[N]);
+        if (N === 5) f.radioDead = true;
+        if (N === 4) {   // Walt's run: two cans, tins, film
+          const fa = this.anchor('IA_fuel_cans') || new THREE.Vector3(7.05, 0.4, 7.9); this.truckVisible = true;
+          for (let k = 0; k < 2; k++) this.inv.create('fuel', { pos: [fa.x - 0.5 + k * 0.4, fa.y, fa.z + 0.6], rotY: k, settle: true });
+          this.inv.create('food', { pos: [fa.x + 0.7, fa.y, fa.z + 0.5], rotY: 0.4, settle: true, n: 2 }); this.photos.packLeft += 10; this.syncItems();
+          this.later(20, () => this.ui.toast('Walt left two cans, tins and a film pack by the shed door.', 4));
+        }
+        for (let k = 3; k < N; k++) { const F = S.WEEK.fires[k]; this.flags['fire_' + F.name] = true; this.flags['fireReported_' + F.name] = true; }   // yesterday's are still burning
+      }
+      if (N >= 3 && N <= 6 && this.night) { if (S.WEEK.evening[N]) this.say(S.WEEK.evening[N]); this.add('n' + N + '_dawn', { optional: true }); this.nightFuelCheck(); }
+      if (ph === 'day7') this.startEvac();
     }
   }
   scriptTick(dt) {
@@ -620,10 +665,33 @@ export class Game {
       if (h >= 23.2) this.once('false', () => { this.quiet(); this.spawnHiker('false'); this.say(S.LINES.falseSOS); this.add('n2_light', { optional: true }); });
       if (h >= 28.4) this.once('dawnObj2', () => this.add('n2_dawn'));
     }
+    const N = phaseNum(ph);
+    if (N >= 3 && N <= 6 && !this.night) {
+      this.clock.addGate('dusk' + N, 20.45, () => z === 'cab' && this.fuel.genOn);
+      const F = S.WEEK.fires[N];
+      if (N <= 4 && h >= 13.0) this.once('smoke' + N, () => { this.say(S.WEEK.smokeCall[N]); this.add('d' + N + '_smoke'); this.showFire(F.name, true); });
+      if (N >= 5 && h >= 12.0) this.once('smoke' + N, () => { this.showFire(F.name, true); f['fireReported_' + F.name] = true; });   // nobody to call it in to
+      if (h >= 14.0) this.once('fuel' + N, () => { this.add('d' + N + '_fuel'); this.add('d' + N + '_generator'); });
+      if (h >= 19.5) this.once('duskT' + N, () => this.add('d' + N + '_dusk', { urgent: true }));
+      if (o.has('d' + N + '_fuel') && this.fuelUpTop()) this.complete('d' + N + '_fuel');
+      if (this.fuel.genOn && h >= 14) this.complete('d' + N + '_generator');
+      if (h >= 19.5 && done('d' + N + '_generator') && !this.fuel.genOn && !done('d' + N + '_dusk')) { o.remove('d' + N + '_generator'); this.add('d' + N + '_generator', { urgent: true }); }
+      if (z === 'cab' && h >= 20.2 && this.fuel.genOn) this.complete('d' + N + '_dusk');
+      if (N === 4 && h >= 16 && this.truckVisible) this.truckVisible = false;
+    }
+    if (N >= 3 && N <= 6 && this.night) {
+      const F = S.WEEK.fires[N];
+      if (h >= 21.3) this.once('glow' + N, () => { for (let k = 3; k < N; k++) this.e.world.setFire(S.WEEK.fires[k].name, 0.8); if (N <= 4) { f['fireReported_' + F.name] = false; this.add('n' + N + '_fire'); } this.showFire(F.name, true); if (N > 4) f['fireReported_' + F.name] = true; });
+      if (h >= 22.0) this.once('tree' + N, () => this.foreboding(() => this.spawnLost(), 5));
+      if (N === 4 && h >= 23.2) this.once('false4', () => { this.quiet(); this.spawnHiker('false'); this.say(S.LINES.falseSOS); this.add('n2_light', { optional: true }); });
+      if (N >= 5 && h >= 24.5) this.once('boots' + N, () => this.foreboding(() => this.otherEvent('boots_catwalk_2'), 4));
+      if (N >= 5 && h >= 26.0) this.once('gate' + N, () => this.foreboding(() => { this.e.audio.play('gate_rattle', { position: this.anchor('IA_gate') || new THREE.Vector3(0, 1, 6), volume: 1.2 }); this.say(S.LINES.gateRattle); }, 4));
+    }
+    if (ph === 'day7') this.evacTick(dt, z);
     // the Other Lookout
     const evs = this.other.check({ phase: ph, hour: h, zone: z, flags: { ...f, weeperComing: this.weeper.triggered, lostHikerStepped: f.lostSteps || 0 } });
     for (const id of evs) this.foreboding(() => this.otherEvent(id), 4);   // a beat of 'wrong' first (the entry in your hand, the boots, the one on the bed)
-    if (this.clock.ended && this.state === 'play') this.endPhase();
+    if (this.clock.ended && this.state === 'play') { if (ph === 'day7') this.die('fire'); else this.endPhase(); }
   }
   otherEvent(id) {
     const e = this.e;
@@ -739,11 +807,11 @@ export class Game {
 
   // ------------------------------------------------------------------ the Lost Hiker(s) at the tree line
   spawnLost() {
-    const e = this.e; const n = 1 + (this.flags.lostN1 ? 1 : 0);
+    const e = this.e; const n = 1 + (this.flags.lostN1 ? 1 : 0) + (phaseNum(this.clock.phase) >= 5 ? 1 : 0);
     const tower = this.L.places.tower || [0, 0, 0];
     for (let k = 0; k < n; k++) {
       const path = spreadPath(this.L.treeLine, k, tower);
-      const w = new LostHikerWatcher(path, { cap: LOST.nightCap.night2, id: k });
+      const w = new LostHikerWatcher(path, { cap: LOST.nightCap[this.clock.phase] || LOST.nightCap.night2, id: k });
       w.ent = e.entities.spawn('lost_hiker', { position: V3(path[0]), facing: V3(tower), pose: 'stand_tilt' });
       this.lostWatchers.push(w);
     }
@@ -764,11 +832,11 @@ export class Game {
     const c = e.view.check(h);
     // night two: every time you've gone a while without looking at him, he's moved: sitting a little closer to the tower
     // (you only notice through the binoculars, or when the crying sounds nearer). He stops a third of the way.
-    if (this.clock.phase === 'night2' && W.state === 'sitting') {
+    if (isNight(this.clock.phase) && this.clock.phase !== 'night1' && W.state === 'sitting') {
       if (c && c.visible) this._wUnseen = 0;
       else if ((this._wUnseen = (this._wUnseen || 0) + dt) > 45 && (this.flags.weeperCreep || 0) < 0.3) { this._wUnseen = 0; this.flags.weeperCreep = Math.min(0.3, (this.flags.weeperCreep || 0) + ((this.flags.weeperCreep || 0) ? 0.06 : 0.12)); }   // (the first move takes him across the creek)
     }
-    const creep = this.clock.phase === 'night2' ? (this.flags.weeperCreep || 0) : 0;
+    const creep = isNight(this.clock.phase) && this.clock.phase !== 'night1' ? (this.flags.weeperCreep || 0) : 0;
     if (this._creepK !== creep) {
       this._creepK = creep; const r = this.weeperSeat, g = this.L.gate || [0, 0, 6], x = r.x + (g[0] - r.x) * creep, z = r.z + (g[2] - r.z) * creep;
       const lift = Math.max(0, r.y - e.world.heightAt(r.x, r.z));   // his rock's seat height above the ground
@@ -909,7 +977,7 @@ export class Game {
     reg('radio', 'IA_radio', () => this.obj.has('d1_radio') && !this.obj.isDone('d1_radio') ? 'E — Call Silver Fork' : 'E — Radio (nothing to report)', () => {
       if (this.radio.busy) return;   // someone's already talking
       if (this.obj.has('d1_radio') && !this.obj.isDone('d1_radio')) { e.audio.play('radio_squelch'); this.say(S.LINES.briefing, { tag: 'briefing', onDone: () => { this.complete('d1_radio'); this.add('d1_rules'); } }); }
-      else { e.audio.play('radio_squelch'); this.ui.toast('Static. Silver Fork is quiet.'); }
+      else { e.audio.play('radio_squelch'); this.ui.toast(phaseNum(this.clock.phase) >= 5 ? S.WEEK.radioDead : 'Static. Silver Fork is quiet.'); }
     });
     reg('finder', 'IA_firefinder', () => this.obj.has('d1_rules') && !this.obj.isDone('d1_rules') ? 'E — Read the card taped to the fire finder' : 'E — Use the fire finder', () => {
       if (this.obj.has('d1_rules') && !this.obj.isDone('d1_rules')) {
@@ -975,7 +1043,7 @@ export class Game {
     }, () => true, 0.7);
     reg('mailbox', 'IA_mailbox', 'E — Mail a photograph', () => this.sendFlow('mailbox'), () => this.photos.sendable().length > 0);
     reg('fax', 'IA_fax', 'E — The fax machine (send or copy a photograph)', () => this.faxMenu(), () => this.photos.sendable().length > 0);
-    reg('truck', 'IA_truck', () => this.photos.sendable().length ? 'E — Give Walt a photograph' : 'E — Talk to Walt', () => { if (this.photos.sendable().length) this.sendFlow('driver'); else this.say(this.clock.phase === 'day1' ? S.LINES.driverHello1 : S.LINES.driverHello); }, () => this.truckVisible);
+    reg('truck', 'IA_truck', () => this.clock.phase === 'day7' ? 'E — Get in the truck' : this.photos.sendable().length ? 'E — Give Walt a photograph' : 'E — Talk to Walt', () => { if (this.clock.phase === 'day7') return this.getIn(); if (this.photos.sendable().length) this.sendFlow('driver'); else this.say(this.clock.phase === 'day1' ? S.LINES.driverHello1 : S.LINES.driverHello); }, () => this.truckVisible);
     reg('pack', 'IA_camp_backpack', 'E — Search the pack', () => {
       e.audio.music.sting('found');
       const f = S.FINDS.camp_backpack; this.flags.rulesTo = Math.max(this.flags.rulesTo, f.rulesTo);
@@ -1713,7 +1781,7 @@ export class Game {
       const lines = this.night ? S.LINES.fireOk(spoken, r.fire.name) : S.LINES.smokeOk(spoken, r.fire.name);
       this.say(lines);
       this.addLog(this.night ? S.AUTO_LOG.glow(r.bearing, r.fire.name) : S.AUTO_LOG.smoke(r.bearing, r.fire.name));
-      this.complete(phase === 'day1' ? 'd1_smoke' : phase === 'night1' ? 'n1_fire' : 'n2_fire');
+      this.complete(this.night ? 'n' + phaseNum(phase) + '_fire' : 'd' + phaseNum(phase) + '_smoke');
       if (!this.night) this.smokeFade = 0;
       this.exitMode();
     } else this.say(this.night ? S.LINES.fireBad(spoken) : S.LINES.smokeBad(spoken));
@@ -1928,7 +1996,8 @@ export class Game {
       if (this._flick && now >= this._flick.until) { const f = this._flick; this._flick = null; if (f.lamp && !this.flags.lampOff) e.lights.cabLamp.on = true; if (f.torch && this.inv.inHands('flashlight')) e.lights.flashlight.on = true; }
       { const Pl = this.player(), cam = e.camera, fw = cam.getWorldDirection(this._ffw || (this._ffw = new THREE.Vector3())), mv = e.input.isDown('forward') || e.input.isDown('back') || e.input.isDown('left') || e.input.isDown('right');
         const lit = e.lights.flashlight.on || this.inv.items.some((i) => i.kind === 'lantern' && i.on && i.where === 'hand');
-        this.follower.update(dt, { t: e.time.value, night: this.night, depth: this.mode === 'walk' && !(this.woods && this.woods.inside(Pl.position.x, Pl.position.z)) ? (Pl.depth || 0) : 0, busy: this.ui.modalOpen() || !!e.uiBlocking || this.state !== 'play' || !!this.resting,
+        const evac = this.clock.phase === 'day7' && Pl.position.y < 25 && Pl.zone !== 'trailhead';   // the last morning: THEY are out in the smoke, on the trail too
+        this.follower.update(dt, { t: e.time.value, night: this.night || evac, depth: evac ? 0.7 : this.mode === 'walk' && !(this.woods && this.woods.inside(Pl.position.x, Pl.position.z)) ? (Pl.depth || 0) : 0, busy: this.ui.modalOpen() || !!e.uiBlocking || this.state !== 'play' || !!this.resting,
           stepped: !!this._stepped, moving: mv && this.mode === 'walk', lit, eye: [cam.position.x, cam.position.y, cam.position.z], fwd: [fw.x, fw.z], pos: [Pl.position.x, Pl.position.y, Pl.position.z], rain: e.sky.weather.rain > 0.3 }, this.followActions || (this.followActions = this.makeFollowActions()));
         this._stepped = false; if (!this.follower.active) this.followFear = 0; }
       // walking the false light brings it home: its steps come up the stairs (about 20 game minutes later), then it knocks
@@ -2037,7 +2106,7 @@ export class Game {
       breath: (p, v) => (this.caption('followBreath'), e.audio.play('breath_close', { position: at(p).add(new THREE.Vector3(0, 1.5, 0)), volume: v })),
       flee: (p) => { e.audio.play('branch_snap', { position: at(p), volume: 1.2 }); for (let k = 1; k <= 5; k++) this.later(0.12 + k * 0.17, () => e.audio.play('footstep_dirt', { position: at(p), volume: 1 - k * 0.16 })); this.fear.spike(0.6, 'woods'); this.scare({ shake: 0.25, seconds: 0.3 }); },
       fear: (k) => { this.followFear = k; },
-      caught: () => { this.scare({ shake: 1, seconds: 0.5 }); this.die('woods'); },
+      caught: () => { this.scare({ shake: 1, seconds: 0.5 }); this.die(this.clock.phase === 'day7' ? 'woods' : 'woods'); },
       dog: (p) => { const d = this.dog; if (d && d.tamed && d.position.distanceTo(this.player().position) < 15) e.audio.play('dog_growl', { position: d.position.clone().add(new THREE.Vector3(0, 0.5, 0)), volume: 0.7 }); },
     };
   }

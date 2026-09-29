@@ -4,7 +4,7 @@
 // He advances along treeLine toward the gate; each night he may get a little further.
 import { dist2d } from './util.js?v=d92670d68201cefe'
 
-export const LOST = { stepDelay: 2.6, nightCap: { night1: 0, night2: 4, night3: 5, night4: 7, night5: 8 } }
+export const LOST = { stepDelay: 2.6, nightCap: { night1: 0, night2: 4, night3: 5, night4: 7, night5: 8, night6: 9 } }
 
 export class LostHikerWatcher {
   /** path: [[x,y,z]...] far → near (the gate last). */

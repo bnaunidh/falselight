@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createInput } from './input.js?v=18bc18106d93c298';
 import { createWorld, loadGLB } from './world.js?v=f72bf2c303254cc4';
 import { createPlayer } from './player.js?v=1dc0031345c6950f';
-import { createSky } from './sky.js?v=68a95a40cff6b4bd';
+import { createSky } from './sky.js?v=9c9b0e311b6ac7d2';
 import { createLights } from './lights.js?v=792a7514929cb178';
 import { createPost } from './post.js?v=44767cb562821303';
 import { createEntities, createView, createInteract } from './entities.js?v=b5bcb59c17f83bbc';
