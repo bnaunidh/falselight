@@ -185,6 +185,7 @@ export function createUI(root = document.getElementById('ui')) {
           <nav class="t2-menu">
             ${o.canContinue ? `<button data-a="continue"><span>Continue</span><em>${esc(o.continueLabel || '')}</em></button>` : ''}
             <button data-a="new"><span>${o.canContinue ? 'Begin again' : 'Begin the season'}</span><em>Day 1 · the walk up</em></button>
+            <button data-a="mp"><span>Play with friends</span><em>up to four · a room code</em></button>
             <button data-a="settings"><span>Settings</span><em>quality · mouse · sound</em></button>
             <button data-a="controls"><span>Controls</span><em>how to keep the light</em></button>
           </nav>

@@ -3,9 +3,10 @@
 // the engine exists; the live backdrop fades in once the title's set is in (stage A); New game / Continue wait only for
 // stage B (the cab, the trailhead, the item templates: the game is built then); the rest of the forest streams in during
 // day 1, and the day-1 clock holds before dusk until the night (stage D) is in.
+import { createCoop } from './game/coop.js?v=9d4c028551f494e4';
 import { createEngine } from './engine/engine.js?v=a183ce1e82db0650';
-import { createUI } from './ui/ui.js?v=3714ae20e380a639';
-import { Game } from './game/bridge.js?v=13b063d337d52ad8';
+import { createUI } from './ui/ui.js?v=dc7091dfb018f2dc';
+import { Game } from './game/bridge.js?v=4e057eabf5d0b7be';
 import { createSaves } from './game/saves.js?v=9b2daabbbb6263ff';
 import { UI as WORDS } from './game/content/story.js?v=8a128137a13c2f76';
 import { ACTIONS, keyName } from './engine/input.js?v=18bc18106d93c298';
@@ -38,7 +39,9 @@ registerScareSounds(engine.audio);    // the director's: snaps, breath, whispers
 window.__fl = { engine, ui };
 engine.noRender = q.has('norender');   // headless logic tests: no GPU work per frame
 const skip = q.get('skip');
-let game = null, gameReady = false, pending = null, stream = null;   // the game is built once stage B is in; pending = Begin/Continue clicked before that
+let game = null, gameReady = false, pending = null, stream = null;
+const coop = window.__fl.coop = createCoop(engine, ui, { getGame: () => game, begin: (a) => begin(a) });   // co-op (src/game/coop.js)
+engine.onUpdate((dt) => coop.update(dt));   // the game is built once stage B is in; pending = Begin/Continue clicked before that
 const inTitle = () => !game || game.state === 'title';
 // the offline cache (public site only): a new build is taken at the title, never mid-run
 const upd = watchUpdates({ isSafe: () => inTitle(), note: (t) => ui.loading(1, t, 'wait') });
@@ -151,6 +154,7 @@ function title() {
   titleScene();
   ui.screen('title', { canContinue: saves.has(), continueLabel: continueLabel(), sound: settings.sound, onAction: (a) => {
     if (a === 'settings') return openSettings(title);
+    if (a === 'mp') return coop.menu(title);
     if (a === 'controls') return ui.screen('controls', { controls: controlsList(), onBack: () => { ui.closeModal(); title(); } });
     if (a === 'sound') { settings.sound = !settings.sound; saves.saveSettings(settings); engine.audio.setMuted(!settings.sound); engine.audio.start(); ui.closeModal(); return title(); }
     if ((a === 'new' || a === 'continue') && !settings.sound && !settings.soundAsked && !q.has('mute')) {   // once: it's a game you play by ear

@@ -305,7 +305,7 @@ export async function createDog(engine, hooks = {}) {
       else { pending = null; brain.pet(); }
     }
     clock += dt;
-    const evs = brain.update(dt, ctx);
+    const evs = H.dogRemote && H.dogRemote(brain) ? [] : brain.update(dt, ctx);
     for (let i = 0; i < evs.length; i++) onEvent(evs[i]);
     // root transform (+ lean up/down slopes and stairs). Small pops in the rules (a loop cut when you double back past her,
     // up to ~0.45 m) glide out over ~0.2 s instead of snapping; real teleports (>= 1 m) still snap.

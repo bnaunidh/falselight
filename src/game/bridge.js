@@ -24,7 +24,7 @@ import { createRng } from './rng.js?v=d4fee6ae2c2692f2';
 import { canSend, send as sendPrint, isProof } from './sending.js?v=912afb8ed504e6bd';
 import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d92670d68201cefe';
 import * as S from './content/story.js?v=8a128137a13c2f76';
-import { createDog, setDogName } from './dog.js?v=438a74e93f443e3c';
+import { createDog, setDogName } from './dog.js?v=ad22a4fc71288b67';
 import { createWildlife } from './wildlife.js?v=a1a5440315b78c05';
 import { Fear, registerFearSounds } from './fear.js?v=7313292ea4947f94';
 import { epilogue } from './content/ending.js?v=eb9d7293a71584ff';
@@ -151,6 +151,7 @@ export class Game {
       night: () => !!this.clock && this.night,
       trapped: () => !!this.inv && !!trapFor(this.inv.items,'dog'),
       dogHealth: () => (this.flags ? this.flags.dogHP ?? 1 : 1),
+      dogRemote: (b) => !!(this.coop && this.coop.dogRemote(b)),   // co-op: a friend's Juniper is the host's
       dogOrders: (cmd, mode) => this.openModal(() => this.ui.choose((this.dog && this.dog.name) || 'Juniper', [
         { label: 'Sit', act: () => cmd('sit') }, { label: 'Follow me', act: () => cmd('come') }, { label: 'Go on, wander', act: () => cmd('wander') },
       ].map((o) => ({ ...o, label: o.label + ((mode === 'stay' && o.label === 'Sit') || (mode === 'follow' && o.label === 'Follow me') || (mode === 'wander' && o.label === 'Go on, wander') ? '  ✓' : '') })), (c) => { this.closedModal(); c.act(); }, () => this.closedModal())),
@@ -337,7 +338,7 @@ export class Game {
     this.persist();
     return true;
   }
-  persist() { this.saves.save({ ...(this.lastSaved || this.snapshot()), checkpoint: this.cpSnap || null }); }
+  persist() { if (this.mpClient) return; this.saves.save({ ...(this.lastSaved || this.snapshot()), checkpoint: this.cpSnap || null }); }
   // ------------------------------------------------------------------ flow
   newGame() { setDogName('Juniper'); if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.wildlife) this.wildlife.reset(); else this._wildSave = null; if (this.chill) this.chill.load([]); this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
   continueGame() {
@@ -691,7 +692,7 @@ export class Game {
     // the Other Lookout
     const evs = this.other.check({ phase: ph, hour: h, zone: z, flags: { ...f, weeperComing: this.weeper.triggered, lostHikerStepped: f.lostSteps || 0 } });
     for (const id of evs) this.foreboding(() => this.otherEvent(id), 4);   // a beat of 'wrong' first (the entry in your hand, the boots, the one on the bed)
-    if (this.clock.ended && this.state === 'play') { if (ph === 'day7') this.die('fire'); else this.endPhase(); }
+    if (this.clock.ended && this.state === 'play' && !this.mpClient) { if (ph === 'day7') this.die('fire'); else this.endPhase(); }   // (a friend's day turns when the host's does)
   }
   otherEvent(id) {
     const e = this.e;
@@ -1034,7 +1035,7 @@ export class Game {
       if (can && this.fuel.tank < FUEL.capacity - 0.05) {
         const pour = Math.min(FUEL.capacity - this.fuel.tank, FUEL.can * can.fill);
         this.fuel.tank += pour; this.fuel.wasLow = this.fuel.frac < FUEL.low; can.fill = Math.max(0, can.fill - pour / FUEL.can); if (can.fill < 0.01) can.fill = 0;
-        e.audio.play('fuel_pour'); this.addLog(S.AUTO_LOG.refuel(this.hourText())); { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.night && this.obj.has(rid) && !this.obj.isDone(rid)) this.complete(rid); } if (this.night) this.flags.refueledOnce = true;
+        e.audio.play('fuel_pour'); this.addLog(S.AUTO_LOG.refuel(this.hourText())); { const rid = 'n' + phaseNum(this.clock.phase) + '_refuel'; if (this.night && this.obj.has(rid) && !this.obj.isDone(rid)) this.complete(rid); } if (this.night) this.flags.refueledOnce = true;
         this.ui.toast(can.fill > 0 ? `Tank full. About ${Math.round(can.fill * FUEL.can * 10) / 10} L left in the can.${this.fuel.genOn ? '' : ' Now start it (E).'}` : `Tank at ${this.fuel.tank.toFixed(1)} L. The can is empty: set it down anywhere (G).${this.fuel.genOn ? '' : ' Now start it (E).'}`, 3.5);
         this.refreshHotbar();
       }
@@ -1812,11 +1813,11 @@ export class Game {
     const beamOn = this.mode === 'searchlight' ? this.slLit : this.slLit && !this.leftOff;
     if ((this._frT = (this._frT || 0) - dt) <= 0) { this._frT = 3; this.fuelRescue(); }
     for (const ev of this.fuel.tick(this.clock.held ? 0 : dt, SL.on)) {
-      if (ev === 'low') { this.say(S.LINES.fuelLow); if (this.night) { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true });
+      if (ev === 'low') { this.say(S.LINES.fuelLow); if (this.night) { const rid = 'n' + phaseNum(this.clock.phase) + '_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true });
         // once a night the sputtering draws the bear up to the shed (~15 s out; moved near if it's far and unseen): you come
         // down with the can to something huffing round the walls. The dog's barking and the torch back-off still apply.
         if (this.wildlife && this.wildlife.callToShed) this.once('bearRefuel', () => this.wildlife.callToShed({ delay: 15 })); } }
-      if (ev === 'empty') { this.say(S.LINES.fuelEmpty); e.audio.play('generator_stop'); if (this.night) { const rid = this.clock.phase === 'night1' ? 'n1_refuel' : 'n2_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true }); } }
+      if (ev === 'empty') { this.say(S.LINES.fuelEmpty); e.audio.play('generator_stop'); if (this.night) { const rid = 'n' + phaseNum(this.clock.phase) + '_refuel'; if (this.obj.isDone(rid)) this.obj.remove(rid); this.add(rid, { urgent: true }); } }
     }
     const sigMode = this.signal.mode && t - this.signal.last < 2.4;
     if (!sigMode) this.signal.mode = false;
