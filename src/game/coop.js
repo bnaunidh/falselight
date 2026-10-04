@@ -23,6 +23,7 @@ export function createCoop(engine, ui, { getGame, begin }) {
   C.menu = (back) => ui.choose('Play with friends', [{ label: 'Host a game' }, { label: 'Join a game' }, { label: 'Back' }], (c) => {
     if (c.label === 'Back') return back();
     ui.ask('Your name', 'What the others see over your head.', C.lastName || 'Lookout', (name) => {
+      if (name == null) return back();   // (Esc)
       name = String(name || '').trim().slice(0, 16) || 'Lookout'; C.lastName = name;
       const fail = (title, e) => { ui.closeModal(); ui.card(title, (e && e.message) || String(e), [{ id: 'ok', label: 'Back' }], () => back()); };
       if (c.label === 'Host a game') {
@@ -33,10 +34,11 @@ export function createCoop(engine, ui, { getGame, begin }) {
             [{ id: 'go', label: 'Start the season' }, { id: 'back', label: 'Cancel' }], (id) => { if (id === 'go') { begin('new'); hook(); } else { C.leave(); back(); } });
         }).catch((e) => fail('Couldn\'t open a room', e));
       } else ui.ask('Room code', 'Five letters, from the host.', '', (code) => {
+        if (code == null) return back();
         ui.note('Joining…', 'Looking for room ' + String(code || '').toUpperCase() + '.');
         mp.join(code, name).catch((e) => fail('Couldn\'t join', e));
-      });
-    });
+      }, { ok: 'Join', max: 8 });
+    }, { ok: 'Next', max: 16 });
   });
   C.leave = () => { if (!mp.role) return; mp.leave(); for (const pl of players.values()) dropAvatar(pl); players.clear(); inTruck.clear(); dead.clear(); const g = G(); if (g) g.mpClient = false; if (badge) badge.style.display = 'none'; };
 
@@ -179,7 +181,7 @@ export function createCoop(engine, ui, { getGame, begin }) {
   addEventListener('keydown', (e) => {
     const g = G(); if (!C.on || !g || g.state !== 'play' || ui.modalOpen() || e.code !== 'KeyT' || e.repeat) return;
     e.preventDefault();
-    g.openModal(() => ui.ask('Say', 'To everyone on the mountain.', '', (text) => { g.closedModal(); text = String(text || '').trim().slice(0, 140); if (!text) return; say(`${mp.name}: ${text}`, 5); mp.send(C.host ? { t: 'chat', n: mp.name, text } : { t: 'chat', text }); }));
+    g.openModal(() => ui.ask('Say', 'To everyone on the mountain.', '', (text) => { g.closedModal(); text = String(text || '').trim().slice(0, 140); if (!text) return; say(`${mp.name}: ${text}`, 5); mp.send(C.host ? { t: 'chat', n: mp.name, text } : { t: 'chat', text }); }, { ok: 'Say', max: 140 }));
   });
 
   function drawAvatar(pl, dt) {

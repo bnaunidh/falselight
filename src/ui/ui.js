@@ -109,12 +109,14 @@ export function createUI(root = document.getElementById('ui')) {
     const first = m.querySelector('button[data-c]'); if (first) setTimeout(() => first.focus(), 30);
   };
   /** A one-line answer (naming the dog). onDone(value) — Enter or the button; Esc keeps the default. */
-  U.ask = (title, text, value, onDone) => {
+  U.ask = (title, text, value, onDone, { ok = 'OK', max = 20 } = {}) => {
+    // (close this box BEFORE handing the answer on: the answer may open the next box, which closing after would shut again)
     let done = false; const finish = (v) => { if (done) return; done = true; onDone(v); };
-    const m = openModal(`<div class="paper note ask"><h2>${esc(title)}</h2><p>${esc(text)}</p><input type="text" maxlength="20" value="${esc(value)}" spellcheck="false"><div class="menu"><button data-a="ok">That's her name</button></div></div>`, 'center', () => finish(null));
+    const submit = (v) => { if (done) return; done = true; U.closeModal(); onDone(v); };
+    const m = openModal(`<div class="paper note ask"><h2>${esc(title)}</h2><p>${esc(text)}</p><input type="text" maxlength="${max}" value="${esc(value)}" spellcheck="false"><div class="menu"><button data-a="ok">${esc(ok)}</button></div></div>`, 'center', () => finish(null));
     const inp = m.querySelector('input'); setTimeout(() => { inp.focus(); inp.select(); }, 30);
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); finish(inp.value); U.closeModal(); } });
-    m.querySelector('[data-a=ok]').onclick = () => { finish(inp.value); U.closeModal(); };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submit(inp.value); } });
+    m.querySelector('[data-a=ok]').onclick = () => submit(inp.value);
   };
   U.note = (title, text, onClose) => {
     const m = openModal(`<div class="paper note"><h2>${esc(title)}</h2><p>${esc(text).replace(/\n/g, '<br>')}</p><div class="close">E / Esc</div></div>`, 'center', onClose);

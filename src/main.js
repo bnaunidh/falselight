@@ -3,10 +3,10 @@
 // the engine exists; the live backdrop fades in once the title's set is in (stage A); New game / Continue wait only for
 // stage B (the cab, the trailhead, the item templates: the game is built then); the rest of the forest streams in during
 // day 1, and the day-1 clock holds before dusk until the night (stage D) is in.
-import { createCoop } from './game/coop.js?v=9d4c028551f494e4';
+import { createCoop } from './game/coop.js?v=96c9b50b7423b408';
 import { createEngine } from './engine/engine.js?v=a183ce1e82db0650';
-import { createUI } from './ui/ui.js?v=dc7091dfb018f2dc';
-import { Game } from './game/bridge.js?v=4e057eabf5d0b7be';
+import { createUI } from './ui/ui.js?v=e6b80b83f479a4d0';
+import { Game } from './game/bridge.js?v=dab3b9d6969617ec';
 import { createSaves } from './game/saves.js?v=9b2daabbbb6263ff';
 import { UI as WORDS } from './game/content/story.js?v=8a128137a13c2f76';
 import { ACTIONS, keyName } from './engine/input.js?v=18bc18106d93c298';

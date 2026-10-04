@@ -144,7 +144,7 @@ export class Game {
         this.openModal(() => this.ui.ask('She\'s yours now', 'She leans her whole weight against your leg. What do you call her?', this.flags.dogName || 'Juniper', (v) => {
           const n = setDogName(v || this.flags.dogName || 'Juniper'); this.flags.dogName = n; this.closedModal();
           this.ui.toast(`You call her ${n}. Her ears go up at it.`, 4);
-        }));
+        }, { ok: 'That\'s her name' }));
       },
       isPlay: () => this.state === 'play',
       walkMode: () => this.mode === 'walk' && !this.placing && !this.camRaised,
