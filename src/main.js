@@ -5,14 +5,14 @@
 // day 1, and the day-1 clock holds before dusk until the night (stage D) is in.
 import { createCoop } from './game/coop.js?v=96c9b50b7423b408';
 import { createEngine } from './engine/engine.js?v=a183ce1e82db0650';
-import { createUI } from './ui/ui.js?v=e6b80b83f479a4d0';
-import { Game } from './game/bridge.js?v=dab3b9d6969617ec';
+import { createUI } from './ui/ui.js?v=58000018e5d86a2d';
+import { Game } from './game/bridge.js?v=03056c42f327e548';
 import { createSaves } from './game/saves.js?v=9b2daabbbb6263ff';
-import { UI as WORDS } from './game/content/story.js?v=8a128137a13c2f76';
+import { UI as WORDS } from './game/content/story.js?v=2755e32c8edc3936';
 import { ACTIONS, keyName } from './engine/input.js?v=18bc18106d93c298';
 import { registerAnimalSounds } from './engine/animalSounds.js?v=98d47a28f0d0689d';
 import { registerScareSounds } from './engine/scareSounds.js?v=03d6d9f843586f50';
-import { paintCabMaps } from './ui/cabMaps.js?v=136aa42d94fcba49';
+import { paintCabMaps } from './ui/cabMaps.js?v=4825411143eafe4f';
 import { loadq } from './engine/loadq.js?v=3479c8521344c615';
 import { watchUpdates } from './engine/updates.js?v=ae8a658deea46809';
 

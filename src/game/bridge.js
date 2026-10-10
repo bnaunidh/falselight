@@ -7,7 +7,7 @@ import { Radio } from './radio.js?v=b7caebeac794988c';
 import { Fuel, FUEL } from './fuel.js?v=c503ffa055b08bd7';
 import { Inventory, KINDS, HAND_SLOTS, PACK_SLOTS, PILLS } from './items.js?v=5ccc36aa54b6ef0b';
 import { Survival, SURV } from './survival.js?v=d00b6b0653de46ed';
-import { createItemsView } from './itemsView.js?v=f83a6f4fb2ae9c52';
+import { createItemsView } from './itemsView.js?v=c1f32f35b3f17e35';
 import { createChill } from './chill.js?v=ec826bfe80729529';
 import { createPlume } from './smokePlume.js?v=7b5942b988989140';
 import { FireFinder, spokenBearing } from './firefinder.js?v=5de3274a9333ec2e';
@@ -23,22 +23,25 @@ import { createSaves } from './saves.js?v=9b2daabbbb6263ff';
 import { createRng } from './rng.js?v=d4fee6ae2c2692f2';
 import { canSend, send as sendPrint, isProof } from './sending.js?v=912afb8ed504e6bd';
 import { fmtHour, dayHour, dist, dist2d, bearing, angDiff, pointInPolygon } from './util.js?v=d92670d68201cefe';
-import * as S from './content/story.js?v=8a128137a13c2f76';
+import * as S from './content/story.js?v=2755e32c8edc3936';
 import { createDog, setDogName } from './dog.js?v=ad22a4fc71288b67';
 import { createWildlife } from './wildlife.js?v=a1a5440315b78c05';
 import { Fear, registerFearSounds } from './fear.js?v=7313292ea4947f94';
 import { epilogue } from './content/ending.js?v=eb9d7293a71584ff';
-import { Director, sosLamp } from './director.js?v=ed9dfc3842a08feb';
+import { Director, sosLamp } from './director.js?v=738ccdf31fe2ce7f';
 import { createPhotoBoard } from './photoBoard.js?v=171437e75704cdce';
 import { makeTent } from './tents.js?v=8256affaddf0bab6';
 import { makeSpringFlow } from './spring.js?v=841fcca15db5856c';
 import { Follower } from './follower.js?v=9830b5f962ff68ec';
-import * as NW from './northWoods.js?v=38b24fd4e4e18620';
-import { createFireCache } from './fireCache.js?v=5ca4de81f93a8df6';
-import { createLandmarks } from './landmarks.js?v=56aaf46f2eff1dc8';
+import * as NW from './northWoods.js?v=c3361da37c67a0c9';
+import { createFireCache } from './fireCache.js?v=d62e642fa3a7ab78';
+import { createLandmarks } from './landmarks.js?v=ecdc2d6afad824fe';
 import { fillFromSource, pourWater, heatPot, tickPot } from './water.js?v=caa3f7db15705bfd';
 import { TRAPPER, trapFor, armTrap, disarmTrap, releaseTrap, tickTraps } from './traps.js?v=4df4ed7c0f218f54';
-import { createTrapperCabin } from './trapper.js?v=dfd4beeb39475090';
+import { createTrapperCabin } from './trapper.js?v=82f1ac01412d93d7';
+import { createPlaces } from './places.js?v=f76fec02837b05fc';
+import * as EX from './explore.js?v=223d917d8a5c564c';
+import * as LORE from './content/lore.js?v=77480f56af567f9f';
 
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // tasks that end on something grim or still frightening: a cheerful two-note chime would undo it (and none at night at all)
@@ -100,7 +103,18 @@ export class Game {
       } catch (err) { console.warn('fire cache', err); this.woods = null; }
       try { this.landmarks = createLandmarks(e, { flags: () => this.flags, play: snd }); } catch (err) { console.warn('landmarks', err); this.landmarks = null; }
       e.player.extraBlocked = (x, z) => (NW.thicketBlocks(x, z) ? 'thicket' : this.landmarks && this.landmarks.blocks(x, z) ? 'deadfall' : false);
-      this.pencilMarks = () => NW.pencilMarks(this.flags); }
+      this.pencilMarks = () => [...NW.pencilMarks(this.flags), ...EX.pencilMarks(this.flags)]; }
+    // the places in the woods where the lookouts' papers are (src/game/places.js, content/lore.js)
+    try {
+      const an = (n, d = [0, 0, 0]) => { const a = this.anchor(n); return a ? a.clone().add(new THREE.Vector3(...d)) : null; }, WA = this.woods ? this.woods.anchors : {};
+      const th = (dx, dz, dy) => new THREE.Vector3(-300 + dx, e.world.heightAt(-300 + dx, 185 + dz) + dy, 185 + dz);   // Halvorsen's cabin (traps.js TRAPPER)
+      const desk = new THREE.Vector3(33.28, -31.6, 382.72);
+      this.places = createPlaces(e, { PLACES: LORE.PLACES, extra: {
+        cache_phone: WA.door ? WA.door.clone().add(new THREE.Vector3(0.6, 0.2, 0.4)) : null, cache_memo: WA.sheet ? WA.sheet.clone().add(new THREE.Vector3(0, 0.35, 0)) : null,
+        station_tow: an('IA_station_door', [0.4, 0.3, 0.6]), station_file: desk.clone().add(new THREE.Vector3(0.5, -0.45, 0.2)), station_file2: desk.clone().add(new THREE.Vector3(0.5, -0.6, -0.15)), station_fax: desk.clone().add(new THREE.Vector3(-0.3, 0.05, 0.3)),
+        stairs_tally: an('SP_stair_foot', [0.6, 1.1, 0]), trapper_pages: th(0, 0, 0.95), trapper_tally: th(0.5, 2.0, 1.4) } });
+    } catch (err) { console.warn('places', err); this.places = null; }
+
     // lamps (hikers' flashlights) and the day smoke
     this.lampTex = lampTexture();
     this.lampPool = [0, 1].map(() => { const l = new THREE.PointLight(0xffd9a0, 0, 12, 2); this.e.scene.add(l); return l; });
@@ -386,6 +400,7 @@ export class Game {
     this.exitMode(); this.holding = null;
     this.placing = null; this.syncItems();
     this.campTents(); this.buildTents(); this.springWater();
+    if (this.places) this.places.reset(this.flags);
     if (this.woods) this.woods.snap(); if (this.landmarks) this.landmarks.snap();
     if (!restored) this.health = Math.max(this.health ?? 1, 0.85);   // a night's sleep (or a day's) mends most of it
     if (!restored) this.dogFetch();
@@ -419,6 +434,7 @@ export class Game {
     this.lastSaved = this.snapshot(); this.cpSnap = null; this.persist();
     this.ui.toast(PHASES[phase].date, 5);
     this.script('start');
+    this.refreshLeads();
     this.refreshTracker();
   }
   /** The last morning: the fire is in the draw below the knoll. Walt is at the lot with the truck. Run. */
@@ -480,6 +496,33 @@ export class Game {
   pos() { return A3(this.e.player.position); }
   get night() { return isNight(this.clock.phase); }
   hourText() { return fmtHour(this.clock.hour); }
+  /** E on a paper out there: take it (it leaves the world) or copy it (two seconds of pencil); it's filed, and you read it. */
+  getPaper(id) {
+    const d = LORE.DOC[id]; if (!d) return;
+    if (EX.hasPaper(this.flags, id)) return this.readPaper(id);
+    if (this._copying) return;
+    const file = () => {
+      this._copying = false;
+      this.flags.papers = [...(this.flags.papers || []), { id, at: (PHASES[this.clock.phase].short || '') + ' · ' + this.hourText() }];
+      if (d.get === 'take') { this.flags['taken_' + id] = true; if (this.places) this.places.take(id); }
+      this.e.audio.play('paper', { volume: 0.3 });
+      if (!this.flags.toldFound) { this.flags.toldFound = true; this.ui.toast('Filed in the logbook (Tab → Found).', 3.5); }
+      for (const l of d.leads || []) this.leadTo(l.place);
+      this.readPaper(id);
+    };
+    if (d.get === 'copy') { this._copying = true; this.e.audio.sfx('paper', { volume: 0.25 }); this.ui.toast('You copy it out in pencil…', 1.8); this.later(1.8, file); } else file();
+  }
+  /** The reading view (the logbook's Found tab uses the same). */
+  paperView(id) {
+    const d = LORE.DOC[id]; if (!d) return null;
+    this.flags.readPapers = [...new Set([...(this.flags.readPapers || []), id])];
+    if (id === 'dump_pages' || id === 'point_card') this.raiseRules(Math.max(this.flags.rulesTo || 5, 8));
+    return { title: d.title, hand: d.hand || 'typed', burned: !!d.burned, fax: !!d.fax, copy: d.get === 'copy', text: S.coDistort(EX.paperText(id, phaseNum(this.clock.phase), this.clock.hour), this.co.blood) };
+  }
+  readPaper(id) { const v = this.paperView(id); if (v) this.openModal(() => this.ui.paper(v, () => this.closedModal())); }
+  /** A paper points somewhere you haven't been: an optional task in your own words (until you find it). */
+  leadTo(place) { const p = LORE.PLACE[place]; if (!p || !p.leadObj || this.flags['place_' + place]) return; if (!this.obj.has(p.leadObj.id)) this.add(p.leadObj.id, { optional: true, text: p.leadObj.text, hint: p.leadObj.hint }); }
+  refreshLeads() { if (!this.flags) return; for (const h of EX.heardOf(this.flags)) this.leadTo(h.place); }
   /** Something found out in the north woods (the wire, the insulators, the flagging, the sign, the cache): a pencil mark on your map. */
   foundNW(id) {
     if (id !== 'inside' && id !== 'roadMore') this.e.audio.play('paper', { volume: 0.3 });
@@ -581,6 +624,7 @@ export class Game {
   script(ev) {
     const ph = this.clock.phase, f = this.flags;
     if (ev === 'start') {
+      if (ph === 'day1' && !f.papers) f.papers = [{ id: 'letter', at: 'Tues. 10:40' }];
       if (ph === 'day1') { this.add('d1_walk'); this.say(S.LINES.arrive); this.truckVisible = true; }
       if (ph === 'night1') { this.say(S.LINES.night1Start); this.add('n1_dawn', { optional: true }); this.nightFuelCheck(); }
       if (ph === 'day2') { this.say(f.lostN1 ? S.LINES.day2Lost : f.walkedOffN1 && !f.savedN1 ? S.LINES.day2WalkedOff : S.LINES.day2Saved); this.add('d2_camp'); this.add('d2_overlook'); this.add('d2_photo'); this.add('d2_send'); this.truckVisible = true;
@@ -601,6 +645,7 @@ export class Game {
       if (N >= 3 && N <= 6 && !this.night) {   // the rest of the week, by day
         if (S.WEEK.morning[N]) this.say(S.WEEK.morning[N]);
         if (N === 5) f.radioDead = true;
+        if (N === 6) f.fileKey = true;
         if (N === 4) {   // Walt's run: two cans, tins, film
           const fa = this.anchor('IA_fuel_cans') || new THREE.Vector3(7.05, 0.4, 7.9); this.truckVisible = true;
           for (let k = 0; k < 2; k++) this.inv.create('fuel', { pos: [fa.x - 0.5 + k * 0.4, fa.y, fa.z + 0.6], rotY: k, settle: true });
@@ -1018,6 +1063,12 @@ export class Game {
         reg('lm_' + id, at, label, () => read(S.FINDS[key]), () => { if (!LA[id]) return false; at.copy(LA[id]); return true; });
       }
     }
+    if (this.places) for (const d of LORE.DOCS) {   // the papers out there: E takes one or copies it into your logbook (and after, reads it again)
+      const a = this.places.anchors[d.id]; if (!a) continue;
+      const short = d.title.length > 40 ? d.title.slice(0, 38) + '…' : d.title;
+      reg('doc:' + d.id, a, () => (EX.hasPaper(this.flags, d.id) ? 'E — Read it again' : (d.get === 'take' ? 'E — Take it · ' : 'E — Copy it into the logbook · ') + short),
+        () => this.getPaper(d.id), () => EX.hasPaper(this.flags, d.id) ? d.get === 'copy' : EX.available(d.id, this.flags, phaseNum(this.clock.phase)), 0.45);
+    }
     reg('board', this.board.anchor, () => this.holding ? 'E — Pin the print to the board' : this.photos.prints.some((p) => p.pin != null && !p.sent) ? 'E — Take a print down' : 'The cork board (hold a print to pin it up)', () => this.useBoard(), () => true, 0.6);
     reg('heater', 'IA_heater', () => this.co.heater ? 'E — Turn the heater off' : 'E — Light the propane heater', () => { this.co.toggleHeater(); e.audio.play(this.co.heater ? 'heater_on' : 'heater_off', { volume: 0.7, position: this.anchor('IA_heater') }); });
     for (const k of ['n', 'e', 's', 'w']) reg('win_' + k, 'IA_window_' + k, () => this.co.windows[k] ? 'E — Close the window' : 'E — Open the window', () => {
@@ -1085,7 +1136,7 @@ export class Game {
     reg('books', 'IA_books', 'E — The bookshelf', () => {   // the real books, the lookouts' own, and the Bible
       const all = [...S.SHELF, ...S.BOOKS.map((b) => ({ title: b.title, author: '', pages: [b.text] }))];
       this.openModal(() => this.ui.choose('The shelf', all.map((b) => ({ label: b.title + (b.author ? ' — ' + b.author.split(' · ')[0] : ''), book: b })), (c) => {
-        this.closedModal(); this.openModal(() => this.ui.book(c.book, (i, sewn) => { if (sewn && c.book.bible) this.flags.bibleRead = true; }, () => this.closedModal()));
+        this.closedModal(); if (/Station Guide/.test(c.book.title)) { this.flags.readGuide = true; this.refreshLeads(); } this.openModal(() => this.ui.book(c.book, (i, sewn) => { if (sewn && c.book.bible) this.flags.bibleRead = true; }, () => this.closedModal()));
       }, () => this.closedModal()));
     }, () => true, 0.5);
 
@@ -1141,6 +1192,7 @@ export class Game {
       date: PHASES[this.clock.phase].date + ' · ' + this.hourText(),
       tasks: o.list.map((x) => ({ text: o.text(x), hint: o.hint(x), done: x.done, urgent: x.urgent })),
       rules: S.RULES.slice(0, this.flags.rulesTo || 5), rulesTyped: 5,
+      found: EX.foundList(this.flags), mentioned: EX.heardOf(this.flags), onPaper: (id) => this.paperView(id),
       tillman: this.flags.readTillman ? S.PREV_LOG.map((en) => ({ ...en, text: S.coDistort(en.text, this.co.blood) })) : [],
       mine: this.log.map((en) => ({ ...en, text: S.coDistort(en.text, this.co.blood) })),
       photos: this.photos.prints.map((p) => ({ id: p.id, dataURL: (p.forbidden && !p.faceDown && !p.seen) || p.develop < 1 ? null : p.dataURL, develop: p.develop, faceDown: p.faceDown, sent: !!p.sent })),
@@ -1891,6 +1943,9 @@ export class Game {
     if (this.woods) { const cam = e.camera; this.woods.update(dt, { t: e.time.value, cam: cam.position, fwd: cam.getWorldDirection(this._fwdNW || (this._fwdNW = new THREE.Vector3())), pos: this.pos(), torch: e.lights.flashlight.on,
       night: this.night, busy: this.ui.modalOpen() || !!e.uiBlocking || this.radio.busy, chase: !!this.weeper.triggered, bear: (this.bearFear || 0) > 0.3, wind: e.sky.weather ? e.sky.weather.wind : 0.3 }); }
     if (this.landmarks) this.landmarks.update(dt, { cam: e.camera.position });
+    if (this.places) { this.places.update(dt, e.camera.position);
+      if ((this._discT = (this._discT || 0) - dt) <= 0) { this._discT = 0.5;
+        for (const id of EX.discover(this.pos(), this.flags)) { this.flags['place_' + id] = this.hourText(); this.e.audio.play('paper', { volume: 0.25 }); const p = LORE.PLACE[id]; if (p && p.leadObj && this.obj.has(p.leadObj.id)) this.complete(p.leadObj.id); } } }
     // coffee on the stove
     { const pot = this.stovePot(), done = tickPot(pot, dt, true);
       this.coffee = pot?.heating ? 1 - pot.heatLeft / (pot.heating === 'coffee' ? 25 : 20) : null;

@@ -1,7 +1,7 @@
 // FALSE LIGHT — diegetic DOM overlays: the logbook tracker (handwriting on paper), radio subtitles, notes, the
 // trail map, the logbook (tasks · rules · Tillman · your log · photos), the print you're holding, the fire-finder
 // readout, the searchlight dial, the camera frame, the watch, and title / pause / death / end screens.
-import { drawMap } from './mapdraw.js?v=a1c2c13dfaee14dc';
+import { drawMap } from './mapdraw.js?v=ad0b0fd3c7008d86';
 import { createOverlays } from './overlays.js?v=03c410562b019ac7';
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -150,18 +150,42 @@ export function createUI(root = document.getElementById('ui')) {
       .fl-modal .book.sewn .bk-page sup{color:#8a2a1c;opacity:.9;position:relative;left:-3px;top:-1px}`; document.head.appendChild(st); }
     render(); return m;
   };
+  /** A paper as it is on the page: each line in its hand (⟨typed⟩ ⟨print⟩ ⟨ink⟩ ⟨pencil⟩ ⟨own⟩ ⟨child⟩ switch it and never print);
+   *  burned pages scorched at the edges, the old thermal fax faded nearly to nothing. A copy is all in your own pencil. */
+  const paperCSS = () => { if (document.getElementById('fl-paper-css')) return; const st = document.createElement('style'); st.id = 'fl-paper-css'; st.textContent = `
+    .fl-modal .paperdoc{background:#ece6d4;color:#24211c;padding:22px 26px;border-radius:2px;max-width:560px;max-height:62vh;overflow:auto;line-height:1.55;font-size:15px;box-shadow:0 6px 30px rgba(0,0,0,.35)}
+    .fl-modal .paperdoc h2{font:600 17px Georgia,serif;margin:0 0 12px;opacity:.75}
+    .fl-modal .paperdoc .ln{white-space:pre-wrap;min-height:1em}
+    .pp-typed{font-family:'Courier New',Courier,monospace;font-size:14px}.pp-print{font-family:Arial,Helvetica,sans-serif;letter-spacing:.4px;font-size:13.5px}
+    .pp-ink{font-family:'Bradley Hand','Segoe Print','Snell Roundhand',cursive;color:#1f2d55;font-size:16px}.pp-pencil{font-family:'Bradley Hand','Segoe Print',cursive;color:#55555e;font-size:16px}
+    .pp-own{font-family:'Bradley Hand','Segoe Print',cursive;color:#2c2b2a;font-size:16px}.pp-child{font-family:'Chalkboard SE','Comic Sans MS',cursive;color:#3a3a46;font-size:18px;letter-spacing:1px}
+    .fl-modal .paperdoc.burned{background:radial-gradient(ellipse at center,#ece6d4 55%,#c9b28a 78%,#3a2414 100%)}
+    .fl-modal .paperdoc.fax{background:#ebe2c4}.fl-modal .paperdoc.fax .ln{color:rgba(60,52,30,.18)}.fl-modal .paperdoc.fax .ln:first-of-type{color:#3c341e}
+    .fl-modal .found h4{margin:12px 0 4px;font:600 14px Georgia,serif}.fl-modal .found h4 small{opacity:.55;font-weight:400;margin-left:6px}
+    .fl-modal .found button.pp{display:block;text-align:left;background:none;border:0;padding:3px 0 3px 12px;color:inherit;font:15px Georgia,serif;cursor:pointer}
+    .fl-modal .found button.pp:hover{text-decoration:underline}.fl-modal .found button.pp i{font-style:normal;opacity:.6;margin-left:6px}
+    .fl-modal .found .heard{margin-top:16px;padding-top:8px;border-top:1px solid rgba(0,0,0,.15);font-size:14px}.fl-modal .found .heard div{margin:4px 0}`; document.head.appendChild(st); };
+  U.paperHTML = (p) => {
+    paperCSS(); let hand = p.copy ? 'own' : p.hand || 'typed';
+    const lines = String(p.text || '').split('\n').map((l) => { const m = /^⟨(typed|print|ink|pencil|own|child)⟩/.exec(l); if (m) { if (!p.copy) hand = m[1]; l = l.slice(m[0].length); } return `<div class="ln pp-${hand}">${esc(l) || '&nbsp;'}</div>`; });
+    return `<div class="paperdoc${p.burned ? ' burned' : ''}${p.fax ? ' fax' : ''}"><h2>${esc(p.title)}${p.copy ? ' <small style="opacity:.6">(your copy)</small>' : ''}</h2>${lines.join('')}</div>`;
+  };
+  U.paper = (p, onClose) => openModal(`<div class="paper note" style="background:none;box-shadow:none;padding:0">${U.paperHTML(p)}<div class="close">E / Esc</div></div>`, 'center', onClose);
   U.logbook = (data, onClose, page = 'tasks') => {
-    const tabs = [['tasks', 'Today'], ['rules', 'Rules'], ['tillman', 'Tillman'], ['mine', 'My log'], ['photos', 'Photos']];
+    const tabs = [['tasks', 'Today'], ['rules', 'Rules'], ['tillman', 'Tillman'], ['found', 'Found'], ['mine', 'My log'], ['photos', 'Photos']];
     const render = (pg) => {
       let body = '';
       if (pg === 'tasks') body = `<h3>${esc(data.date)}</h3>` + data.tasks.map((t) => `<div class="task${t.done ? ' done' : ''}${t.urgent ? ' urgent' : ''}">${esc(t.text)}${t.hint && !t.done ? `<small>${esc(t.hint)}</small>` : ''}</div>`).join('') +
         `<div class="proof">Proof sent: ${data.proofs} / ${data.proofGoal}</div>`;
       if (pg === 'rules') body = `<div class="card">${data.rules.map((r, i) => `<div class="rule${i >= data.rulesTyped ? ' hand' : ''}"><b>${i + 1}.</b> ${esc(r)}</div>`).join('')}</div>`;
       if (pg === 'tillman') body = data.tillman.length ? data.tillman.map((e) => `<div class="entry${e.pressed ? ' pressed' : ''}"><span>${esc(e.date)}</span> ${esc(e.text)}</div>`).join('') : '<p>Tillman\'s logbook is in the cab, on the desk.</p>';
+      if (pg === 'found') { paperCSS(); body = `<div class="found">${(data.found || []).map((g) => `<h4>${esc(g.head)}<small>${esc(g.at || '')}</small></h4>${g.docs.map((d) => `<button class="pp" data-doc="${esc(d.id)}">${esc(d.title)}${d.unread ? '<i>✎</i>' : ''}</button>`).join('')}`).join('') || '<p>Nothing yet.</p>'}${(data.mentioned || []).length ? `<div class="heard"><b>Places mentioned</b>${data.mentioned.map((h) => `<div>${esc(h.name)} — <i>${esc(h.from || '')}${h.quote ? `: “${esc(h.quote)}”` : ''}</i></div>`).join('')}</div>` : ''}</div>`; }
+      if (pg.startsWith('doc:')) { const v = data.onPaper ? data.onPaper(pg.slice(4)) : null; body = `<button data-p="found" class="back" style="margin-bottom:8px">← back</button>${v ? U.paperHTML(v) : ''}`; }
       if (pg === 'mine') body = data.mine.map((e) => `<div class="entry${e.own ? ' own' : ''}"><span>${esc(e.date)}</span> ${esc(e.text)}</div>`).join('') || '<p>Nothing yet.</p>';
       if (pg === 'photos') body = data.photos.length ? `<div class="grid">${data.photos.map((p) => `<div class="thumb${p.faceDown ? ' down' : ''}" data-id="${p.id}">${p.faceDown ? '<i>face-down</i>' : `<img src="${p.dataURL || ''}" style="filter:brightness(${0.5 + 0.5 * p.develop}) saturate(${p.develop})">`}<em>${esc(p.id)}${p.sent ? ' · sent' : ''}</em></div>`).join('')}</div>` : '<p>No photographs.</p>';
       const m = openModal(`<div class="paper logbook"><div class="tabs">${tabs.map(([k, l]) => `<button data-p="${k}" class="${k === pg ? 'on' : ''}">${l}</button>`).join('')}</div><div class="page">${body}</div><div class="close">Tab / Esc</div></div>`, 'center', onClose);
       m.querySelectorAll('button[data-p]').forEach((b) => b.onclick = () => render(b.dataset.p));
+      m.querySelectorAll('button[data-doc]').forEach((b) => b.onclick = () => render('doc:' + b.dataset.doc));
       m.querySelectorAll('.thumb').forEach((t) => t.onclick = () => { data.onPhoto && data.onPhoto(t.dataset.id); });
       if (data.onPage) data.onPage(pg);   // the game hears which page is open (reading the card again completes a task)
     };

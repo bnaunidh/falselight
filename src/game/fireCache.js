@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { loadGLB } from '../engine/world.js?v=f72bf2c303254cc4';
 import { NORTH_WOODS as NWD, CACHE_LOCAL, CACHE_FLOOR, CACHE_SHELVES, cacheToWorld, worldToCache, inCache, blowdownLine, thicketPlants,
-  pointAt, ROAD_LEN, SIGN_S, scareStep, SCARE_BEATS, scareReady, cacheLock, cacheStock, discover, doorPrompt, doorAct, toolboxPrompt } from './northWoods.js?v=38b24fd4e4e18620';
+  pointAt, ROAD_LEN, SIGN_S, scareStep, SCARE_BEATS, scareReady, cacheLock, cacheStock, discover, doorPrompt, doorAct, toolboxPrompt } from './northWoods.js?v=c3361da37c67a0c9';
 
 const V3 = THREE.Vector3, WHITE = [1, 1, 1];
 export const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };

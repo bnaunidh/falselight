@@ -56,7 +56,7 @@
 //   moveCabItem(kind, pos, rotY)       move one of the cab's things (it must be lying in the cab) → bool
 //   dogReact(kind, pos)                'growl' | 'whimper', toward pos → bool (false: no tamed dog close)
 import { clamp, lerp, smooth, dist, dist2d, lerp3 } from './util.js?v=d92670d68201cefe'
-import { LINES } from './content/story.js?v=8a128137a13c2f76'
+import { LINES } from './content/story.js?v=2755e32c8edc3936'
 
 export const DIR = {
   minGap: 20,                 // s: no two events start closer than this, whatever they are

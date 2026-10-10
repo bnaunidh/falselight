@@ -244,6 +244,13 @@ export function drawPencil(g, view, k, marks) {
       const [a, b] = J(m.pos[0], m.pos[1], 7), r = 6 * k;
       g.beginPath(); for (let i = 0; i <= 10; i++) { const t = i / 10, x = a - r + 2 * r * t, y = b + Math.sin(t * Math.PI * 4) * 2.2 * k; if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke();
       label(m.label, a, b, -r / k - 58, 12, -0.04);
+    } else if (m.kind === 'q') {   // heard of, not found: a loose dashed circle and a question mark, never quite on the spot
+      const [a, b] = J(m.pos[0], m.pos[1], 13), r = Math.max(7 * k, (m.r || 22) * view.s);
+      g.save(); if (g.setLineDash) g.setLineDash([3 * k, 3 * k]); g.beginPath(); g.arc(a, b, r, 0, Math.PI * 2); g.stroke(); g.restore();
+      g.save(); g.font = `italic ${Math.round(16 * k)}px ${PENCIL.font}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', a, b); g.restore(); label(m.label, a, b, r / k * 0 + 8, -r / k - 2);
+    } else if (m.kind === 'ray') {   // known only as a bearing from the cab: a dashed line out from the tower
+      const L = 320, br = m.brg * Math.PI / 180, [a0, b0] = J(0, 0, 17), [a1, b1] = J(Math.sin(br) * L, -Math.cos(br) * L, 18);
+      g.save(); if (g.setLineDash) g.setLineDash([5 * k, 4 * k]); g.beginPath(); g.moveTo(a0, b0); g.lineTo(a1, b1); g.stroke(); g.restore(); label(m.label, a1, b1, 4, -6);
     } else if (m.kind === 'box') {
       const [a, b] = J(m.pos[0], m.pos[1], 11), hw = Math.max(3.2 * k, NW.cache.w / 2 * view.s), hd = Math.max(4.5 * k, NW.cache.d / 2 * view.s);
       g.save(); g.translate(a, b); g.rotate(-(m.rotY || 0)); g.strokeRect(-hw, -hd, hw * 2, hd * 2);

@@ -17,7 +17,7 @@
 //   heading   radians, three.js yaw (forward = (-sin, -cos) in x/z; 0 = north)     optional: the arrow's direction
 //   dpr       optional: canvas.width / CSS width (draw in CSS pixels, stay sharp on Retina)
 // World axes: +x east, -z north. Returns { ms, cached, view, benches: [{ id, x, y, box }], labels: [screen boxes] }.
-import { drawPencil, pencilPoints } from '../game/northWoods.js?v=38b24fd4e4e18620';
+import { drawPencil, pencilPoints } from '../game/northWoods.js?v=c3361da37c67a0c9';
 
 export const ELEV0 = 1750;             // metres above sea level of the ground at the tower (world y = 0)
 export const CONTOUR = 10, INDEX = 50;

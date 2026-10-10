@@ -13,8 +13,8 @@
 // The pure half (where, what blocks, the truck's route) is at the top; node tests it (tests/landmarks.test.mjs).
 import * as THREE from 'three';
 import { loadGLB } from '../engine/world.js?v=f72bf2c303254cc4';
-import { MB, Bins, M4, memberM, WP, WB, canvasTex, decalMat, sceneMaterials, cullTrees, rng, hash, smooth, scuff, SERIF, SANS } from './fireCache.js?v=5ca4de81f93a8df6';
-import { nearestOnLine, pointAt, lineLength } from './northWoods.js?v=38b24fd4e4e18620';
+import { MB, Bins, M4, memberM, WP, WB, canvasTex, decalMat, sceneMaterials, cullTrees, rng, hash, smooth, scuff, SERIF, SANS } from './fireCache.js?v=d62e642fa3a7ab78';
+import { nearestOnLine, pointAt, lineLength } from './northWoods.js?v=c3361da37c67a0c9';
 
 const V3 = THREE.Vector3;
 export const LANDMARKS = {

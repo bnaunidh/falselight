@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { KINDS } from './items.js?v=5ccc36aa54b6ef0b';
 import { makeTentBag } from './tents.js?v=8256affaddf0bab6';
-import { makeCacheKey, makeFilmPack, makeWaterJug } from './fireCache.js?v=5ca4de81f93a8df6';
+import { makeCacheKey, makeFilmPack, makeWaterJug } from './fireCache.js?v=d62e642fa3a7ab78';
 import { makeJacket } from './jacket.js?v=c7013253cfd4258d';
 const PROC = { tentBag: makeTentBag, cacheKey: makeCacheKey, filmPack: makeFilmPack, waterJug: makeWaterJug, jacket: makeJacket };   // items built here rather than loaded
 import { createSurfaces } from './surfaces.js?v=a693dd057324b286';

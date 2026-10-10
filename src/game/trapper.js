@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {TRAPPER} from './traps.js?v=4df4ed7c0f218f54';
-import {cullTrees,sceneMaterials} from './fireCache.js?v=5ca4de81f93a8df6';
+import {cullTrees,sceneMaterials} from './fireCache.js?v=d62e642fa3a7ab78';
 
 export async function createTrapperCabin(engine) {
  const W=engine.world,{x,z}=TRAPPER;
