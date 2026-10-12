@@ -4,7 +4,7 @@
 // Weeper: whoever meets his eyes is the one he comes for. Friends are figures with a name over them and a light in hand.
 // Hooked onto the Game from outside (wrapping a few of its methods), so the single-player game is untouched.
 import * as THREE from 'three';
-import { createMP, MAX_PLAYERS, PROTO } from '../net/mp.js?v=08bd0233d8d3dc22';
+import { createMP, MAX_PLAYERS, PROTO } from '../net/mp.js?v=0ea156e996cfe137';
 
 const TINTS = [0xb8332a, 0x2f6db3, 0x3e8f4e, 0xd2a019];
 const SYNC_FLAGS = /^(fire_|fireReported_)|^(savedN1|lostN1|walkedOffN1|falseWalked|gateShut|gateOpenedByIt|radioDead|evac|cacheStocked|cacheDoorOpen|cacheLock|tunnelOpen|dogName)$/;
@@ -36,7 +36,7 @@ export function createCoop(engine, ui, { getGame, begin }) {
       } else ui.ask('Room code', 'Five letters, from the host.', '', (code) => {
         if (code == null) return back();
         ui.note('Joining…', 'Looking for room ' + String(code || '').toUpperCase() + '.');
-        mp.join(code, name).catch((e) => fail('Couldn\'t join', e));
+        mp.join(code, name, (t) => { ui.closeModal(); ui.note('Joining room ' + String(code || '').toUpperCase(), t); }).catch((e) => fail('Couldn\'t join', e));
       }, { ok: 'Join', max: 8 });
     }, { ok: 'Next', max: 16 });
   });
@@ -219,7 +219,7 @@ export function createCoop(engine, ui, { getGame, begin }) {
   }
   function drawBadge() {
     if (!badge) { badge = document.createElement('div'); badge.style.cssText = 'position:fixed;left:14px;top:12px;z-index:30;font:600 12px Georgia,serif;color:rgba(240,232,214,.9);background:rgba(10,12,14,.45);padding:5px 9px;border-radius:6px;pointer-events:none;letter-spacing:.3px'; document.body.appendChild(badge); }
-    const n = C.host ? 1 + mp.peers.size : players.size + 1, txt = `Room ${mp.code} · ${n}/${MAX_PLAYERS} lookouts · T to talk`;
+    const n = C.host ? 1 + mp.peers.size : players.size + 1, txt = `Room ${mp.code} · ${n}/${MAX_PLAYERS} lookouts${C.client && mp.via === 'relay' ? ' · via relay' : ''} · T to talk`;
     if (badge.textContent !== txt) badge.textContent = txt; badge.style.display = 'block';
   }
   return C;
