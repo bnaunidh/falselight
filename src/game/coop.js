@@ -4,7 +4,7 @@
 // Weeper: whoever meets his eyes is the one he comes for. Friends are figures with a name over them and a light in hand.
 // Hooked onto the Game from outside (wrapping a few of its methods), so the single-player game is untouched.
 import * as THREE from 'three';
-import { createMP, MAX_PLAYERS } from '../net/mp.js?v=4f44325106300c7d';
+import { createMP, MAX_PLAYERS, PROTO } from '../net/mp.js?v=08bd0233d8d3dc22';
 
 const TINTS = [0xb8332a, 0x2f6db3, 0x3e8f4e, 0xd2a019];
 const SYNC_FLAGS = /^(fire_|fireReported_)|^(savedN1|lostN1|walkedOffN1|falseWalked|gateShut|gateOpenedByIt|radioDead|evac|cacheStocked|cacheDoorOpen|cacheLock|tunnelOpen|dogName)$/;
@@ -96,12 +96,15 @@ export function createCoop(engine, ui, { getGame, begin }) {
 
   // ---------------------------------------------------------------- messages
   mp.on('hello', (m, from) => {   // host: a friend arrived
-    const g = G(); players.set(from, { name: String(m.name || 'Lookout').slice(0, 16), k: players.size + 1 });
+    const g = G();
+    if ((m.proto || 0) !== PROTO) { mp.send({ t: 'version', proto: PROTO }, from); setTimeout(() => { const p = mp.peers.get(from); if (p) p.conn.close(); }, 800); return; } players.set(from, { name: String(m.name || 'Lookout').slice(0, 16), k: players.size + 1 });
     say(`${players.get(from).name} is coming up the trail.`, 3);
     const flags = {}; if (g && g.flags) for (const [k, v] of Object.entries(g.flags)) if (SYNC_FLAGS.test(k)) flags[k] = v;
-    mp.send({ t: 'welcome', you: from, ph: g && g.clock ? g.clock.phase : 'day1', h: g && g.clock ? g.clock.hour : null, flags, playing: !!(g && g.state === 'play') }, from);
+    mp.send({ t: 'welcome', proto: PROTO, you: from, ph: g && g.clock ? g.clock.phase : 'day1', h: g && g.clock ? g.clock.hour : null, flags, playing: !!(g && g.state === 'play') }, from);
   });
-  mp.on('welcome', (m) => { myId = m.you; joinMsg = m; startClient(); });
+  mp.on('welcome', (m) => { if ((m.proto || 0) !== PROTO) return mismatch(); myId = m.you; joinMsg = m; startClient(); });
+  mp.on('version', () => mismatch());
+  const mismatch = () => { C.leave(); ui.closeModal(); ui.card('Different versions', 'You and the host have different versions of the game. Both of you: reload the page (Ctrl/⌘ + Shift + R), then try again.', [{ id: 'ok', label: 'OK' }], () => {}); };
   mp.on('full', () => { C.leave(); ui.card('That room is full', `Four lookouts already.`, [{ id: 'ok', label: 'OK' }], () => {}); });
   mp.on('left', (m, from) => { const pl = players.get(from); if (pl) { say(`${pl.name} left.`, 3); dropAvatar(pl); players.delete(from); } inTruck.delete(from); dead.delete(from); checkTruck(); });
   mp.on('hostLeft', () => { const g = G(); C.leave(); say('The host left. The mountain is yours alone now.', 5); if (g) g.mpClient = false; });
@@ -125,7 +128,7 @@ export function createCoop(engine, ui, { getGame, begin }) {
   function startClient() {   // a friend's game: start a season and follow the host to the same day and hour
     const g = G(), m = joinMsg; if (!m) return;
     if (!g || !g.itemsReady) { setTimeout(startClient, 500); return; }
-    ui.closeModal(); begin('new');
+    ui.closeModal(); g.mpClient = true; begin('join');   // (a friend's game never saves, and doesn't wipe their own season)
     const wait = () => { const g2 = G(); if (!g2 || g2.state !== 'play') return setTimeout(wait, 300);
       g2.mpClient = true; hook();
       if (m.ph && m.ph !== g2.clock.phase) g2.skipTo(m.ph);
@@ -177,6 +180,8 @@ export function createCoop(engine, ui, { getGame, begin }) {
     for (const pl of players.values()) drawAvatar(pl, dt);
     drawBadge();
   };
+  // a window in the background stops drawing, and its game loop with it: keep the link talking (poses, the host's world) anyway
+  setInterval(() => { if (C.on && document.hidden) C.update(0.25); }, 250);
   // chat: T
   addEventListener('keydown', (e) => {
     const g = G(); if (!C.on || !g || g.state !== 'play' || ui.modalOpen() || e.code !== 'KeyT' || e.repeat) return;

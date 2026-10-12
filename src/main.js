@@ -3,10 +3,10 @@
 // the engine exists; the live backdrop fades in once the title's set is in (stage A); New game / Continue wait only for
 // stage B (the cab, the trailhead, the item templates: the game is built then); the rest of the forest streams in during
 // day 1, and the day-1 clock holds before dusk until the night (stage D) is in.
-import { createCoop } from './game/coop.js?v=96c9b50b7423b408';
+import { createCoop } from './game/coop.js?v=c1654ead011c58bb';
 import { createEngine } from './engine/engine.js?v=a183ce1e82db0650';
 import { createUI } from './ui/ui.js?v=58000018e5d86a2d';
-import { Game } from './game/bridge.js?v=03056c42f327e548';
+import { Game } from './game/bridge.js?v=d91d62e00d281cb1';
 import { createSaves } from './game/saves.js?v=9b2daabbbb6263ff';
 import { UI as WORDS } from './game/content/story.js?v=2755e32c8edc3936';
 import { ACTIONS, keyName } from './engine/input.js?v=18bc18106d93c298';
@@ -137,7 +137,7 @@ function begin(a) {
   pending = null;
   ui.closeModal(); ui.hideHUD(false); engine.audio.start();
   engine.lights.searchlight.on = false; engine.lights.searchlight.operating = false;
-  if (a === 'continue') game.continueGame(); else game.newGame();
+  if (a === 'continue') game.continueGame(); else game.newGame({ keepSave: a === 'join' });
   engine.input.lock(); goFullscreen();   // (after a wait with no click, the 'Click to continue' overlay takes the mouse)
   ui.loading(null, null, 'play');
 }

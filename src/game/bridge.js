@@ -354,7 +354,7 @@ export class Game {
   }
   persist() { if (this.mpClient) return; this.saves.save({ ...(this.lastSaved || this.snapshot()), checkpoint: this.cpSnap || null }); }
   // ------------------------------------------------------------------ flow
-  newGame() { setDogName('Juniper'); if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.wildlife) this.wildlife.reset(); else this._wildSave = null; if (this.chill) this.chill.load([]); this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
+  newGame(o = {}) { setDogName('Juniper'); if (this.dog) this.dog.reset(); else this._dogSave = null; if (this.wildlife) this.wildlife.reset(); else this._wildSave = null; if (this.chill) this.chill.load([]); if (!o.keepSave) this.saves.clear(); this.cpSnap = null; this.fresh('day1'); this.startPhase('day1'); }
   continueGame() {
     const s = this.saves.load(); if (!s) return this.newGame();
     this.lastSaved = { ...s }; delete this.lastSaved.checkpoint;
